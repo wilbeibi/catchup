@@ -70,7 +70,7 @@ func (p *Provider) ResolveRank(ctx context.Context, roots session.Roots, opts se
 	}
 	defer db.Close()
 
-	sums, err := listSessions(ctx, db, path, opts.Query, rank)
+	sums, err := listSessions(ctx, db, path, opts.Query, opts.Cwd, rank)
 	if err != nil {
 		return session.Source{}, err
 	}
@@ -103,7 +103,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 		return nil, err
 	}
 	defer db.Close()
-	return listSessions(ctx, db, path, opts.Query, limit)
+	return listSessions(ctx, db, path, opts.Query, opts.Cwd, limit)
 }
 
 // --- database access --------------------------------------------------------
@@ -179,7 +179,7 @@ func loadSession(ctx context.Context, db *sql.DB, path, id string) (session.Sour
 
 // --- listing ----------------------------------------------------------------
 
-func listSessions(ctx context.Context, db *sql.DB, path, query string, limit int) ([]session.Summary, error) {
+func listSessions(ctx context.Context, db *sql.DB, path, query, cwd string, limit int) ([]session.Summary, error) {
 	rows, err := db.QueryContext(ctx, `SELECT `+sessionColumns+` FROM session WHERE time_archived IS NULL ORDER BY time_updated DESC`)
 	if err != nil {
 		return nil, err
@@ -195,6 +195,9 @@ func listSessions(ctx context.Context, db *sql.DB, path, query string, limit int
 		src, err := scanSession(path, rows)
 		if err != nil {
 			return nil, err
+		}
+		if cwd != "" && src.Metadata["cwd"] != cwd {
+			continue
 		}
 		if q != "" {
 			match, err := matchesText(ctx, db, src.Ref.SessionID, q)

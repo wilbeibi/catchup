@@ -33,11 +33,49 @@ func codexRoot(t *testing.T) session.Roots {
 
 func run(t *testing.T, roots session.Roots, args ...string) string {
 	t.Helper()
+	return runWithCwd(t, roots, "", args...)
+}
+
+func runWithCwd(t *testing.T, roots session.Roots, cwd string, args ...string) string {
+	t.Helper()
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), args, roots, &out, &errOut); err != nil {
+	if err := Run(context.Background(), args, roots, cwd, &out, &errOut); err != nil {
 		t.Fatalf("Run(%v) error: %v (stderr: %s)", args, err, errOut.String())
 	}
 	return out.String()
+}
+
+func TestRunCwdFiltering(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions", "2026", "06", "26")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	batonRollout := `{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta","payload":{"id":"sess-baton","cwd":"/home/u/src/baton","cli_version":"0.1"}}
+{"timestamp":"2026-06-26T21:31:55.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"refactor the auth module"}]}}
+{"timestamp":"2026-06-26T21:32:08.0Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}}
+`
+	otherRollout := `{"timestamp":"2026-06-26T22:00:00.0Z","type":"session_meta","payload":{"id":"sess-other","cwd":"/home/u/src/other","cli_version":"0.1"}}
+{"timestamp":"2026-06-26T22:01:00.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"unrelated work"}]}}
+{"timestamp":"2026-06-26T22:02:00.0Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}}
+`
+	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-baton.jsonl"), []byte(batonRollout), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-other.jsonl"), []byte(otherRollout), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	roots := session.Roots{Codex: root}
+
+	// With cwd: only the matching session appears
+	out := runWithCwd(t, roots, "/home/u/src/baton", "codex", "--list")
+	if !strings.Contains(out, "sess-baton") {
+		t.Errorf("expected sess-baton in cwd-filtered listing, got:\n%s", out)
+	}
+	if strings.Contains(out, "sess-other") {
+		t.Errorf("unexpected sess-other in cwd-filtered listing, got:\n%s", out)
+	}
 }
 
 func TestRunRendersLatestMarkdown(t *testing.T) {
@@ -51,7 +89,7 @@ func TestRunRendersLatestMarkdown(t *testing.T) {
 
 func TestRunUnknownProvider(t *testing.T) {
 	var out, errOut bytes.Buffer
-	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, &out, &errOut)
+	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, "", &out, &errOut)
 	if err == nil || !strings.Contains(err.Error(), "unknown provider") {
 		t.Errorf("expected unknown provider error, got %v", err)
 	}

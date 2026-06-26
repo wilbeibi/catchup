@@ -68,7 +68,7 @@ func (p *Provider) ResolveRank(ctx context.Context, roots session.Roots, opts se
 	if rank < 1 {
 		return session.Source{}, fmt.Errorf("codex: rank must be >= 1")
 	}
-	sums, err := listSessions(roots.Codex, opts.Query, rank)
+	sums, err := listSessions(roots.Codex, opts.Query, opts.Cwd, rank)
 	if err != nil {
 		return session.Source{}, err
 	}
@@ -94,7 +94,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 	if limit <= 0 {
 		limit = defaultLimit
 	}
-	return listSessions(roots.Codex, opts.Query, limit)
+	return listSessions(roots.Codex, opts.Query, opts.Cwd, limit)
 }
 
 // --- file enumeration -------------------------------------------------------
@@ -141,8 +141,9 @@ func findByID(files []fileInfo, id string, requireNameHit bool) (session.Source,
 
 // listSessions walks files newest-first and collects up to limit summaries.
 // Without a query it reads only the first limit files; with a query it reads in
-// recency order until limit matches are found.
-func listSessions(root, query string, limit int) ([]session.Summary, error) {
+// recency order until limit matches are found. When cwd is set, only sessions
+// whose working directory matches exactly are included.
+func listSessions(root, query, cwd string, limit int) ([]session.Summary, error) {
 	files, err := sessionFiles(root)
 	if err != nil {
 		return nil, err
@@ -155,6 +156,9 @@ func listSessions(root, query string, limit int) ([]session.Summary, error) {
 		}
 		t, err := readThread(fi)
 		if err != nil || len(t.Entries) == 0 {
+			continue
+		}
+		if cwd != "" && t.Source.Metadata["cwd"] != cwd {
 			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(visibleText(t)), q) {

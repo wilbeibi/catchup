@@ -17,7 +17,7 @@ import (
 )
 
 // Run executes one invocation.
-func Run(ctx context.Context, args []string, roots session.Roots, stdout, stderr io.Writer) error {
+func Run(ctx context.Context, args []string, roots session.Roots, cwd string, stdout, stderr io.Writer) error {
 	cmd, err := Parse(args)
 	if err != nil {
 		return err
@@ -29,7 +29,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, stdout, stderr
 	}
 
 	if cmd.List {
-		opts := session.ListOptions{Query: cmd.Target.Query, Limit: cmd.Limit}
+		opts := session.ListOptions{Query: cmd.Target.Query, Cwd: cwd, Limit: cmd.Limit}
 		summaries, err := prov.List(ctx, roots, opts)
 		if err != nil {
 			return err
@@ -37,7 +37,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, stdout, stderr
 		return render.List(stdout, cmd.Target.Provider, summaries)
 	}
 
-	src, err := locate(ctx, prov, roots, cmd)
+	src, err := locate(ctx, prov, roots, cmd, cwd)
 	if err != nil {
 		return err
 	}
@@ -73,16 +73,19 @@ func selectProvider(name string) (session.Provider, error) {
 
 // locate chooses the right Provider resolution method for the command's
 // selection mode. The precedence here mirrors the documented Target semantics:
-// explicit id, then rank, then newest.
-func locate(ctx context.Context, prov session.Provider, roots session.Roots, cmd Command) (session.Source, error) {
+// explicit id, then rank, then newest. When cwd is set, the newest and rank
+// resolutions are scoped to sessions in that directory; --id bypasses the
+// directory filter.
+func locate(ctx context.Context, prov session.Provider, roots session.Roots, cmd Command, cwd string) (session.Source, error) {
 	switch {
 	case cmd.Target.SessionID != "":
 		return prov.Resolve(ctx, roots, cmd.Target.SessionID)
 	case cmd.Target.Rank > 0:
-		opts := session.ListOptions{Query: cmd.Target.Query, Limit: cmd.Limit}
+		opts := session.ListOptions{Query: cmd.Target.Query, Cwd: cwd, Limit: cmd.Limit}
 		return prov.ResolveRank(ctx, roots, opts, cmd.Target.Rank)
 	default:
-		return prov.Resolve(ctx, roots, "")
+		opts := session.ListOptions{Cwd: cwd, Limit: 1}
+		return prov.ResolveRank(ctx, roots, opts, 1)
 	}
 }
 

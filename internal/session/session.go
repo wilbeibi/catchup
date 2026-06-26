@@ -109,10 +109,12 @@ type Summary struct {
 }
 
 // ListOptions controls listing and rank resolution. Query is a literal,
-// case-insensitive match over visible text; empty means no filter. Limit caps
+// case-insensitive match over visible text. Cwd filters to sessions whose
+// working directory matches exactly; empty means no directory filter. Limit caps
 // the number of rows; zero means the caller should apply its default.
 type ListOptions struct {
 	Query string
+	Cwd   string
 	Limit int
 }
 

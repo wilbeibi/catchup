@@ -23,10 +23,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, "baton:", err)
 		os.Exit(1)
 	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "" // fall back to no directory filtering
+	}
 
 	roots := session.ResolveRoots(os.Getenv, home)
 
-	if err := cli.Run(ctx, os.Args[1:], roots, os.Stdout, os.Stderr); err != nil {
+	if err := cli.Run(ctx, os.Args[1:], roots, cwd, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "baton:", err)
 		os.Exit(1)
 	}
