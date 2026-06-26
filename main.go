@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/wilbeibi/baton/internal/session"
 	"github.com/wilbeibi/baton/internal/cli"
+	"github.com/wilbeibi/baton/internal/session"
 )
 
 func main() {

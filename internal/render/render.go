@@ -9,6 +9,7 @@ package render
 import (
 	"fmt"
 	"io"
+	"text/tabwriter"
 
 	"github.com/wilbeibi/baton/internal/session"
 )
@@ -45,5 +46,26 @@ func Meta(w io.Writer, s session.Source, f session.Format) error {
 // (rank, updated time, title/cwd, preview, session id), independent of the
 // Thread output format, so they do not take a Format.
 func List(w io.Writer, provider string, summaries []session.Summary) error {
-	return fmt.Errorf("render: List not implemented")
+	if len(summaries) == 0 {
+		_, err := fmt.Fprintf(w, "no %s sessions found\n", provider)
+		return err
+	}
+
+	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(tw, "RANK\tUPDATED\tTITLE\tCWD\tPREVIEW\tSESSION")
+	for _, s := range summaries {
+		updated := ""
+		if !s.UpdatedAt.IsZero() {
+			updated = s.UpdatedAt.Local().Format(tsHuman)
+		}
+		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\n",
+			s.Rank,
+			updated,
+			truncate(oneLine(s.Title), 40),
+			truncate(oneLine(s.Cwd), 32),
+			truncate(oneLine(s.Preview), 50),
+			s.Ref.SessionID,
+		)
+	}
+	return tw.Flush()
 }

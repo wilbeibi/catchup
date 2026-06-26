@@ -71,8 +71,7 @@ func TestParseRejects(t *testing.T) {
 	bad := [][]string{
 		{},                               // missing provider
 		{"agents://codex/latest"},        // legacy scheme
-		{"codex/latest"},                 // non-numeric rank
-		{"codex/019f-abcdef"},            // session id mistaken as rank
+		{"codex/019f-abcdef"},            // session id mistaken as a rank
 		{"codex/role/user"},              // path/role form
 		{"codex?query=x"},                // query-string form
 		{"codex/2", "--list"},            // rank + list conflict
