@@ -8,3 +8,6 @@
 # Go workspace files (local-only)
 go.work
 go.work.sum
+
+# Design docs (local reference only)
+/docs
