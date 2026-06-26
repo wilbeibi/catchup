@@ -1,0 +1,10 @@
+# Compiled binary from `go build` at the repo root
+/baton
+
+# Test + coverage artifacts
+*.test
+*.out
+
+# Go workspace files (local-only)
+go.work
+go.work.sum
