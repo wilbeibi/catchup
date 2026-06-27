@@ -113,6 +113,35 @@ func TestLastTurns(t *testing.T) {
 	}
 }
 
+func TestSinceCompact(t *testing.T) {
+	u := func(s string) session.Entry { return session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: s} }
+	a := func(s string) session.Entry { return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: s} }
+	summary := session.Entry{Kind: session.KindCompact, Text: "recap so far"}
+
+	// Keep the last compaction entry (the recap) and everything after it.
+	thread := session.Thread{Entries: []session.Entry{
+		u("q1"), a("a1"),
+		summary,
+		u("q2"), a("a2"),
+	}}
+	got := sinceCompact(thread)
+	want := []string{"recap so far", "q2", "a2"}
+	if len(got.Entries) != len(want) {
+		t.Fatalf("got %d entries, want %d", len(got.Entries), len(want))
+	}
+	for i, e := range got.Entries {
+		if e.Text != want[i] {
+			t.Errorf("entry %d = %q, want %q", i, e.Text, want[i])
+		}
+	}
+
+	// No compaction marker: the whole thread is returned unchanged.
+	plain := session.Thread{Entries: []session.Entry{u("q1"), a("a1")}}
+	if got := sinceCompact(plain); len(got.Entries) != 2 {
+		t.Errorf("no-compaction: got %d entries, want 2", len(got.Entries))
+	}
+}
+
 func TestRunUnknownProvider(t *testing.T) {
 	var out, errOut bytes.Buffer
 	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, "", &out, &errOut)

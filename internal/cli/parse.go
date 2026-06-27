@@ -17,12 +17,13 @@ const DefaultLimit = 20
 // output and the cli's only input, so that argument syntax lives in exactly one
 // place and the rest of the program works with structured data.
 type Command struct {
-	Target   session.Target
-	Format   session.Format
-	MetaOnly bool // -I: render metadata/frontmatter only
-	LastN    int  // --last N: keep only the last N exchanges/turns (0 = all)
-	List     bool // --list: print the ranked listing and exit
-	Limit    int  // -n N: cap listing rows (defaults to DefaultLimit)
+	Target       session.Target
+	Format       session.Format
+	MetaOnly     bool // -I: render metadata/frontmatter only
+	LastN        int  // --last N: keep only the last N exchanges/turns (0 = all)
+	SinceCompact bool // --since-compact: keep only the final compaction segment
+	List         bool // --list: print the ranked listing and exit
+	Limit        int  // -n N: cap listing rows (defaults to DefaultLimit)
 }
 
 // Parse turns raw argv (excluding the program name) into a Command. It accepts
@@ -116,6 +117,8 @@ func Parse(args []string) (Command, error) {
 				return cmd, fmt.Errorf("--last needs a positive integer, got %q", v)
 			}
 			cmd.LastN = n
+		case "--since-compact":
+			cmd.SinceCompact = true
 		default:
 			if strings.HasPrefix(tok, "-") && tok != "-" {
 				return cmd, fmt.Errorf("unknown flag %q", tok)
@@ -208,6 +211,8 @@ func normalize(cmd *Command) error {
 		return errors.New("a /rank selector cannot be combined with --list")
 	case cmd.MetaOnly && cmd.List:
 		return errors.New("-I cannot be combined with --list")
+	case cmd.LastN > 0 && cmd.SinceCompact:
+		return errors.New("--last cannot be combined with --since-compact; they are alternative trims")
 	}
 
 	// -q implies list mode unless a concrete row was selected by rank or id.

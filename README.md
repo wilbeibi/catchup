@@ -54,7 +54,8 @@ baton claude --id <exact-session-id>  # exact session (for scripts)
 
 ```bash
 baton codex -I      # metadata only (who/when/where, no conversation)
-baton codex --last 4 # last 4 exchanges only (each = your prompt + the reply)
+baton codex --last 4       # last 4 exchanges only (each = your prompt + the reply)
+baton claude --since-compact # only the final compaction segment (leads with Claude's recap)
 baton codex --html   # self-contained HTML (for sharing in a browser)
 baton codex --json   # structured JSON (for scripts)
 ```
