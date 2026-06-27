@@ -20,7 +20,7 @@ type Command struct {
 	Target   session.Target
 	Format   session.Format
 	MetaOnly bool // -I: render metadata/frontmatter only
-	LastN    int  // --last N: keep only the last N timeline entries (0 = all)
+	LastN    int  // --last N: keep only the last N exchanges/turns (0 = all)
 	List     bool // --list: print the ranked listing and exit
 	Limit    int  // -n N: cap listing rows (defaults to DefaultLimit)
 }

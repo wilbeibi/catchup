@@ -51,7 +51,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, cwd string, st
 		return err
 	}
 	if cmd.LastN > 0 {
-		thread = lastN(thread, cmd.LastN)
+		thread = lastTurns(thread, cmd.LastN)
 	}
 	return render.Thread(stdout, thread, cmd.Format)
 }
@@ -89,13 +89,22 @@ func locate(ctx context.Context, prov session.Provider, roots session.Roots, cmd
 	}
 }
 
-// lastN trims a thread to its final n entries, preserving the Source. It lives
-// here, not in render, so the renderer stays a pure function of the Thread it
-// is given.
-func lastN(t session.Thread, n int) session.Thread {
-	if n >= len(t.Entries) {
-		return t
+// lastTurns trims a thread to its final n exchanges, preserving the Source. A
+// turn begins at each user message, so this keeps everything from the
+// n-th-from-last user message onward — the user's prompt plus every assistant
+// reply (and any compaction markers) that follow it. With fewer than n user
+// turns, the whole thread is kept. It lives here, not in render, so the
+// renderer stays a pure function of the Thread it is given.
+func lastTurns(t session.Thread, n int) session.Thread {
+	count := 0
+	for i := len(t.Entries) - 1; i >= 0; i-- {
+		e := t.Entries[i]
+		if e.Kind == session.KindMessage && e.Role == session.RoleUser {
+			if count++; count == n {
+				t.Entries = t.Entries[i:]
+				return t
+			}
+		}
 	}
-	t.Entries = t.Entries[len(t.Entries)-n:]
 	return t
 }

@@ -87,6 +87,32 @@ func TestRunRendersLatestMarkdown(t *testing.T) {
 	}
 }
 
+func TestLastTurns(t *testing.T) {
+	// Keeping the last turn must start at the final user message and include
+	// every assistant reply that follows it — not the prior exchange or the
+	// compaction marker before it.
+	u := func(s string) session.Entry { return session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: s} }
+	a := func(s string) session.Entry { return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: s} }
+	compact := session.Entry{Kind: session.KindCompact}
+
+	thread := session.Thread{Entries: []session.Entry{
+		u("q1"), a("a1"),
+		compact,
+		u("q2"), a("a2a"), a("a2b"),
+	}}
+
+	got := lastTurns(thread, 1)
+	want := []string{"q2", "a2a", "a2b"}
+	if len(got.Entries) != len(want) {
+		t.Fatalf("got %d entries, want %d", len(got.Entries), len(want))
+	}
+	for i, e := range got.Entries {
+		if e.Text != want[i] {
+			t.Errorf("entry %d = %q, want %q", i, e.Text, want[i])
+		}
+	}
+}
+
 func TestRunUnknownProvider(t *testing.T) {
 	var out, errOut bytes.Buffer
 	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, "", &out, &errOut)
