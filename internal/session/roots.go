@@ -33,3 +33,21 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 
 	return Roots{Codex: codex, Claude: claude, OpenCode: opencode}
 }
+
+// ResolveCurrent reports the session each provider says we are running inside,
+// keyed by provider name. Only Claude Code injects such a signal today
+// ($CLAUDE_CODE_SESSION_ID, set in every shell it spawns); Codex and OpenCode
+// spawn shells indistinguishable from a plain terminal, so they contribute
+// nothing. A provider absent from the map (or mapped to "") has no in-band
+// current session, and the caller falls back to the newest session in the
+// working directory.
+//
+// Like ResolveRoots, getenv is passed in rather than read from os so resolution
+// stays a pure, testable function; main wires in os.Getenv.
+func ResolveCurrent(getenv func(string) string) map[string]string {
+	current := map[string]string{}
+	if id := getenv("CLAUDE_CODE_SESSION_ID"); id != "" {
+		current[ProviderClaude] = id
+	}
+	return current
+}

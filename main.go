@@ -29,8 +29,9 @@ func main() {
 	}
 
 	roots := session.ResolveRoots(os.Getenv, home)
+	current := session.ResolveCurrent(os.Getenv)
 
-	if err := cli.Run(ctx, os.Args[1:], roots, cwd, os.Stdout, os.Stderr); err != nil {
+	if err := cli.Run(ctx, os.Args[1:], roots, current, cwd, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "catchup:", err)
 		os.Exit(1)
 	}

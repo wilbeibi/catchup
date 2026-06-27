@@ -16,8 +16,11 @@ import (
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
-// Run executes one invocation.
-func Run(ctx context.Context, args []string, roots session.Roots, cwd string, stdout, stderr io.Writer) error {
+// Run executes one invocation. current maps a provider name to the id of the
+// session we are running inside, when that agent injects one (see
+// session.ResolveCurrent); it lets the default selection target the live
+// session exactly rather than guessing by recency.
+func Run(ctx context.Context, args []string, roots session.Roots, current map[string]string, cwd string, stdout, stderr io.Writer) error {
 	cmd, err := Parse(args)
 	if err != nil {
 		return err
@@ -37,7 +40,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, cwd string, st
 		return render.List(stdout, cmd.Target.Provider, summaries)
 	}
 
-	src, err := locate(ctx, prov, roots, cmd, cwd)
+	src, err := locate(ctx, prov, roots, cmd, cwd, current)
 	if err != nil {
 		return err
 	}
@@ -79,13 +82,20 @@ func selectProvider(name string) (session.Provider, error) {
 // explicit id, then rank, then newest. When cwd is set, the newest and rank
 // resolutions are scoped to sessions in that directory; --id bypasses the
 // directory filter.
-func locate(ctx context.Context, prov session.Provider, roots session.Roots, cmd Command, cwd string) (session.Source, error) {
+//
+// In the default case (no explicit selector) an injected current-session id for
+// this provider wins over "newest in cwd": only the agent that set it can tell
+// its live session from another of its sessions sharing the directory, which
+// recency cannot. Providers with no such signal fall through to newest-in-cwd.
+func locate(ctx context.Context, prov session.Provider, roots session.Roots, cmd Command, cwd string, current map[string]string) (session.Source, error) {
 	switch {
 	case cmd.Target.SessionID != "":
 		return prov.Resolve(ctx, roots, cmd.Target.SessionID)
 	case cmd.Target.Rank > 0:
 		opts := session.ListOptions{Query: cmd.Target.Query, Cwd: cwd, Limit: cmd.Limit}
 		return prov.ResolveRank(ctx, roots, opts, cmd.Target.Rank)
+	case current[cmd.Target.Provider] != "":
+		return prov.Resolve(ctx, roots, current[cmd.Target.Provider])
 	default:
 		opts := session.ListOptions{Cwd: cwd, Limit: 1}
 		return prov.ResolveRank(ctx, roots, opts, 1)
