@@ -1,5 +1,5 @@
 # Compiled binary from `go build` at the repo root
-/baton
+/catchup
 
 # Test + coverage artifacts
 *.test

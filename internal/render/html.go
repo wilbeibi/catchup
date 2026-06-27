@@ -4,7 +4,7 @@ import (
 	"html/template"
 	"io"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 // htmlThread renders a self-contained HTML document with inline CSS and no

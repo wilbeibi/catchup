@@ -11,7 +11,7 @@ import (
 	"io"
 	"text/tabwriter"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 // Thread renders a full conversation timeline in the requested format.

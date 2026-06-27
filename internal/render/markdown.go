@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 // markdownThread writes YAML frontmatter followed by a numbered timeline, built

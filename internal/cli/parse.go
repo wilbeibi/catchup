@@ -6,13 +6,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 // DefaultLimit is the number of rows a listing returns when -n is not given.
 const DefaultLimit = 20
 
-// Command is the fully parsed, normalized form of a single baton invocation:
+// Command is the fully parsed, normalized form of a single catchup invocation:
 // what to select (Target) and how to present it. It is the parser's only
 // output and the cli's only input, so that argument syntax lives in exactly one
 // place and the rest of the program works with structured data.
@@ -29,7 +29,7 @@ type Command struct {
 // Parse turns raw argv (excluding the program name) into a Command. It accepts
 // the fixed grammar:
 //
-//	baton <provider>[/<rank>] [flags]
+//	catchup <provider>[/<rank>] [flags]
 //
 // Flags may appear before or after the target, which is why this is a small
 // hand-rolled parser rather than the stdlib flag package (which stops at the
@@ -131,7 +131,7 @@ func Parse(args []string) (Command, error) {
 	}
 
 	if !haveTgt {
-		return cmd, errors.New("missing provider; usage: baton <provider>[/<rank>]")
+		return cmd, errors.New("missing provider; usage: catchup <provider>[/<rank>]")
 	}
 	if err := applyTarget(&cmd, target); err != nil {
 		return cmd, err
@@ -156,7 +156,7 @@ func setFormat(cmd *Command, set *bool, f session.Format) error {
 // rank — ids only ever enter through --id.
 func applyTarget(cmd *Command, spec string) error {
 	if strings.Contains(spec, "://") || strings.HasPrefix(spec, "agents:") {
-		return fmt.Errorf("%q: the agents:// scheme is not supported; use baton <provider>[/<rank>]", spec)
+		return fmt.Errorf("%q: the agents:// scheme is not supported; use catchup <provider>[/<rank>]", spec)
 	}
 
 	provider, rest, hasRank := strings.Cut(spec, "/")

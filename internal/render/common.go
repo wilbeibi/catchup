@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 // tsHuman is the compact, local-friendly timestamp used in headings and tables.

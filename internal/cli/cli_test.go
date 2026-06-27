@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 const rollout = `{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta","payload":{"id":"sess-1","cwd":"/home/u/src/proj","cli_version":"0.1"}}
@@ -52,7 +52,7 @@ func TestRunCwdFiltering(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	batonRollout := `{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta","payload":{"id":"sess-baton","cwd":"/home/u/src/baton","cli_version":"0.1"}}
+	catchupRollout := `{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta","payload":{"id":"sess-catchup","cwd":"/home/u/src/catchup","cli_version":"0.1"}}
 {"timestamp":"2026-06-26T21:31:55.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"refactor the auth module"}]}}
 {"timestamp":"2026-06-26T21:32:08.0Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}}
 `
@@ -60,7 +60,7 @@ func TestRunCwdFiltering(t *testing.T) {
 {"timestamp":"2026-06-26T22:01:00.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"unrelated work"}]}}
 {"timestamp":"2026-06-26T22:02:00.0Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}}
 `
-	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-baton.jsonl"), []byte(batonRollout), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-catchup.jsonl"), []byte(catchupRollout), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-other.jsonl"), []byte(otherRollout), 0o644); err != nil {
@@ -69,9 +69,9 @@ func TestRunCwdFiltering(t *testing.T) {
 	roots := session.Roots{Codex: root}
 
 	// With cwd: only the matching session appears
-	out := runWithCwd(t, roots, "/home/u/src/baton", "codex", "--list")
-	if !strings.Contains(out, "sess-baton") {
-		t.Errorf("expected sess-baton in cwd-filtered listing, got:\n%s", out)
+	out := runWithCwd(t, roots, "/home/u/src/catchup", "codex", "--list")
+	if !strings.Contains(out, "sess-catchup") {
+		t.Errorf("expected sess-catchup in cwd-filtered listing, got:\n%s", out)
 	}
 	if strings.Contains(out, "sess-other") {
 		t.Errorf("unexpected sess-other in cwd-filtered listing, got:\n%s", out)

@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/wilbeibi/baton/internal/claude"
-	"github.com/wilbeibi/baton/internal/codex"
-	"github.com/wilbeibi/baton/internal/opencode"
-	"github.com/wilbeibi/baton/internal/render"
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/claude"
+	"github.com/wilbeibi/catchup/internal/codex"
+	"github.com/wilbeibi/catchup/internal/opencode"
+	"github.com/wilbeibi/catchup/internal/render"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 // Run executes one invocation.

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 // writeRollout creates a rollout file under <root>/sessions/Y/M/D and stamps its

@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 func TestParse(t *testing.T) {

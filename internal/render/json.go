@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 // The JSON wire types are an explicit projection of the core types, not their

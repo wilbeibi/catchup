@@ -32,7 +32,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 const defaultLimit = 20

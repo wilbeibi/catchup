@@ -1,4 +1,4 @@
-module github.com/wilbeibi/baton
+module github.com/wilbeibi/catchup
 
 go 1.25.0
 

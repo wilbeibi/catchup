@@ -8,10 +8,10 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
-// makeDB creates a minimal OpenCode database (the subset of columns baton reads)
+// makeDB creates a minimal OpenCode database (the subset of columns catchup reads)
 // and returns the root directory containing opencode.db.
 func makeDB(t *testing.T) string {
 	t.Helper()

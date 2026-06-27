@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wilbeibi/baton/internal/session"
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 func sampleThread() session.Thread {
@@ -17,7 +17,7 @@ func sampleThread() session.Thread {
 			Ref:       session.Ref{Provider: "codex", SessionID: "019f05d8"},
 			Path:      "/home/u/.codex/sessions/x.jsonl",
 			UpdatedAt: ts,
-			Metadata:  map[string]string{"title": "baton: skeleton", "cwd": "/home/u/src/baton"},
+			Metadata:  map[string]string{"title": "catchup: skeleton", "cwd": "/home/u/src/catchup"},
 		},
 		Entries: []session.Entry{
 			{Kind: session.KindMessage, Role: session.RoleUser, Text: "hello <there>", Time: ts},
@@ -38,7 +38,7 @@ func TestMarkdownThread(t *testing.T) {
 		"---\n",
 		"provider: codex\n",
 		"session: 019f05d8\n",
-		`title: "baton: skeleton"` + "\n",
+		`title: "catchup: skeleton"` + "\n",
 		"entries: 3\n",
 		"## 1. user · 2026-06-26 14:31",
 		"## 2. assistant",
@@ -90,7 +90,7 @@ func TestList(t *testing.T) {
 	var b bytes.Buffer
 	sums := []session.Summary{
 		{Ref: session.Ref{Provider: "codex", SessionID: "019f05d8"}, Rank: 1,
-			UpdatedAt: time.Now(), Title: "skeleton", Cwd: "/src/baton", Preview: "let's\nimplement"},
+			UpdatedAt: time.Now(), Title: "skeleton", Cwd: "/src/catchup", Preview: "let's\nimplement"},
 	}
 	if err := List(&b, "codex", sums); err != nil {
 		t.Fatal(err)
