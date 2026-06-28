@@ -42,30 +42,52 @@ func Meta(w io.Writer, s session.Source, f session.Format) error {
 	}
 }
 
-// List renders a ranked listing as a plain table. Listings are always textual
-// (rank, updated time, title/cwd, preview, session id), independent of the
-// Thread output format, so they do not take a Format.
+// List renders a ranked listing as a plain table. It adapts to terminal width:
+// columns are "#", "UPDATED", "TITLE", "SESSION". TITLE gets the remaining
+// space after fixed columns and the longest session ID in the batch.
 func List(w io.Writer, provider string, summaries []session.Summary) error {
 	if len(summaries) == 0 {
 		_, err := fmt.Fprintf(w, "no %s sessions found\n", provider)
 		return err
 	}
 
+	titleMax := listTitleWidth(w, summaries)
+	if titleMax < 15 {
+		titleMax = 15
+	}
+	if titleMax > 80 {
+		titleMax = 80
+	}
+
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "RANK\tUPDATED\tTITLE\tCWD\tPREVIEW\tSESSION")
+	fmt.Fprintln(tw, "#\tUPDATED\tTITLE\tSESSION")
 	for _, s := range summaries {
 		updated := ""
 		if !s.UpdatedAt.IsZero() {
 			updated = s.UpdatedAt.Local().Format(tsHuman)
 		}
-		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\n",
+		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n",
 			s.Rank,
 			updated,
-			truncate(oneLine(s.Title), 40),
-			truncate(oneLine(s.Cwd), 32),
-			truncate(oneLine(s.Preview), 50),
+			truncate(oneLine(s.Title), titleMax),
 			s.Ref.SessionID,
 		)
 	}
 	return tw.Flush()
+}
+
+// listTitleWidth computes how many runes the TITLE column gets after
+// accounting for the other fixed columns and tabwriter padding (2 per cell).
+// It scans summaries for the longest session ID to use as the SESSION column
+// width, so the full ID always fits.
+func listTitleWidth(w io.Writer, summaries []session.Summary) int {
+	maxSid := len("SESSION") // at least the header width
+	for _, s := range summaries {
+		if len(s.Ref.SessionID) > maxSid {
+			maxSid = len(s.Ref.SessionID)
+		}
+	}
+	// Fixed: "#" (max 3 for ranks up to 999) + "UPDATED" (16) + SESSION (maxSid) + 8 padding
+	fixed := 3 + 16 + maxSid + 8
+	return termWidth(w) - fixed
 }

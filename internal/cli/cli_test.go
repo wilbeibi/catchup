@@ -117,7 +117,7 @@ func TestRunCwdFiltering(t *testing.T) {
 	}
 	roots := session.Roots{Codex: root}
 
-	// With cwd: only the matching session appears
+	// With cwd: only the matching session appears.
 	out := runWithCwd(t, roots, "/home/u/src/catchup", "codex", "--list")
 	if !strings.Contains(out, "sess-catchup") {
 		t.Errorf("expected sess-catchup in cwd-filtered listing, got:\n%s", out)

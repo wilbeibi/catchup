@@ -1,11 +1,15 @@
 package render
 
 import (
+	"io"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/wilbeibi/catchup/internal/session"
+	"golang.org/x/term"
 )
 
 // tsHuman is the compact, local-friendly timestamp used in headings and tables.
@@ -82,4 +86,21 @@ func truncate(s string, n int) string {
 		return string(r[:n])
 	}
 	return string(r[:n-1]) + "…"
+}
+
+// termWidth returns the terminal width in characters for the given writer.
+// When w is a terminal, it uses the TTY ioctl. Falls back to $COLUMNS,
+// then to a hardcoded default of 80.
+func termWidth(w io.Writer) int {
+	if f, ok := w.(*os.File); ok {
+		if width, _, err := term.GetSize(int(f.Fd())); err == nil && width > 0 {
+			return width
+		}
+	}
+	if s := os.Getenv("COLUMNS"); s != "" {
+		if w, err := strconv.Atoi(s); err == nil && w > 0 {
+			return w
+		}
+	}
+	return 80
 }

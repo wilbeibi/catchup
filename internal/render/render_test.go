@@ -96,10 +96,20 @@ func TestList(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := b.String()
-	if !strings.Contains(out, "RANK") || !strings.Contains(out, "019f05d8") {
+	if !strings.Contains(out, "#") || !strings.Contains(out, "019f05d8") {
 		t.Errorf("list missing header or row:\n%s", out)
 	}
-	if strings.Contains(out, "let's\nimplement") {
-		t.Errorf("preview newline should be collapsed:\n%s", out)
+	if strings.Contains(out, "let's") {
+		t.Errorf("preview should not appear in list:\n%s", out)
+	}
+	// Full session IDs are preserved so --id can restore them.
+	sums[0].Ref.SessionID = "deadbeef-cafe-babe-0123-456789abcdef"
+	b.Reset()
+	if err := List(&b, "codex", sums); err != nil {
+		t.Fatal(err)
+	}
+	out = b.String()
+	if !strings.Contains(out, "deadbeef-cafe-babe-0123-456789abcdef") {
+		t.Errorf("full session id should appear:\n%s", out)
 	}
 }
