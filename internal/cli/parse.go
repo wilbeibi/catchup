@@ -82,7 +82,7 @@ func Parse(args []string) (Command, error) {
 			if err := setFormat(&cmd, &formatSet, session.FormatMarkdown); err != nil {
 				return cmd, err
 			}
-		case "-I":
+		case "-I", "--info":
 			cmd.MetaOnly = true
 		case "--list":
 			cmd.List = true
@@ -98,7 +98,7 @@ func Parse(args []string) (Command, error) {
 				return cmd, err
 			}
 			cmd.Target.SessionID = v
-		case "-n":
+		case "-n", "--limit":
 			v, err := value()
 			if err != nil {
 				return cmd, err
@@ -137,7 +137,7 @@ func Parse(args []string) (Command, error) {
 		return cmd, nil // skip target validation; help text is provider-agnostic
 	}
 	if !haveTgt {
-		return cmd, errors.New("missing provider; usage: catchup <provider>[/<rank>]")
+		return cmd, errors.New("missing provider; run catchup --help for usage")
 	}
 	if err := applyTarget(&cmd, target); err != nil {
 		return cmd, err

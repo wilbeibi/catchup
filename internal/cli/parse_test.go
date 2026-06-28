@@ -67,12 +67,32 @@ func TestParse(t *testing.T) {
 			args: []string{"--help"},
 			want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
 		},
-		{
-			name: "--help before target",
-			args: []string{"--help", "claude"},
-			want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
-		},
-	}
+	{
+		name: "--help before target",
+		args: []string{"--help", "claude"},
+		want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
+	},
+	{
+		name: "-n sets limit",
+		args: []string{"codex", "-n", "5"},
+		want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: 5},
+	},
+	{
+		name: "--limit sets limit",
+		args: []string{"codex", "--limit", "5"},
+		want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: 5},
+	},
+	{
+		name: "-I sets meta-only",
+		args: []string{"codex", "-I"},
+		want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, MetaOnly: true, Limit: DefaultLimit},
+	},
+	{
+		name: "--info sets meta-only",
+		args: []string{"codex", "--info"},
+		want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, MetaOnly: true, Limit: DefaultLimit},
+	},
+}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

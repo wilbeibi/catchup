@@ -25,13 +25,13 @@ Flags:
   --list              list recent sessions
   -q, --query <text>  filter by keyword (implies --list)
   --id <id>           select by exact session id
-  -I                  print metadata only, no messages
+  -I, --info         print metadata only, no messages
   --last <N>          show last N exchanges only
   --since-compact     show only the final compaction segment
   --json              output JSON
   --html              output HTML
   --md, --markdown    output Markdown (default)
-  -n <N>              cap listing rows (default 20)
+  -n, --limit <N>     cap listing rows (default 20)
   -h, --help          print this help
 
 Examples:
@@ -107,7 +107,7 @@ func selectProvider(name string) (session.Provider, error) {
 	case session.ProviderPiAgent:
 		return piagent.New(), nil
 	default:
-		return nil, fmt.Errorf("unknown provider %q (want codex, claude, opencode, or pi-agent)", name)
+		return nil, fmt.Errorf("unknown provider %q (want codex, claude, opencode, or pi-agent); run catchup --help", name)
 	}
 }
 
