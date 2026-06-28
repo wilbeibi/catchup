@@ -17,6 +17,32 @@ import (
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
+const helpText = `Usage: catchup <provider>[/<rank>] [flags]
+
+Providers: codex, claude, opencode, pi-agent
+
+Flags:
+  --list              list recent sessions
+  -q, --query <text>  filter by keyword (implies --list)
+  --id <id>           select by exact session id
+  -I                  print metadata only, no messages
+  --last <N>          show last N exchanges only
+  --since-compact     show only the final compaction segment
+  --json              output JSON
+  --html              output HTML
+  --md, --markdown    output Markdown (default)
+  -n <N>              cap listing rows (default 20)
+  -h, --help          print this help
+
+Examples:
+  catchup claude              latest Claude session → Markdown
+  catchup claude --list       list recent Claude sessions
+  catchup codex -q "deploy"   search Codex sessions by keyword
+  catchup codex/3             3rd most recent Codex session
+  catchup claude --last 5     last 5 exchanges
+  catchup claude --since-compact  tail after last compaction
+`
+
 // Run executes one invocation. current maps a provider name to the id of the
 // session we are running inside, when that agent injects one (see
 // session.ResolveCurrent); it lets the default selection target the live
@@ -25,6 +51,11 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 	cmd, err := Parse(args)
 	if err != nil {
 		return err
+	}
+
+	if cmd.Help {
+		fmt.Fprint(stdout, helpText)
+		return nil
 	}
 
 	prov, err := selectProvider(cmd.Target.Provider)

@@ -52,6 +52,26 @@ func TestParse(t *testing.T) {
 			args: []string{"codex", "--json", "--last=20"},
 			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatJSON, LastN: 20, Limit: DefaultLimit},
 		},
+		{
+			name: "--help with provider",
+			args: []string{"codex", "--help"},
+			want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
+		},
+		{
+			name: "-h with provider",
+			args: []string{"claude", "-h"},
+			want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
+		},
+		{
+			name: "--help alone, no provider",
+			args: []string{"--help"},
+			want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
+		},
+		{
+			name: "--help before target",
+			args: []string{"--help", "claude"},
+			want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
+		},
 	}
 
 	for _, tt := range tests {

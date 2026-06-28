@@ -24,6 +24,7 @@ type Command struct {
 	SinceCompact bool // --since-compact: keep only the final compaction segment
 	List         bool // --list: print the ranked listing and exit
 	Limit        int  // -n N: cap listing rows (defaults to DefaultLimit)
+	Help         bool // --help, -h: print usage and exit
 }
 
 // Parse turns raw argv (excluding the program name) into a Command. It accepts
@@ -119,6 +120,8 @@ func Parse(args []string) (Command, error) {
 			cmd.LastN = n
 		case "--since-compact":
 			cmd.SinceCompact = true
+		case "-h", "--help":
+			cmd.Help = true
 		default:
 			if strings.HasPrefix(tok, "-") && tok != "-" {
 				return cmd, fmt.Errorf("unknown flag %q", tok)
@@ -130,6 +133,9 @@ func Parse(args []string) (Command, error) {
 		}
 	}
 
+	if cmd.Help {
+		return cmd, nil // skip target validation; help text is provider-agnostic
+	}
 	if !haveTgt {
 		return cmd, errors.New("missing provider; usage: catchup <provider>[/<rank>]")
 	}
