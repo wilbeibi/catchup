@@ -40,7 +40,7 @@ func TestMarkdownThread(t *testing.T) {
 		"session: 019f05d8\n",
 		`title: "catchup: skeleton"` + "\n",
 		"entries: 3\n",
-		"## 1. user · 2026-06-26 14:31",
+		"## 1. user | 2026-06-26 14:31",
 		"## 2. assistant",
 		"## 3. compact",
 		"_(context compacted)_",

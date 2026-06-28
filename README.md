@@ -32,10 +32,10 @@ updated: 2026-06-26T14:30:00Z
 cwd: /home/you/src/app
 model: claude-sonnet-4-20250514
 ---
-## 1. user · 2026-06-26 14:25
+## 1. user | 2026-06-26 14:25
 Refactor the auth middleware to use the new token format
 
-## 2. assistant · 2026-06-26 14:26  
+## 2. assistant | 2026-06-26 14:26
 Here's the updated middleware...
 ```
 

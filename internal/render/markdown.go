@@ -56,7 +56,7 @@ func writeFrontmatter(b *strings.Builder, src session.Source, warnings []string,
 func writeEntry(b *strings.Builder, n int, e session.Entry) {
 	fmt.Fprintf(b, "## %d. %s", n, entryLabel(e))
 	if !e.Time.IsZero() {
-		b.WriteString(" · ")
+		b.WriteString(" | ")
 		b.WriteString(e.Time.UTC().Format(tsHuman))
 	}
 	b.WriteString("\n\n")
