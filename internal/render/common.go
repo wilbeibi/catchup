@@ -76,18 +76,6 @@ func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// truncate shortens s to at most n runes, appending an ellipsis when it cuts.
-func truncate(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	if n <= 1 {
-		return string(r[:n])
-	}
-	return string(r[:n-1]) + "…"
-}
-
 // termWidth returns the terminal width in characters for the given writer.
 // When w is a terminal, it uses the TTY ioctl. Falls back to $COLUMNS,
 // then to a hardcoded default of 80.

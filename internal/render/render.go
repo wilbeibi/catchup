@@ -9,8 +9,8 @@ package render
 import (
 	"fmt"
 	"io"
-	"text/tabwriter"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
@@ -45,49 +45,58 @@ func Meta(w io.Writer, s session.Source, f session.Format) error {
 // List renders a ranked listing as a plain table. It adapts to terminal width:
 // columns are "#", "UPDATED", "TITLE", "SESSION". TITLE gets the remaining
 // space after fixed columns and the longest session ID in the batch.
+// Columns are aligned with display-width-aware padding so CJK characters
+// (2 columns each in terminals) align correctly.
 func List(w io.Writer, provider string, summaries []session.Summary) error {
 	if len(summaries) == 0 {
 		_, err := fmt.Fprintf(w, "no %s sessions found\n", provider)
 		return err
 	}
 
-	titleMax := listTitleWidth(w, summaries)
-	if titleMax < 15 {
-		titleMax = 15
+	const gutter = 1
+	rankW := 3            // fits ranks up to 999
+	updW := 16            // "2006-01-02 15:04"
+	sidW := maxSidWidth(summaries)
+	titleW := termWidth(w) - rankW - updW - sidW - 3*gutter
+	if titleW < 15 {
+		titleW = 15
 	}
-	if titleMax > 80 {
-		titleMax = 80
+	if titleW > 80 {
+		titleW = 80
 	}
 
-	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "#\tUPDATED\tTITLE\tSESSION")
+	// Header
+	fmt.Fprintf(w, "%s %s %s %s\n",
+		runewidth.FillRight("#", rankW),
+		runewidth.FillRight("UPDATED", updW),
+		runewidth.FillRight("TITLE", titleW),
+		runewidth.FillRight("SESSION", sidW),
+	)
+
 	for _, s := range summaries {
 		updated := ""
 		if !s.UpdatedAt.IsZero() {
 			updated = s.UpdatedAt.Local().Format(tsHuman)
 		}
-		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n",
-			s.Rank,
-			updated,
-			truncate(oneLine(s.Title), titleMax),
+		title := runewidth.Truncate(oneLine(s.Title), titleW, "…")
+		fmt.Fprintf(w, "%s %s %s %s\n",
+			runewidth.FillRight(fmt.Sprintf("%d", s.Rank), rankW),
+			runewidth.FillRight(updated, updW),
+			runewidth.FillRight(title, titleW),
 			s.Ref.SessionID,
 		)
 	}
-	return tw.Flush()
+	return nil
 }
 
-// listTitleWidth computes how many runes the TITLE column gets after
-// accounting for the other fixed columns and tabwriter padding (2 per cell).
-// It scans summaries for the longest session ID to use as the SESSION column
-// width, so the full ID always fits.
-func listTitleWidth(w io.Writer, summaries []session.Summary) int {
-	maxSid := len("SESSION") // at least the header width
+// maxSidWidth returns the maximum display width of session IDs in the batch,
+// clamped to at least the width of the header "SESSION" (7).
+func maxSidWidth(summaries []session.Summary) int {
+	m := 7 // len("SESSION")
 	for _, s := range summaries {
-		if len(s.Ref.SessionID) > maxSid {
-			maxSid = len(s.Ref.SessionID)
+		if w := runewidth.StringWidth(s.Ref.SessionID); w > m {
+			m = w
 		}
 	}
-	// Fixed: "#" (max 3 for ranks up to 999) + "UPDATED" (16) + SESSION (maxSid) + 8 padding
-	fixed := 3 + 16 + maxSid + 8
-	return termWidth(w) - fixed
+	return m
 }

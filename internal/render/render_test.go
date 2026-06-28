@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
@@ -111,5 +112,59 @@ func TestList(t *testing.T) {
 	out = b.String()
 	if !strings.Contains(out, "deadbeef-cafe-babe-0123-456789abcdef") {
 		t.Errorf("full session id should appear:\n%s", out)
+	}
+}
+
+// TestListCJKAlignment locks in the display-width-aware padding: a CJK title
+// (2 columns per rune) must not shift the SESSION column relative to the
+// header or to an ASCII-only row. Regression for the tabwriter replacement.
+func TestListCJKAlignment(t *testing.T) {
+	// termWidth falls back to $COLUMNS when w is not a *os.File.
+	t.Setenv("COLUMNS", "80")
+
+	cases := []struct {
+		name  string
+		title string
+	}{
+		{"ascii", "Engineering basics"},
+		{"cjk", "Engineering博文三结论开头写法"},
+	}
+	sums := make([]session.Summary, 0, len(cases))
+	for i, c := range cases {
+		sums = append(sums, session.Summary{
+			Ref:       session.Ref{Provider: "codex", SessionID: "0123456789abcdef"},
+			Rank:      i + 1,
+			UpdatedAt: time.Date(2026, 6, 28, 14, 9, 0, 0, time.UTC),
+			Title:     c.title,
+		})
+	}
+
+	var b bytes.Buffer
+	if err := List(&b, "codex", sums); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimRight(b.String(), "\n"), "\n")
+	if len(lines) != len(cases)+1 {
+		t.Fatalf("expected %d lines, got %d:\n%s", len(cases)+1, len(lines), b.String())
+	}
+
+	// The SESSION column must start at the same *display column* in every
+	// line. CJK runes are 3 bytes but 2 columns, so byte offset is not
+	// enough — measure the display width of the prefix before SESSION.
+	marker := "0123456789abcdef"
+	want := runewidth.StringWidth(lines[0][:strings.Index(lines[0], "SESSION")])
+	if want < 0 {
+		t.Fatalf("header missing SESSION:\n%s", lines[0])
+	}
+	for i, ln := range lines[1:] {
+		idx := strings.Index(ln, marker)
+		if idx < 0 {
+			t.Fatalf("line %d missing session id:\n%s", i+1, ln)
+		}
+		got := runewidth.StringWidth(ln[:idx])
+		if got != want {
+			t.Errorf("line %d (%s): SESSION at display col %d, want %d (header)\n%s",
+				i+1, cases[i].name, got, want, ln)
+		}
 	}
 }
