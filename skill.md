@@ -1,6 +1,6 @@
 ---
 name: catchup
-description: Recovers prior coding-agent session context by running the local `catchup` CLI, which extracts clean conversation summaries from Codex, Claude Code, and OpenCode history. Use when the user says "catch up", "what did the last session do", "get me up to speed", "I switched agents", or asks to recover/summarize a previous Codex/Claude/OpenCode session before continuing. Do NOT use for the current conversation, git history, or any non-agent log.
+description: Recovers prior coding-agent session context by running the local `catchup` CLI, which extracts clean conversation summaries from Codex, Claude Code, OpenCode, and Pi Agent history. Use when the user says "catch up", "what did the last session do", "get me up to speed", "I switched agents", or asks to recover/summarize a previous Codex/Claude/OpenCode/Pi Agent session before continuing. Do NOT use for the current conversation, git history, or any non-agent log.
 ---
 
 # catchup
@@ -17,7 +17,7 @@ Run the command, read the output, then continue the user's task with that contex
 
 ## Steps
 
-1. Pick the provider the prior work happened in: `codex`, `claude`, or `opencode`.
+1. Pick the provider the prior work happened in: `codex`, `claude`, `opencode`, or `pi-agent`.
 2. Run `catchup <provider>` and read the result. Sessions are scoped to the current working directory by default.
 3. If it's the wrong session, narrow it:
    - `catchup <provider> --list` — list recent sessions to find the right one.

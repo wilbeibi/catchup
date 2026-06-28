@@ -1,6 +1,10 @@
 // Package codex implements session.Provider over Codex CLI history: rollout JSONL
 // files under $CODEX_HOME (default ~/.codex).
 //
+// Format reference, source of truth for RolloutLine/RolloutItem and the record
+// payloads — codex-rs/protocol/src/protocol.rs in the Codex repo:
+// https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs
+//
 // Useful records: session_meta.payload.{id,cwd,timestamp,cli_version,
 // model_provider} for metadata; response_item.payload with type=message and
 // role user/assistant, content types input_text and output_text, for the
@@ -31,15 +35,12 @@ import (
 
 const defaultLimit = 20
 
-// Provider reads Codex rollout files. It holds no state today; the receiver is
-// kept so per-instance configuration (clock, fs override) can be added without
-// changing the constructor's callers.
+// Provider reads Codex rollout files.
 type Provider struct{}
 
 // New returns a Codex provider.
 func New() *Provider { return &Provider{} }
 
-// Ensure Provider satisfies the interface at compile time.
 var _ session.Provider = (*Provider)(nil)
 
 func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) (session.Source, error) {
@@ -260,7 +261,6 @@ func readMeta(fi fileInfo) (session.Source, error) {
 	return src, nil
 }
 
-// readThread parses a rollout file into a visible timeline.
 func readThread(fi fileInfo) (session.Thread, error) {
 	f, err := os.Open(fi.path)
 	if err != nil {

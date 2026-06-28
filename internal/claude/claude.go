@@ -2,6 +2,10 @@
 // JSONL under $CLAUDE_CONFIG_DIR/projects/**/<uuid>.jsonl (default
 // ~/.claude).
 //
+// Claude Code does not publish a schema for these transcripts; the record types
+// below were derived from real files, which is why the parser ignores anything
+// it does not recognize rather than assuming a fixed shape.
+//
 // Useful records: top-level user and assistant entries; message.content as a
 // string or as text blocks; compact summaries from the known compact/summary
 // system records; ai-title, cwd, gitBranch, sessionId, and timestamp for
@@ -147,7 +151,7 @@ func listSessions(root, query, cwd string, limit int) ([]session.Summary, error)
 		}
 		t, err := readThread(fi)
 		if err != nil || len(t.Entries) == 0 {
-			continue // skip empty/unreadable transcripts
+			continue
 		}
 		if cwd != "" && t.Source.Metadata["cwd"] != cwd {
 			continue
@@ -313,7 +317,6 @@ func applyMeta(src *session.Source, line claudeLine) {
 	}
 }
 
-// finalizeMeta supplies a title fallback when no ai-title record was present.
 func finalizeMeta(src *session.Source) {
 	if src.Metadata["title"] == "" {
 		if cwd := src.Metadata["cwd"]; cwd != "" {

@@ -12,6 +12,7 @@ import (
 	"github.com/wilbeibi/catchup/internal/claude"
 	"github.com/wilbeibi/catchup/internal/codex"
 	"github.com/wilbeibi/catchup/internal/opencode"
+	"github.com/wilbeibi/catchup/internal/piagent"
 	"github.com/wilbeibi/catchup/internal/render"
 	"github.com/wilbeibi/catchup/internal/session"
 )
@@ -63,7 +64,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 }
 
 // selectProvider maps a provider name to its implementation. The set is closed
-// at exactly three, so this is a switch, not a registry.
+// and small, so this is a switch, not a registry.
 func selectProvider(name string) (session.Provider, error) {
 	switch name {
 	case session.ProviderCodex:
@@ -72,8 +73,10 @@ func selectProvider(name string) (session.Provider, error) {
 		return claude.New(), nil
 	case session.ProviderOpenCode:
 		return opencode.New(), nil
+	case session.ProviderPiAgent:
+		return piagent.New(), nil
 	default:
-		return nil, fmt.Errorf("unknown provider %q (want codex, claude, or opencode)", name)
+		return nil, fmt.Errorf("unknown provider %q (want codex, claude, opencode, or pi-agent)", name)
 	}
 }
 

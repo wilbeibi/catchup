@@ -10,9 +10,9 @@
 
 ## The problem
 
-You use multiple coding agents — Codex, Claude Code, OpenCode. Each keeps its conversation history in a different place, in a different format. When you need to hand off a session's context to another agent, you open the old UI, scroll through walls of tool calls and reasoning blocks, find the actual messages, copy a chunk, and paste.
+You use multiple coding agents — Codex, Claude Code, OpenCode, Pi Agent. Each keeps its conversation history in a different place, in a different format. When you need to hand off a session's context to another agent, you open the old UI, scroll through walls of tool calls and reasoning blocks, find the actual messages, copy a chunk, and paste.
 
-catchup reads all three local histories and gives you a clean, compact summary: just the conversation, stripped of noise.
+catchup reads local agent histories and gives you a clean, compact summary: just the conversation, stripped of noise.
 
 ## What it does
 
@@ -20,6 +20,7 @@ catchup reads all three local histories and gives you a clean, compact summary: 
 catchup codex        # latest Codex session → clean Markdown to stdout
 catchup claude       # latest Claude session
 catchup opencode     # latest OpenCode session
+catchup pi-agent     # latest Pi Agent session
 ```
 
 The output is YAML frontmatter (who, when, where, which model) followed by the conversation timeline — user and assistant messages only, numbered and timestamped. Tool calls, reasoning, and bookkeeping noise are gone. Compaction markers stay as lightweight breaks.
@@ -62,7 +63,7 @@ catchup codex --json   # structured JSON (for scripts)
 
 ## Supported agents
 
-catchup reads sessions from Codex, Claude Code, and OpenCode. It finds them automatically under `~/.codex`, `~/.claude`, and `~/.local/share/opencode`. Each can be overridden with an environment variable: `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `XDG_DATA_HOME`.
+catchup reads sessions from Codex, Claude Code, OpenCode, and Pi Agent. It finds them automatically under `~/.codex`, `~/.claude`, `~/.local/share/opencode`, and `~/.pi/agent`. Each can be overridden with an environment variable: `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `XDG_DATA_HOME`, `PI_CODING_AGENT_DIR`.
 
 **What's included:** user and assistant messages, session metadata (title, directory, model, branch), compaction markers.
 

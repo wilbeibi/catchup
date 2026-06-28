@@ -9,6 +9,7 @@ import "path/filepath"
 //	Codex    : $CODEX_HOME          else <home>/.codex
 //	Claude   : $CLAUDE_CONFIG_DIR   else <home>/.claude
 //	OpenCode : $XDG_DATA_HOME/opencode else <home>/.local/share/opencode
+//	PiAgent  : $PI_CODING_AGENT_DIR else <home>/.pi/agent
 //
 // getenv and home are passed in rather than read from the os package so that
 // root resolution is a pure function and can be tested without touching the
@@ -31,7 +32,12 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		opencode = filepath.Join(home, ".local", "share", "opencode")
 	}
 
-	return Roots{Codex: codex, Claude: claude, OpenCode: opencode}
+	piAgent := getenv("PI_CODING_AGENT_DIR")
+	if piAgent == "" {
+		piAgent = filepath.Join(home, ".pi", "agent")
+	}
+
+	return Roots{Codex: codex, Claude: claude, OpenCode: opencode, PiAgent: piAgent}
 }
 
 // ResolveCurrent reports the session each provider says we are running inside,

@@ -4,10 +4,10 @@
 //
 // This package performs no I/O and knows nothing about the CLI or about output
 // formats. The provider packages (internal/codex, internal/claude,
-// internal/opencode) implement Provider against real history on disk; the cli
-// layer turns user input into a request and hands the result to the renderer
-// (internal/render). Keeping the nouns here, free of any behavior, is what lets
-// the other layers stay independent of one another.
+// internal/opencode, internal/piagent) implement Provider against real history
+// on disk; the cli layer turns user input into a request and hands the result to
+// the renderer (internal/render). Keeping the nouns here, free of any behavior,
+// is what lets the other layers stay independent of one another.
 package session
 
 import (
@@ -21,6 +21,7 @@ const (
 	ProviderCodex    = "codex"
 	ProviderClaude   = "claude"
 	ProviderOpenCode = "opencode"
+	ProviderPiAgent  = "pi-agent"
 )
 
 // Entry kinds and message roles. Providers normalize their own wire formats
@@ -64,6 +65,7 @@ type Roots struct {
 	Codex    string
 	Claude   string
 	OpenCode string
+	PiAgent  string
 }
 
 // Source is a located session: enough to read it and to describe it in a

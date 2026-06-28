@@ -6,6 +6,10 @@
 // keeps SQLite isolated to this package and the rest of the program
 // dependency-free.
 //
+// Schema reference, source of truth for the session/message/part tables —
+// packages/core/src/session/sql.ts in the OpenCode repo:
+// https://github.com/sst/opencode/blob/dev/packages/core/src/session/sql.ts
+//
 // Useful rows: session.{id,title,directory,parent_id,agent,model,time_created,
 // time_updated} for metadata and listing; message.{id,session_id,time_created,
 // data} for role and order; part.data.type=text for timeline text;

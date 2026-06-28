@@ -68,6 +68,23 @@ func claudeRoot(t *testing.T) session.Roots {
 	return session.Roots{Claude: root}
 }
 
+func piAgentRoot(t *testing.T) session.Roots {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions", "--home-u-src-proj--")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"type":"session","version":3,"id":"pi-1","timestamp":"2026-06-28T02:50:19.365Z","cwd":"/home/u/src/proj"}
+{"type":"message","id":"m1","parentId":null,"timestamp":"2026-06-28T02:50:23.414Z","message":{"role":"user","content":[{"type":"text","text":"hello pi"}]}}
+{"type":"message","id":"m2","parentId":"m1","timestamp":"2026-06-28T02:50:26.242Z","message":{"role":"assistant","content":[{"type":"text","text":"hi pi"}]}}
+`
+	if err := os.WriteFile(filepath.Join(dir, "2026-06-28T02-50-19-365Z_pi-1.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return session.Roots{PiAgent: root}
+}
+
 func runWithCwd(t *testing.T, roots session.Roots, cwd string, args ...string) string {
 	t.Helper()
 	var out, errOut bytes.Buffer
@@ -119,12 +136,25 @@ func TestRunRendersLatestMarkdown(t *testing.T) {
 	}
 }
 
+func TestRunRendersPiAgentMarkdown(t *testing.T) {
+	out := run(t, piAgentRoot(t), "pi-agent")
+	for _, want := range []string{"provider: pi-agent", "session: pi-1", "## 1. user", "hello pi", "## 2. assistant", "hi pi"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestLastTurns(t *testing.T) {
 	// Keeping the last turn must start at the final user message and include
 	// every assistant reply that follows it — not the prior exchange or the
 	// compaction marker before it.
-	u := func(s string) session.Entry { return session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: s} }
-	a := func(s string) session.Entry { return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: s} }
+	u := func(s string) session.Entry {
+		return session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: s}
+	}
+	a := func(s string) session.Entry {
+		return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: s}
+	}
 	compact := session.Entry{Kind: session.KindCompact}
 
 	thread := session.Thread{Entries: []session.Entry{
@@ -146,8 +176,12 @@ func TestLastTurns(t *testing.T) {
 }
 
 func TestSinceCompact(t *testing.T) {
-	u := func(s string) session.Entry { return session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: s} }
-	a := func(s string) session.Entry { return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: s} }
+	u := func(s string) session.Entry {
+		return session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: s}
+	}
+	a := func(s string) session.Entry {
+		return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: s}
+	}
 	summary := session.Entry{Kind: session.KindCompact, Text: "recap so far"}
 
 	// Keep the last compaction entry (the recap) and everything after it.
