@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# DEMO SIM (right pane) — a scripted mimic of a Codex session. The prose is
+# staged, but the catchup call is REAL: it runs `catchup claude` against the
+# seeded sessions and shows the actual title / turn count / first message it
+# loaded. Drives the "after" half of the handoff story.
+set -u
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+export TZ=UTC
+
+cy=$'\033[38;5;39m'    # Codex blue
+gn=$'\033[38;5;114m'   # success
+g=$'\033[38;5;245m'    # muted
+dim=$'\033[2m'; rs=$'\033[0m'
+
+clear
+printf '%s~/src/app%s\n' "$dim" "$rs"
+printf '%s⌖ Codex%s\n\n' "$cy" "$rs"
+sleep 0.6
+
+# the user "types" a request to Codex
+req="catch up on the last Claude session and continue"
+printf '%s›%s ' "$cy" "$rs"
+for (( i=0; i<${#req}; i++ )); do printf '%s' "${req:$i:1}"; sleep 0.035; done
+printf '\n\n'
+sleep 0.8
+
+# REAL catchup call (Codex self-serving the prior context)
+printf '%s⚙%s %scatchup claude%s\n' "$g" "$rs" "$dim" "$rs"
+sleep 0.7
+json=$(catchup claude --json 2>/dev/null || true)
+title=$(printf '%s' "$json" | jq -r '.metadata.title // .session_id // "unknown"')
+n=$(printf '%s' "$json" | jq -r '(.entries | length) // 0')
+firstuser=$(printf '%s' "$json" | jq -r 'first(.entries[] | select(.role=="user") | .text) // ""')
+firstuser=${firstuser:0:48}
+printf '%s✓%s loaded "%s%s%s"  ·  %s turns\n' "$gn" "$rs" "$cy" "$title" "$rs" "$n"
+sleep 0.5
+printf '%s   · %s…%s\n' "$g" "$firstuser" "$rs"
+printf '%s   · root cause: token-refresh race in refreshToken()%s\n' "$g" "$rs"
+sleep 1.5
+printf '\n%s›%s Continuing where Claude stopped — adding a\n' "$cy" "$rs"
+printf '  sync.Mutex around refreshToken()…\n'
+sleep 1.0
+sleep 20   # hold the final frame for the recorder; killed when the demo ends

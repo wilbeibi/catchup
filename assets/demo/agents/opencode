@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# DEMO SIM — a scripted mimic of an opencode interactive session for the recall
+# GIF. You launch `opencode` (no args) in a project dir and ask about past work
+# in Claude; opencode invokes the `catchup` skill to recall it. The prose is
+# staged, but the catchup search + load run for real against the seeded sessions.
+set -u
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+export TZ=UTC
+
+mg=$'\033[38;5;170m'   # opencode accent
+gn=$'\033[38;5;114m'   # skill marker
+g=$'\033[38;5;252m'    # answer text
+dim=$'\033[2m'; rs=$'\033[0m'
+i='  '
+gut="${dim}│${rs} "
+
+# gutter-prefixed line (mimics opencode's tool/skill output block)
+g_line() { printf '%s%s%s\n' "$i" "$gut" "$1"; }
+
+printf '\n%s%s● opencode%s  %s~/src/app%s\n\n' "$i" "$mg" "$rs" "$dim" "$rs"
+sleep 0.6
+
+# the user asks about earlier work — explicitly in Claude, so catchup is the move
+req='what did I figure out in Claude last week about rate limits?'
+printf '%s%s›%s ' "$i" "$mg" "$rs"
+for (( k=0; k<${#req}; k++ )); do printf '%s' "${req:$k:1}"; sleep 0.028; done
+printf '\n\n'
+sleep 0.9
+
+# opencode invokes the catchup skill — the catchup commands below are REAL
+printf '%s%s⏺ Using skill%s  %scatchup%s\n' "$i" "$gn" "$rs" "$mg" "$rs"
+sleep 0.7
+tbl=$(catchup claude -q "rate limit")
+g_line "$(printf '%s$ catchup claude -q "rate limit"%s' "$dim" "$rs")"
+printf '%s\n' "$tbl" | while IFS= read -r l; do g_line "$l"; done
+sleep 1.3
+id=$(printf '%s' "$tbl" | awk 'NR==2{print $NF}')
+json=$(catchup claude --id "$id" --json 2>/dev/null || true)
+title=$(printf '%s' "$json" | jq -r '.metadata.title // .session_id // "unknown"')
+ans=$(printf '%s' "$json" | jq -r 'last(.entries[] | select(.role=="assistant") | .text) // ""')
+g_line "$(printf '%s$ catchup claude --id %s%s' "$dim" "$id" "$rs")"
+sleep 1.2
+
+# opencode answers in plain language from what the skill recalled (no "loaded")
+printf '\n%s%s›%s Got it — in your Claude session "%s%s%s":\n' "$i" "$mg" "$rs" "$mg" "$title" "$rs"
+printf '%s  %s%s%s\n' "$i" "$g" "$ans" "$rs"
+sleep 1.0
+sleep 15   # hold the final frame for the recorder; killed when the demo ends

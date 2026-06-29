@@ -26,6 +26,10 @@ fmt:
 tidy:
     go mod tidy
 
+# regenerate the README demo GIFs (requires vhs)
+demo:
+    bash assets/demo/render.sh
+
 # remove build artifacts
 clean:
     rm -f catchup
