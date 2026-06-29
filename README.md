@@ -87,12 +87,6 @@ Restart the agent, then ask it to "catch up on the last session".
 
 Default output is clean Markdown: session metadata plus the user/assistant conversation, with tool calls and reasoning removed. Pipe it, save it, or hand it to another agent.
 
-When there's nothing to read, catchup says why on stderr and exits non-zero:
-
-```
-catchup: claude: no sessions found under ~/.claude
-```
-
 ## Usage
 
 ### Read a session
