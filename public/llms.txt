@@ -1,11 +1,12 @@
 # catchup
 
-> catchup is an open-source command-line tool (written in Go, MIT-licensed) that reads the session history of AI coding agents — Claude Code, Codex, OpenCode, and Pi Agent — and prints a clean, handoff-ready Markdown summary containing just the user/assistant conversation, with tool calls, reasoning traces, and token noise removed. It lets you switch between coding agents, or resume work days later, without re-explaining context.
+> catchup is an open-source command-line tool (written in Go, MIT-licensed) that lets your next coding agent catch itself up. It reads local Claude Code, Codex, OpenCode, and Pi Agent session history and prints clean, handoff-ready Markdown containing just the user/assistant conversation, with tool calls, reasoning traces, and token noise removed.
 
-catchup solves a concrete problem: developers jump between coding agents, and each stores its history in a different place and format. When one agent hits a usage limit or you want a second opinion, the next agent has no context. catchup reads any supported agent's history and emits the same clean output, so the next agent (or you) picks up instantly.
+catchup solves a concrete problem: developers jump between coding agents, and each stores its history in a different place and format. When one agent hits a usage limit or you want a second opinion, the next agent has no context. catchup gives the agent a simple command it can run itself to recover prior work without you re-explaining the project state.
 
 Key facts:
-- One command per agent: `catchup claude`, `catchup codex`, `catchup opencode`, `catchup pi-agent` — identical clean output regardless of source.
+- Agent handoff commands: `catchup claude`, `catchup codex`, `catchup opencode`, `catchup pi-agent` — clean Markdown regardless of source.
+- Human browsing starts with `catchup <provider> --list`, for example `catchup codex --list`.
 - Output is Markdown by default; `--html` and `--json` are also available.
 - Read-only: catchup never modifies, deletes, or tags sessions.
 - Install with Go: `go install github.com/wilbeibi/catchup@latest`.

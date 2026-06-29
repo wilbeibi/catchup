@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>catchup - handoff-ready context for AI coding agents</title>
-<meta name="description" content="catchup is an open-source CLI that turns Claude Code, Codex, OpenCode &amp; Pi Agent session history into clean, handoff-ready Markdown — switch agents without re-explaining.">
+<title>catchup - let your next coding agent catch itself up</title>
+<meta name="description" content="catchup is an open-source CLI your AI coding agents can run to read Claude Code, Codex, OpenCode &amp; Pi Agent history and print clean handoff Markdown.">
 <meta name="keywords" content="catchup, AI coding agent, Claude Code, Codex, OpenCode, Pi Agent, session history, context handoff, CLI, Go">
 <meta property="og:type" content="website">
-<meta property="og:title" content="catchup — handoff-ready context for your AI coding agents">
-<meta property="og:description" content="Reads Claude Code, Codex, OpenCode &amp; Pi Agent session history and prints clean Markdown — just the conversation, none of the tool-call noise.">
+<meta property="og:title" content="catchup — let your next coding agent catch itself up">
+<meta property="og:description" content="A small CLI your AI coding agents can run to read prior sessions and print clean handoff Markdown without tool-call noise.">
 <meta property="og:url" content="https://catchup.pages.dev/">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="catchup — handoff-ready context for your AI coding agents">
-<meta name="twitter:description" content="Switch between Claude Code, Codex, OpenCode &amp; Pi Agent without re-explaining everything.">
+<meta name="twitter:title" content="catchup — let your next coding agent catch itself up">
+<meta name="twitter:description" content="A small CLI your AI coding agents can run to recover prior local session context.">
 <link rel="canonical" href="https://catchup.pages.dev/">
 <link rel="alternate" type="text/markdown" href="/index.md">
 <meta name="theme-color" content="#f7f4ec">
@@ -27,7 +27,7 @@
   "name": "catchup",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS, Linux, Windows",
-  "description": "CLI that turns Claude Code, Codex, OpenCode & Pi Agent session history into clean, handoff-ready Markdown context. Switch agents without re-explaining.",
+  "description": "CLI your AI coding agents can run to read Claude Code, Codex, OpenCode & Pi Agent session history and print clean handoff Markdown context.",
   "url": "https://catchup.pages.dev/",
   "downloadUrl": "https://github.com/wilbeibi/catchup",
   "softwareHelp": "https://pkg.go.dev/github.com/wilbeibi/catchup",
@@ -87,8 +87,8 @@
   <!-- HERO -->
   <header style="max-width: 1080px; margin: 0 auto; padding: 64px 32px 40px;">
     <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin-bottom: 26px;">Open-source CLI · Go · MIT</div>
-    <h1 style="font-size: clamp(40px, 6.4vw, 76px); line-height: 1.02; font-weight: 500; letter-spacing: -0.025em; margin: 0; max-width: 16ch; text-wrap: balance;">Switch coding agents without <em style="font-style: italic; color: var(--accent);">re-explaining.</em></h1>
-    <p style="font-size: clamp(18px, 2.1vw, 22px); line-height: 1.5; color: #514a3d; max-width: 56ch; margin: 28px 0 0; text-wrap: pretty;">catchup reads your Claude Code, Codex, OpenCode, and Pi Agent session history and prints clean, handoff-ready Markdown — just the conversation, none of the tool-call noise. The next agent picks up instantly.</p>
+    <h1 style="font-size: clamp(40px, 6.4vw, 76px); line-height: 1.02; font-weight: 500; letter-spacing: -0.025em; margin: 0; max-width: 16ch; text-wrap: balance;">Let your next coding agent <em style="font-style: italic; color: var(--accent);">catch itself up.</em></h1>
+    <p style="font-size: clamp(18px, 2.1vw, 22px); line-height: 1.5; color: #514a3d; max-width: 56ch; margin: 28px 0 0; text-wrap: pretty;">catchup is a small CLI your AI coding agents can run to read prior Claude Code, Codex, OpenCode, and Pi Agent sessions and print clean, handoff-ready Markdown. Agents continue work without you re-explaining what happened.</p>
 
     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 38px;">
       <button onclick="copyInstall()" aria-label="Copy install command" style="display: inline-flex; align-items: center; gap: 12px; max-width: 100%; background: #232019; color: #f7f4ec; border: none; border-radius: 8px; padding: 13px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 14px; cursor: pointer; box-shadow: 0 1px 0 #00000018;" class="cu-darkbtn">
@@ -158,8 +158,8 @@ with a sync.Mutex.<span style="color: var(--accent); animation: cu-blink 1.1s st
     <div class="cu-how" data-reveal="" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;">
       <div style="padding: 4px 36px 4px 0; border-right: 1px solid #ddd5c2;">
         <div style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 14px; margin-bottom: 16px;">I</div>
-        <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">One command, any agent</h3>
-        <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;"><code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup claude</code>, <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup codex</code>, <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup opencode</code>, <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup pi-agent</code> — the same clean output, whichever tool wrote the history.</p>
+        <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Built for agent handoff</h3>
+        <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;">Your next agent runs <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup claude</code>, <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup codex</code>, <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup opencode</code>, or <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup pi-agent</code> to recover the relevant conversation.</p>
       </div>
       <div style="padding: 4px 36px; border-right: 1px solid #ddd5c2;">
         <div style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 14px; margin-bottom: 16px;">II</div>
@@ -168,8 +168,8 @@ with a sync.Mutex.<span style="color: var(--accent); animation: cu-blink 1.1s st
       </div>
       <div style="padding: 4px 0 4px 36px;">
         <div style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 14px; margin-bottom: 16px;">III</div>
-        <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Built for handoff</h3>
-        <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;">Pipe it straight to the next agent, or read it yourself days later. No re-briefing, no copy-pasting context between windows.</p>
+        <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Readable by humans</h3>
+        <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;">Browsing manually? Start with <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup codex --list</code>, then open the exact session you want.</p>
       </div>
     </div>
   </section>
@@ -181,26 +181,26 @@ with a sync.Mutex.<span style="color: var(--accent); animation: cu-blink 1.1s st
       
         <div style="border: 1px solid #ddd5c2; border-radius: 10px; padding: 22px 20px; background: #fffdf8;" class="cu-card">
           <div style="font-size: 21px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 10px;">Claude Code</div>
-          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675;"><span style="color: var(--green);">$</span> catchup claude</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675;"><span style="color: var(--green);">$</span> catchup claude --list</div>
         </div>
       
         <div style="border: 1px solid #ddd5c2; border-radius: 10px; padding: 22px 20px; background: #fffdf8;" class="cu-card">
           <div style="font-size: 21px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 10px;">Codex</div>
-          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675;"><span style="color: var(--green);">$</span> catchup codex</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675;"><span style="color: var(--green);">$</span> catchup codex --list</div>
         </div>
       
         <div style="border: 1px solid #ddd5c2; border-radius: 10px; padding: 22px 20px; background: #fffdf8;" class="cu-card">
           <div style="font-size: 21px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 10px;">OpenCode</div>
-          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675;"><span style="color: var(--green);">$</span> catchup opencode</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675;"><span style="color: var(--green);">$</span> catchup opencode --list</div>
         </div>
       
         <div style="border: 1px solid #ddd5c2; border-radius: 10px; padding: 22px 20px; background: #fffdf8;" class="cu-card">
           <div style="font-size: 21px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 10px;">Pi Agent</div>
-          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675;"><span style="color: var(--green);">$</span> catchup pi-agent</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675;"><span style="color: var(--green);">$</span> catchup pi-agent --list</div>
         </div>
       
     </div>
-    <p style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675; margin: 22px 0 0;">Read-only. No cross-agent mixing, no raw replay, no writing — catchup never touches your sessions.</p>
+    <p style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675; margin: 22px 0 0;">Agents can run the bare command for handoff context. Humans can add <code style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;">--list</code> to browse first. Read-only: catchup never touches your sessions.</p>
   </section>
 
   <!-- CLOSING CTA -->

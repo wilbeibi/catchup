@@ -1,16 +1,16 @@
 # catchup
 
-> Switch coding agents without re-explaining. catchup reads your Claude Code, Codex, OpenCode, and Pi Agent session history and prints clean, handoff-ready Markdown — just the conversation, none of the tool-call noise.
+> Let your next coding agent catch itself up. catchup is a small CLI your agents can run to read prior Claude Code, Codex, OpenCode, and Pi Agent sessions and print clean, handoff-ready Markdown.
 
 Open-source CLI · Go · MIT · https://catchup.pages.dev/
 
 ## What it does
 
-catchup reads the local session history of an AI coding agent and prints a clean Markdown transcript of only the user/assistant conversation. Tool calls, reasoning traces, and token noise are removed, so the next agent — or you, days later — can pick up the thread without being re-briefed.
+catchup reads the local session history of an AI coding agent and prints a clean Markdown transcript of only the user/assistant conversation. Tool calls, reasoning traces, and token noise are removed, so the next agent can recover what happened without you re-explaining the project state.
 
-- **One command, any agent.** `catchup claude`, `catchup codex`, `catchup opencode`, `catchup pi-agent` produce the same clean output, whichever tool wrote the history.
+- **Built for agent handoff.** Your next agent runs `catchup claude`, `catchup codex`, `catchup opencode`, or `catchup pi-agent` to recover the relevant conversation.
 - **Just the conversation.** User and assistant messages only; tool calls, reasoning, and token accounting are stripped.
-- **Built for handoff.** Pipe the output to the next agent, or read it yourself later — no re-explaining, no copy-pasting context between windows.
+- **Still readable by humans.** Browsing manually? Start with `catchup codex --list`, then open the exact session you want.
 
 ## Install
 
@@ -22,10 +22,10 @@ MIT-licensed, no config.
 
 ## Supported agents
 
-- Claude Code — `catchup claude`
-- Codex — `catchup codex`
-- OpenCode — `catchup opencode`
-- Pi Agent — `catchup pi-agent`
+- Claude Code — `catchup claude --list`
+- Codex — `catchup codex --list`
+- OpenCode — `catchup opencode --list`
+- Pi Agent — `catchup pi-agent --list`
 
 Read-only: no cross-agent mixing, no raw replay, no writing. catchup never touches your sessions.
 
