@@ -10,6 +10,10 @@ status:
 init:
     mkdir -p public
 
+# serve the static site locally
+serve port="8788":
+    cd public && python3 -m http.server {{port}}
+
 # deploy the site branch to Cloudflare Pages
 deploy:
     npx wrangler pages deploy public --project-name=catchup --branch=site
