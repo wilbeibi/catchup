@@ -2,11 +2,21 @@
 
 # catchup
 
-### Handoff-ready summaries from your agent sessions
+### Handoff-ready summaries of your AI coding-agent sessions
+
+Switch between Claude Code, Codex, OpenCode & Pi Agent without re-explaining everything.
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/wilbeibi/catchup.svg)](https://pkg.go.dev/github.com/wilbeibi/catchup)
+[![Go Report Card](https://goreportcard.com/badge/github.com/wilbeibi/catchup)](https://goreportcard.com/report/github.com/wilbeibi/catchup)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
 
 You jump between coding agents — Claude Code, Codex, OpenCode, Pi Agent — each keeping its history in a different place and format. **catchup** reads any of them and prints a clean, handoff-ready summary — just the conversation, no tool-call noise — so the next agent (or you, days later) picks up instantly.
+
+- **One command, any agent.** `catchup claude`, `catchup codex`, `catchup opencode`, `catchup pi-agent` — same clean output.
+- **Just the conversation.** User and assistant messages only. Tool calls, reasoning, and token noise are stripped.
+- **Built for handoff.** Pipe it to the next agent or read it yourself days later — no re-briefing.
 
 <div align="center">
 
