@@ -35,86 +35,122 @@ You jump between coding agents — Claude Code, Codex, OpenCode, Pi Agent — ea
 go install github.com/wilbeibi/catchup@latest
 ```
 
-Requires Go 1.25+. Single binary, one dependency (SQLite for OpenCode, pure Go).
+<details>
+<summary>Add skill to Claude Code</summary>
+
+```bash
+mkdir -p ~/.claude/skills/catchup
+curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md \
+  -o ~/.claude/skills/catchup/SKILL.md
+```
+
+</details>
+
+<details>
+<summary>Add skill to Codex</summary>
+
+```bash
+mkdir -p ~/.agents/skills/catchup
+curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md \
+  -o ~/.agents/skills/catchup/SKILL.md
+```
+
+</details>
+
+<details>
+<summary>Add skill to OpenCode</summary>
+
+OpenCode uses Claude Code skills by default.
+
+```bash
+mkdir -p ~/.claude/skills/catchup
+curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md \
+  -o ~/.claude/skills/catchup/SKILL.md
+```
+
+</details>
+
+<details>
+<summary>Add skill to Pi Agent</summary>
+
+```bash
+mkdir -p ~/.pi/agent/skills/catchup
+curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md \
+  -o ~/.pi/agent/skills/catchup/SKILL.md
+```
+
+</details>
+
+Restart the agent, then ask it to "catch up on the last session".
 
 ## What it does
 
-```bash
-catchup codex        # latest Codex session → clean Markdown to stdout
-catchup claude       # latest Claude session
-catchup opencode     # latest OpenCode session
-catchup pi-agent     # latest Pi Agent session
-```
+Default output is clean Markdown: session metadata plus the user/assistant conversation, with tool calls and reasoning removed. Pipe it, save it, or hand it to another agent.
 
-The output is YAML frontmatter (who, when, where, which model) followed by the conversation timeline — user and assistant messages only, numbered and timestamped. Tool calls, reasoning, and bookkeeping noise are gone. Compaction markers stay as lightweight breaks.
-
-```
----
-provider: codex
-session: sess-abc123
-updated: 2026-06-26T14:30:00Z
-cwd: /home/you/src/app
-model: claude-sonnet-4-20250514
----
-## 1. user | 2026-06-26 14:25
-Refactor the auth middleware to use the new token format
-
-## 2. assistant | 2026-06-26 14:26
-Here's the updated middleware...
-```
-
-That's it. You can pipe it, save it, or hand it to another agent. When there's nothing to read, catchup says why on stderr and exits non-zero:
+When there's nothing to read, catchup says why on stderr and exits non-zero:
 
 ```
 catchup: claude: no sessions found under ~/.claude
 ```
 
-## Finding sessions
+## Usage
+
+### Read a session
 
 ```bash
-catchup codex --list                    # list recent sessions
-catchup codex -q "auth"                 # search for sessions about auth
-catchup codex/3                         # 3rd most recent session
-catchup claude --id <exact-session-id>  # exact session (for scripts)
+catchup codex      # latest Codex session in this project
+catchup claude     # latest Claude Code session in this project
+catchup opencode   # latest OpenCode session in this project
+catchup pi-agent   # latest Pi Agent session in this project
 ```
 
-## Other output formats
+### Find the right session
 
 ```bash
-catchup codex -I      # metadata only (who/when/where, no conversation)
-catchup codex --last 4       # last 4 exchanges only (each = your prompt + the reply)
-catchup claude --since-compact # only the final compaction segment (leads with Claude's recap)
-catchup codex --html   # self-contained HTML (for sharing in a browser)
-catchup codex --json   # structured JSON (for scripts)
+catchup codex --list                   # list sessions in this project
+catchup codex -q "auth"                # search sessions in this project
+catchup codex/3                        # 3rd most recent session in this project
+catchup claude --id <session-id>       # exact session id from any project
 ```
 
-## Options
+### Limit the output
+
+```bash
+catchup codex --last 4                 # last 4 exchanges
+catchup claude --since-compact         # final compaction segment, if any
+catchup codex --info                   # metadata only
+```
+
+### Change the format
+
+```bash
+catchup codex --md                     # Markdown output
+catchup codex --html                   # self-contained HTML
+catchup codex --json                   # structured JSON
+```
+
+## Reference
 
 | Argument / flag | What it does |
 |---|---|
-| `<provider>` | one of `codex`, `claude`, `opencode`, `pi-agent` |
-| `<provider>/N` | the N-th most recent session (`/1` = latest) |
-| `--list` | list recent sessions as a table |
-| `-q, --query <text>` | filter sessions by keyword (implies `--list`) |
-| `--id <id>` | select an exact session by id (ignores the directory filter) |
-| `-I, --info` | metadata only, no messages |
+| `<provider>` | latest session for this provider in the current directory |
+| `<provider>/N` | N-th most recent session in the current directory |
+| `--list` | list sessions in the current directory |
+| `-q, --query <text>` | filter current-directory sessions by keyword (implies `--list`) |
+| `--id <id>` | select an exact session by id, ignoring the directory filter |
+| `--info` | metadata only, no messages |
 | `--last <N>` | keep only the last N exchanges |
-| `--since-compact` | keep only the final compaction segment |
+| `--since-compact` | keep the final compaction segment, or the whole session if none |
 | `-n, --limit <N>` | cap listing rows (default 20) |
 | `--md` · `--html` · `--json` | output format (default `--md`) |
 | `-h, --help` | print usage |
 
 ## Supported agents
 
-catchup reads sessions from Codex, Claude Code, OpenCode, and Pi Agent. It finds them automatically under `~/.codex`, `~/.claude`, `~/.local/share/opencode`, and `~/.pi/agent`. Each can be overridden with an environment variable: `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `XDG_DATA_HOME`, `PI_CODING_AGENT_DIR`.
-
-**What's included:** user and assistant messages, session metadata (title, directory, model, branch), compaction markers.
-
-**What's skipped:** tool calls, tool results, reasoning/thinking blocks, token counts, file snapshots.
-
-## Use it from an agent
-
-catchup ships with an agent skill (`skill.md`), so a coding agent can run it on its own — tell it "catch up on the last session" or "I switched agents" and it pulls the prior context in before continuing. Works across Claude Code, Codex, OpenCode, and Pi Agent.
+- Codex
+- Claude Code
+- OpenCode
+- Pi Agent
 
 ## What catchup doesn't do
 
@@ -123,14 +159,6 @@ catchup ships with an agent skill (`skill.md`), so a coding agent can run it on 
 **No raw replay.** If you need every tool call, result, and reasoning step for debugging, catchup is the wrong tool — grep the raw `.jsonl` or `.db` files directly.
 
 **No writing.** catchup is read-only. It doesn't modify, delete, or tag sessions.
-
-## Troubleshooting
-
-**`catchup: <provider>: no sessions found under …`** — that agent has no history where catchup looks. Defaults are `~/.codex`, `~/.claude`, `~/.local/share/opencode`, `~/.pi/agent`; override with `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `XDG_DATA_HOME`, or `PI_CODING_AGENT_DIR`.
-
-**`--list` is empty or shows the wrong session** — `--list`, `-q`, and `/N` only consider sessions whose working directory matches where you run catchup. Run it from the project directory, or use `--id <id>` to reach any session.
-
-**Selecting a session in a script** — use `--id <full-id>`, not `/N`: ranks shift as new sessions appear, ids are stable.
 
 ## License
 
