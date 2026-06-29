@@ -2,7 +2,7 @@
 
 # catchup
 
-### Handoff-ready summaries of your AI coding-agent sessions
+### Handoff-ready context of your AI coding-agent sessions
 
 Switch between Claude Code, Codex, OpenCode & Pi Agent without re-explaining everything.
 
