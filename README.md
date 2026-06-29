@@ -19,9 +19,13 @@ You jump between coding agents — Claude Code, Codex, OpenCode, Pi Agent — ea
 
 <div align="center">
 
+**Claude Code hits its 5-hour limit — Codex runs `catchup` in the same folder and keeps going, no re-explaining.**
+
 <img src="assets/handoff.gif" alt="A second agent picks up a Claude Code session that hit its 5-hour limit by running catchup, instead of being re-briefed" width="850">
 
-<sub><i>Claude Code hits its 5-hour limit (left); Codex — in the same directory — runs <code>catchup</code> to pick up the thread and keep going (right). No re-explaining.</i></sub>
+**Ask a new agent about earlier work — it runs `catchup -q` to find the old session and pull it back into context.**
+
+<img src="assets/recall.gif" alt="An agent recalls a past session by keyword with catchup -q, then pulls it up by id" width="850">
 
 </div>
 
@@ -73,14 +77,6 @@ catchup codex -q "auth"                 # search for sessions about auth
 catchup codex/3                         # 3rd most recent session
 catchup claude --id <exact-session-id>  # exact session (for scripts)
 ```
-
-<div align="center">
-
-<img src="assets/recall.gif" alt="An agent recalls a past session by keyword with catchup -q, then pulls it up by id" width="850">
-
-<sub><i>Ask opencode about earlier work in Claude — it runs the <code>catchup</code> skill to recall the session that solved it.</i></sub>
-
-</div>
 
 ## Other output formats
 
