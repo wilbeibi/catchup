@@ -6,9 +6,8 @@
 
 Switch between Claude Code, Codex, OpenCode & Pi Agent without re-explaining everything.
 
+[![CI](https://github.com/wilbeibi/catchup/actions/workflows/ci.yml/badge.svg)](https://github.com/wilbeibi/catchup/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/wilbeibi/catchup.svg)](https://pkg.go.dev/github.com/wilbeibi/catchup)
-[![Go Report Card](https://goreportcard.com/badge/github.com/wilbeibi/catchup)](https://goreportcard.com/report/github.com/wilbeibi/catchup)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
 
