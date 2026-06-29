@@ -1,0 +1,41 @@
+# catchup
+
+> catchup is an open-source command-line tool (written in Go, MIT-licensed) that reads the session history of AI coding agents — Claude Code, Codex, OpenCode, and Pi Agent — and prints a clean, handoff-ready Markdown summary containing just the user/assistant conversation, with tool calls, reasoning traces, and token noise removed. It lets you switch between coding agents, or resume work days later, without re-explaining context.
+
+catchup solves a concrete problem: developers jump between coding agents, and each stores its history in a different place and format. When one agent hits a usage limit or you want a second opinion, the next agent has no context. catchup reads any supported agent's history and emits the same clean output, so the next agent (or you) picks up instantly.
+
+Key facts:
+- One command per agent: `catchup claude`, `catchup codex`, `catchup opencode`, `catchup pi-agent` — identical clean output regardless of source.
+- Output is Markdown by default; `--html` and `--json` are also available.
+- Read-only: catchup never modifies, deletes, or tags sessions.
+- Install with Go: `go install github.com/wilbeibi/catchup@latest`.
+- Ships as a Claude Code / Codex / OpenCode / Pi Agent skill (SKILL.md) so an agent can run it itself to "catch up on the last session".
+
+## Documentation
+- [Full reference (llms-full.txt)](https://catchup.pages.dev/llms-full.txt): Complete command list, usage scenarios, comparisons, and facts in one Markdown file.
+- [GitHub repository](https://github.com/wilbeibi/catchup): Source code, README, install instructions, and the full command reference.
+- [Go package reference (pkg.go.dev)](https://pkg.go.dev/github.com/wilbeibi/catchup): API and package documentation.
+- [SKILL.md](https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md): The agent skill definition that teaches a coding agent how to invoke catchup.
+
+## Usage
+- Read a session: `catchup <provider>` reads the latest session for that agent in the current directory.
+- Pick a session: `catchup <provider>/N` reads the N-th most recent; `--id <id>` selects an exact session id.
+- Find a session: `catchup <provider> --list` lists sessions; `-q, --query <text>` filters by keyword.
+- Trim output: `--last <N>` keeps the last N exchanges; `--since-compact` keeps the final compaction segment; `--info` shows metadata only.
+- Change format: `--md` (default), `--html`, `--json`.
+
+## Supported agents
+- Claude Code
+- Codex
+- OpenCode
+- Pi Agent
+
+## Scope
+- No cross-agent mixing: one agent is selected at a time; sessions are not merged.
+- No raw replay: tool calls, results, and reasoning steps are intentionally stripped — grep the raw `.jsonl`/`.db` files for that.
+- No writing: catchup is strictly read-only.
+
+## Optional
+- [Author: wilbeibi on GitHub](https://github.com/wilbeibi): Maintainer profile.
+- [Issues](https://github.com/wilbeibi/catchup/issues): Bug reports and feature requests.
+- [MIT License](https://github.com/wilbeibi/catchup/blob/main/LICENSE): Licensing terms.

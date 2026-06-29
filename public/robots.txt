@@ -1,0 +1,59 @@
+# catchup — https://catchup.pages.dev/
+# Crawlers are classified by purpose. This site opts INTO AI search visibility.
+# Reference: the bots below are grouped so you can flip any category to Disallow.
+
+# ---------------------------------------------------------------------------
+# Default: everything is allowed.
+# ---------------------------------------------------------------------------
+User-agent: *
+Allow: /
+
+# --- AI search & retrieval (drives AI-search answers — keep allowed) --------
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+# --- User-triggered (fires when someone pastes your URL into a chat) --------
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Agent
+Allow: /
+
+# --- Training crawlers (allowed here — an OSS tool benefits from reach) ------
+# To keep content out of model training without hurting AI search,
+# change "Allow: /" to "Disallow: /" for the four agents below.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /
+
+# --- Opt-out tokens (not crawlers; signal training opt-out if disallowed) ---
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://catchup.pages.dev/sitemap.xml
