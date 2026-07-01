@@ -1,33 +1,22 @@
 ---
 name: catchup
-description: Recovers prior coding-agent session context by running `catchup <agent>`, which extracts clean conversation summaries from Codex, Claude Code, OpenCode, and Pi Agent history. Use when the user says "catch up", "what did the last session do", "get me up to speed", "I switched agents", or asks to recover/summarize a previous Codex/Claude/OpenCode/Pi Agent session before continuing. Do NOT use for the current conversation, git history, or any non-agent log.
+description: Recovers prior coding-agent session context by running `catchup <agent> --since-compact`, which extracts a clean summary of a previous Codex, Claude Code, OpenCode, or Pi Agent session. Use when the user says "catch up", "what did the last session do", "get me up to speed", "I switched agents", or asks to recover/summarize a previous session before continuing. Do NOT use for the current conversation, git history, or any non-agent log.
 ---
 
 # catchup
 
-Pull a clean summary of a previous agent session into context.
-
 ```bash
-catchup <agent>              # latest -> Markdown
-catchup <agent> --list       # browse recent sessions
-catchup <agent> -q "topic"   # search by keyword
-catchup <agent>/3            # 3rd most recent
-catchup <agent> --id <id>    # exact session
+catchup <agent> --since-compact
 ```
 
 Agents: `codex`, `claude`, `opencode`, `pi-agent`.
 
 ## Operation
 
-Always run `--list` first when unsure which session the user means — don't guess.
-
-- `--last N` — last N exchanges only.
-- `--since-compact` — final compaction segment only. Mutually exclusive with `--last`.
-
-## Output
-
-- Conversation only: user/assistant messages, numbered and timestamped. Tool calls and reasoning are already stripped.
-- Default Markdown; `--json` / `--html` for scripts and sharing.
-- `-I` for metadata only (who/when/where/model).
+- Default to `--since-compact` (final compaction segment).
+- Unclear which session? Run `catchup <agent> --list` first — don't guess.
+- Unclear which flag fits the request (full session, `--last N`, a specific rank/id)? Ask the user instead of guessing.
+- `-q "topic"` implies `--list` — returns a listing, not a session read.
+- Output: Markdown, conversation only, tool calls/reasoning already stripped.
 
 Run `catchup --help` for the full flag list.

@@ -12,7 +12,7 @@ Use it when an agent hits a limit, you switch tools, or you need to recall what 
 
 <div align="center">
 
-**Claude Code hits its usage limit. Codex runs `catchup claude` in the same directory.**
+**Claude Code hits its usage limit. Codex runs `catchup claude --since-compact` in the same directory.**
 
 <img src="assets/handoff.gif" alt="A second agent picks up a Claude Code session that hit its 5-hour limit by running catchup, instead of being re-briefed" width="850">
 
@@ -37,18 +37,18 @@ Restart the agent, then ask it to catch up on the last session.
 Use `<agent>` as `codex`, `claude`, `opencode`, or `pi-agent`.
 
 ```bash
-catchup <agent>                # latest session in this directory
-catchup <agent> --list         # browse sessions in this directory
-catchup <agent> -q "auth"      # search sessions in this directory
-catchup <agent>/3              # 3rd most recent session
-catchup <agent> --id <id>      # exact session from any directory
+catchup <agent> --since-compact  # read latest since compaction
+catchup <agent> --list           # list recent sessions
+catchup <agent> -q "auth"        # search sessions
+catchup <agent>/3                # read 3rd newest session
+catchup <agent> --id <id>        # read exact session
 
-catchup <agent> --last 4       # last 4 exchanges
-catchup <agent> --json         # Markdown by default; also --html
+catchup <agent> --last 4         # read last 4 exchanges
+catchup <agent> --json           # render JSON; also --html
 
-catchup fork                   # fork the newest coding agent session
-catchup fork <agent>           # fork a specific agent's newest session
-catchup install-skill <agent>  # install the skill for one agent
+catchup fork                     # fork newest session
+catchup fork <agent>             # fork agent's newest session
+catchup install-skill <agent>    # install skill for agent
 ```
 
 ## Boundaries
