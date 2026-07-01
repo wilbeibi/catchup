@@ -13,7 +13,7 @@ import (
 // names change. Times are RFC3339 strings; empty values are omitted.
 
 type sourceDoc struct {
-	Provider  string            `json:"provider"`
+	Agent     string            `json:"agent"`
 	SessionID string            `json:"session_id,omitempty"`
 	Path      string            `json:"path,omitempty"`
 	UpdatedAt string            `json:"updated_at,omitempty"`
@@ -60,7 +60,7 @@ func jsonMeta(w io.Writer, s session.Source) error {
 
 func makeSourceDoc(s session.Source) sourceDoc {
 	return sourceDoc{
-		Provider:  s.Ref.Provider,
+		Agent:     s.Ref.Provider,
 		SessionID: s.Ref.SessionID,
 		Path:      s.Path,
 		UpdatedAt: rfc3339(s.UpdatedAt),

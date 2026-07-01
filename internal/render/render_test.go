@@ -37,7 +37,7 @@ func TestMarkdownThread(t *testing.T) {
 	// Frontmatter: title contains a colon, so it must be quoted.
 	for _, want := range []string{
 		"---\n",
-		"provider: codex\n",
+		"agent: codex\n",
 		"session: 019f05d8\n",
 		`title: "catchup: skeleton"` + "\n",
 		"entries: 3\n",
@@ -61,7 +61,7 @@ func TestJSONThreadShape(t *testing.T) {
 	if err := json.Unmarshal(b.Bytes(), &doc); err != nil {
 		t.Fatalf("output is not valid JSON: %v", err)
 	}
-	if doc.Provider != "codex" || doc.SessionID != "019f05d8" {
+	if doc.Agent != "codex" || doc.SessionID != "019f05d8" {
 		t.Errorf("bad source doc: %+v", doc.sourceDoc)
 	}
 	if len(doc.Entries) != 3 || doc.Entries[0].Index != 1 || doc.Entries[0].Role != "user" {

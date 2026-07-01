@@ -20,17 +20,17 @@ import (
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
-const helpText = `Usage: catchup <provider>[/<rank>] [flags]
-       catchup fork [provider]
-       catchup install-skill [provider]
+const helpText = `Usage: catchup <agent>[/<rank>] [flags]
+       catchup fork [agent]
+       catchup install-skill [agent]
 
-Providers: codex, claude, opencode, pi-agent
+Agents: codex, claude, opencode, pi-agent
 
 Flags:
   --list              list recent sessions
   -q, --query <text>  filter by keyword (implies --list)
   --id <id>           select by exact session id
-  -I, --info         print metadata only, no messages
+  -I, --info          print metadata only, no messages
   --last <N>          show last N exchanges only
   --since-compact     show only the final compaction segment
   --json              output JSON
@@ -144,7 +144,7 @@ func selectProvider(name string) (session.Provider, error) {
 	case session.ProviderPiAgent:
 		return piagent.New(), nil
 	default:
-		return nil, fmt.Errorf("unknown provider %q (want codex, claude, opencode, or pi-agent); run catchup --help", name)
+		return nil, fmt.Errorf("unknown agent %q (want codex, claude, opencode, or pi-agent); run catchup --help", name)
 	}
 }
 
@@ -181,7 +181,7 @@ func locateForkSource(ctx context.Context, roots session.Roots, cmd Command, cwd
 	if len(failures) > 0 {
 		return session.Source{}, fmt.Errorf("fork: no sessions found in %q", cwd)
 	}
-	return session.Source{}, fmt.Errorf("fork: no providers available")
+	return session.Source{}, fmt.Errorf("fork: no agents available")
 }
 
 // installSkill writes skillMD to "<dir>/catchup/SKILL.md" for one provider, or
@@ -265,7 +265,7 @@ func forkCommand(src session.Source) (string, []string, error) {
 		}
 		return "pi", []string{"--fork", target}, nil
 	default:
-		return "", nil, fmt.Errorf("fork: unsupported provider %q", src.Ref.Provider)
+		return "", nil, fmt.Errorf("fork: unsupported agent %q", src.Ref.Provider)
 	}
 }
 

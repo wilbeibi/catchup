@@ -130,7 +130,7 @@ func TestRunCwdFiltering(t *testing.T) {
 
 func TestRunRendersLatestMarkdown(t *testing.T) {
 	out := run(t, codexRoot(t), "codex")
-	for _, want := range []string{"provider: codex", "session: sess-1", "## 1. user", "hello from cli test", "## 2. assistant", "hi back"} {
+	for _, want := range []string{"agent: codex", "session: sess-1", "## 1. user", "hello from cli test", "## 2. assistant", "hi back"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
@@ -139,7 +139,7 @@ func TestRunRendersLatestMarkdown(t *testing.T) {
 
 func TestRunRendersPiAgentMarkdown(t *testing.T) {
 	out := run(t, piAgentRoot(t), "pi-agent")
-	for _, want := range []string{"provider: pi-agent", "session: pi-1", "## 1. user", "hello pi", "## 2. assistant", "hi pi"} {
+	for _, want := range []string{"agent: pi-agent", "session: pi-1", "## 1. user", "hello pi", "## 2. assistant", "hi pi"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
@@ -238,8 +238,8 @@ func TestCurrentSessionBeatsNewest(t *testing.T) {
 func TestRunUnknownProvider(t *testing.T) {
 	var out, errOut bytes.Buffer
 	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, nil, nil, nil, "", nil, &out, &errOut)
-	if err == nil || !strings.Contains(err.Error(), "unknown provider") {
-		t.Errorf("expected unknown provider error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "unknown agent") {
+		t.Errorf("expected unknown agent error, got %v", err)
 	}
 }
 

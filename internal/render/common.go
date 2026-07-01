@@ -27,7 +27,7 @@ var metaOrder = []string{"title", "cwd", "branch", "model", "model_provider", "c
 // the single definition of "how a session describes itself" shared by the
 // Markdown frontmatter and the HTML header.
 func header(src session.Source) []kv {
-	pairs := []kv{{"provider", src.Ref.Provider}}
+	pairs := []kv{{"agent", src.Ref.Provider}}
 	if src.Ref.SessionID != "" {
 		pairs = append(pairs, kv{"session", src.Ref.SessionID})
 	}

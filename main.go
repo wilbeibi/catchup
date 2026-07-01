@@ -1,5 +1,5 @@
 // Command catchup converts local agent conversation history into compact handover
-// output. Usage: catchup <provider>[/<rank>] [flags].
+// output. Usage: catchup <agent>[/<rank>] [flags].
 //
 // main is intentionally tiny: it resolves the environment into values and wires
 // the layers together. All behavior lives behind cli.Run so that the program is

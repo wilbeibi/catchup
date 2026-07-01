@@ -31,7 +31,7 @@ type Command struct {
 // Parse turns raw argv (excluding the program name) into a Command. It accepts
 // the fixed grammar:
 //
-//	catchup <provider>[/<rank>] [flags]
+//	catchup <agent>[/<rank>] [flags]
 //
 // Flags may appear before or after the target, which is why this is a small
 // hand-rolled parser rather than the stdlib flag package (which stops at the
@@ -133,7 +133,7 @@ func Parse(args []string) (Command, error) {
 				return cmd, fmt.Errorf("unknown flag %q", tok)
 			}
 			if haveTgt {
-				return cmd, fmt.Errorf("unexpected extra argument %q (only one provider target is allowed)", tok)
+				return cmd, fmt.Errorf("unexpected extra argument %q (only one agent target is allowed)", tok)
 			}
 			target, haveTgt = tok, true
 		}
@@ -146,7 +146,7 @@ func Parse(args []string) (Command, error) {
 		return cmd, normalize(&cmd)
 	}
 	if !haveTgt {
-		return cmd, errors.New("missing provider; run catchup --help for usage")
+		return cmd, errors.New("missing agent; run catchup --help for usage")
 	}
 	if err := applyTarget(&cmd, target); err != nil {
 		return cmd, err
@@ -165,21 +165,21 @@ func setFormat(cmd *Command, set *bool, f session.Format) error {
 	return nil
 }
 
-// applyTarget splits "<provider>[/<rank>]" and rejects every other URI shape:
+// applyTarget splits "<agent>[/<rank>]" and rejects every other URI shape:
 // schemes (agents://...), path segments, and non-numeric ranks. Forbidding a
 // non-numeric rank is what guarantees a session id can never be mistaken for a
 // rank — ids only ever enter through --id.
 func applyTarget(cmd *Command, spec string) error {
 	if strings.Contains(spec, "://") || strings.HasPrefix(spec, "agents:") {
-		return fmt.Errorf("%q: the agents:// scheme is not supported; use catchup <provider>[/<rank>]", spec)
+		return fmt.Errorf("%q: the agents:// scheme is not supported; use catchup <agent>[/<rank>]", spec)
 	}
 
 	provider, rest, hasRank := strings.Cut(spec, "/")
 	if provider == "" {
-		return errors.New("missing provider name")
+		return errors.New("missing agent name")
 	}
 	if !isProviderName(provider) {
-		return fmt.Errorf("%q: provider name may only contain letters, digits, '-' and '_'", provider)
+		return fmt.Errorf("%q: agent name may only contain letters, digits, '-' and '_'", provider)
 	}
 	cmd.Target.Provider = provider
 
@@ -187,7 +187,7 @@ func applyTarget(cmd *Command, spec string) error {
 		return nil
 	}
 	if rest == "" || strings.Contains(rest, "/") {
-		return fmt.Errorf("%q: expected <provider>/<rank> with a single numeric rank", spec)
+		return fmt.Errorf("%q: expected <agent>/<rank> with a single numeric rank", spec)
 	}
 	rank, err := strconv.Atoi(rest)
 	if err != nil || rank < 1 {
