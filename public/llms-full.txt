@@ -63,6 +63,11 @@ Change the format:
 - `--json` — structured JSON.
 - `-h, --help` — print usage.
 
+Fork:
+
+- `catchup fork` — fork the newest session in the current directory, across all providers.
+- `catchup fork <provider>` — fork the newest current-directory session for one provider. Launches that agent's own native fork command (`codex fork`, `claude --resume --fork-session`, `opencode --session --fork`, `pi --fork`).
+
 ## Supported agents
 
 - Claude Code — agent handoff: `catchup claude`; human browsing: `catchup claude --list`
@@ -76,13 +81,11 @@ Each produces the same clean output regardless of how the source agent stored it
 
 - Versus reading raw history files: the raw `.jsonl` or `.db` files contain tool calls, results, reasoning, and token accounting. catchup strips all of that and leaves only the conversation, so a typical session of well over a thousand lines becomes a short, readable transcript.
 - Versus a unified "show everything" dashboard: catchup deliberately handles one agent at a time. There is no merged cross-agent view, because each agent's sessions have different shapes and flattening them would lose meaningful differences.
-- Versus a session manager: catchup is strictly read-only. It never modifies, deletes, tags, or writes sessions.
 
 ## What catchup intentionally does not do
 
 - No cross-agent mixing — you pick one agent per invocation.
 - No raw replay — for every tool call, result, and reasoning step, grep the raw `.jsonl`/`.db` files directly instead.
-- No writing — catchup only reads.
 
 ## Facts
 

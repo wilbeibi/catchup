@@ -114,7 +114,7 @@
   <!-- HOW IT WORKS -->
   <section style="max-width: 1080px; margin: 0 auto; padding: 72px 32px 24px;">
     <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #8d8675; margin-bottom: 32px; border-top: 1px solid #ddd5c2; padding-top: 22px;">What it does</div>
-    <div class="cu-how" data-reveal="" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;">
+    <div class="cu-how" data-reveal="" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;">
       <div style="padding: 4px 36px 4px 0; border-right: 1px solid #ddd5c2;">
         <div style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 14px; margin-bottom: 16px;">I</div>
         <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Built for agent handoff</h3>
@@ -125,10 +125,15 @@
         <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Just the conversation</h3>
         <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;">User and assistant messages only. Tool calls, reasoning traces, and token noise are stripped — what's left is the thread you actually need.</p>
       </div>
-      <div style="padding: 4px 0 4px 36px;">
+      <div style="padding: 4px 36px; border-right: 1px solid #ddd5c2;">
         <div style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 14px; margin-bottom: 16px;">III</div>
         <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Readable by humans</h3>
         <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;">Browsing manually? Start with <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup codex --list</code>, then open the exact session you want.</p>
+      </div>
+      <div style="padding: 4px 0 4px 36px;">
+        <div style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 14px; margin-bottom: 16px;">IV</div>
+        <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Fork back in</h3>
+        <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;">Run <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup fork</code> to hand off to the agent's own native fork command — real session state, not a rendered transcript.</p>
       </div>
     </div>
   </section>
@@ -159,7 +164,7 @@
         </div>
       
     </div>
-    <p style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675; margin: 22px 0 0;">Agents can run the bare command for handoff context. Humans can add <code style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;">--list</code> to browse first. Read-only: catchup never touches your sessions.</p>
+    <p style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675; margin: 22px 0 0;">Agents can run the bare command for handoff context. Humans can add <code style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;">--list</code> to browse first, or <code style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;">fork</code> to resume natively.</p>
   </section>
 
   <!-- CLOSING CTA -->

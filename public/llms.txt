@@ -8,7 +8,7 @@ Key facts:
 - Agent handoff commands: `catchup claude`, `catchup codex`, `catchup opencode`, `catchup pi-agent` — clean Markdown regardless of source.
 - Human browsing starts with `catchup <provider> --list`, for example `catchup codex --list`.
 - Output is Markdown by default; `--html` and `--json` are also available.
-- Read-only: catchup never modifies, deletes, or tags sessions.
+- `catchup fork [provider]` resumes the newest session natively, via the agent's own fork command.
 - Install with Go: `go install github.com/wilbeibi/catchup@latest`.
 - Ships as a Claude Code / Codex / OpenCode / Pi Agent skill (SKILL.md) so an agent can run it itself to "catch up on the last session".
 
@@ -24,6 +24,7 @@ Key facts:
 - Find a session: `catchup <provider> --list` lists sessions; `-q, --query <text>` filters by keyword.
 - Trim output: `--last <N>` keeps the last N exchanges; `--since-compact` keeps the final compaction segment; `--info` shows metadata only.
 - Change format: `--md` (default), `--html`, `--json`.
+- Fork back in: `catchup fork [provider]` resumes the newest matching session using that agent's own native fork command.
 
 ## Supported agents
 - Claude Code
@@ -34,7 +35,6 @@ Key facts:
 ## Scope
 - No cross-agent mixing: one agent is selected at a time; sessions are not merged.
 - No raw replay: tool calls, results, and reasoning steps are intentionally stripped — grep the raw `.jsonl`/`.db` files for that.
-- No writing: catchup is strictly read-only.
 
 ## Optional
 - [Author: wilbeibi on GitHub](https://github.com/wilbeibi): Maintainer profile.
