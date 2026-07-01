@@ -13,7 +13,7 @@ Switch between Claude Code, Codex, OpenCode & Pi Agent without re-explaining eve
 
 You jump between coding agents — Claude Code, Codex, OpenCode, Pi Agent — each keeping its history in a different place and format. **catchup** reads any of them and prints a clean, handoff-ready summary — just the conversation, no tool-call noise — so the next agent (or you, days later) picks up instantly.
 
-- **One command, any agent.** `catchup claude`, `catchup codex`, `catchup opencode`, `catchup pi-agent` — same clean output.
+- **One command, any agent.** Run `catchup <agent>` for `codex`, `claude`, `opencode`, or `pi-agent` — same clean output.
 - **Just the conversation.** User and assistant messages only. Tool calls, reasoning, and token noise are stripped.
 - **Built for handoff.** Pipe it to the next agent or read it yourself days later — no re-briefing.
 
@@ -37,7 +37,7 @@ go install github.com/wilbeibi/catchup@latest
 
 ```bash
 catchup install-skill          # writes SKILL.md to every detected agent's skills directory
-catchup install-skill codex    # or just one: codex, claude, opencode, pi-agent
+catchup install-skill codex    # or target one agent
 ```
 
 Restart the agent, then ask it to "catch up on the last session".
@@ -48,23 +48,19 @@ Default output is clean Markdown: session metadata plus the user/assistant conve
 
 ## Usage
 
+Use `<agent>` as `codex`, `claude`, `opencode`, or `pi-agent`.
+
 ### Read a session
 
 ```bash
-catchup codex      # latest Codex session in this directory
-catchup claude     # latest Claude Code session in this directory
-catchup opencode   # latest OpenCode session in this directory
-catchup pi-agent   # latest Pi Agent session in this directory
+catchup <agent>   # latest session for that agent in this directory
 ```
 
 ### Fork the latest session
 
 ```bash
 catchup fork                 # fork the newest session in this directory, across agents
-catchup fork codex           # fork the newest Codex session in this directory
-catchup fork claude          # fork the newest Claude Code session in this directory
-catchup fork opencode        # fork the newest OpenCode session in this directory
-catchup fork pi-agent        # fork the newest Pi Agent session in this directory
+catchup fork <agent>         # fork that agent's newest session in this directory
 ```
 
 `fork` dispatches to the agent's native fork command, so the new agent keeps
@@ -109,8 +105,8 @@ catchup codex --json                   # structured JSON
 
 | Argument / flag | What it does |
 |---|---|
-| `<provider>` | latest session for this provider in the current directory |
-| `<provider>/N` | N-th most recent session in the current directory |
+| `<agent>` | latest session for this agent in the current directory |
+| `<agent>/N` | N-th most recent session in the current directory |
 | `--list` | list sessions in the current directory |
 | `-q, --query <text>` | filter current-directory sessions by keyword (implies `--list`) |
 | `--id <id>` | select an exact session by id, ignoring the directory filter |
@@ -125,15 +121,15 @@ Forking:
 
 | Command | What it does |
 |---|---|
-| `fork` | fork the newest session in the current directory across all providers |
-| `fork <provider>` | fork the newest current-directory session for one provider |
+| `fork` | fork the newest session in the current directory across all agents |
+| `fork <agent>` | fork the newest current-directory session for one agent |
 
 Installing the skill:
 
 | Command | What it does |
 |---|---|
 | `install-skill` | write `SKILL.md` to every detected agent's skills directory |
-| `install-skill <provider>` | write `SKILL.md` to one agent's skills directory |
+| `install-skill <agent>` | write `SKILL.md` to one agent's skills directory |
 
 ## Supported agents
 
