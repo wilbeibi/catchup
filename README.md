@@ -92,20 +92,20 @@ Default output is clean Markdown: session metadata plus the user/assistant conve
 ### Read a session
 
 ```bash
-catchup codex      # latest Codex session in this project
-catchup claude     # latest Claude Code session in this project
-catchup opencode   # latest OpenCode session in this project
-catchup pi-agent   # latest Pi Agent session in this project
+catchup codex      # latest Codex session in this directory
+catchup claude     # latest Claude Code session in this directory
+catchup opencode   # latest OpenCode session in this directory
+catchup pi-agent   # latest Pi Agent session in this directory
 ```
 
 ### Fork the latest session
 
 ```bash
-catchup fork                 # fork the newest session in this project, across agents
-catchup fork codex           # fork the newest Codex session in this project
-catchup fork claude          # fork the newest Claude Code session in this project
-catchup fork opencode        # fork the newest OpenCode session in this project
-catchup fork pi-agent        # fork the newest Pi Agent session in this project
+catchup fork                 # fork the newest session in this directory, across agents
+catchup fork codex           # fork the newest Codex session in this directory
+catchup fork claude          # fork the newest Claude Code session in this directory
+catchup fork opencode        # fork the newest OpenCode session in this directory
+catchup fork pi-agent        # fork the newest Pi Agent session in this directory
 ```
 
 `fork` dispatches to the agent's native fork command, so the new agent keeps
@@ -114,10 +114,10 @@ real session context instead of receiving a rendered handoff transcript.
 ### Find the right session
 
 ```bash
-catchup codex --list                   # list sessions in this project
-catchup codex -q "auth"                # search sessions in this project
-catchup codex/3                        # 3rd most recent session in this project
-catchup claude --id <session-id>       # exact session id from any project
+catchup codex --list                   # list sessions in this directory
+catchup codex -q "auth"                # search sessions in this directory
+catchup codex/3                        # 3rd most recent session in this directory
+catchup claude --id <session-id>       # exact session id from any directory
 ```
 
 ### Limit the output
