@@ -17,6 +17,7 @@ const DefaultLimit = 20
 // output and the cli's only input, so that argument syntax lives in exactly one
 // place and the rest of the program works with structured data.
 type Command struct {
+	Action       string // optional action subcommand; empty means render history
 	Target       session.Target
 	Format       session.Format
 	MetaOnly     bool // -I: render metadata/frontmatter only
@@ -39,6 +40,11 @@ type Command struct {
 // to the cli dispatch (selectProvider).
 func Parse(args []string) (Command, error) {
 	cmd := Command{Format: session.FormatMarkdown, Limit: DefaultLimit}
+
+	if len(args) > 0 && args[0] == "fork" {
+		cmd.Action = "fork"
+		args = args[1:]
+	}
 
 	var (
 		target    string
@@ -136,6 +142,9 @@ func Parse(args []string) (Command, error) {
 	if cmd.Help {
 		return cmd, nil // skip target validation; help text is provider-agnostic
 	}
+	if cmd.Action == "fork" && !haveTgt {
+		return cmd, normalize(&cmd)
+	}
 	if !haveTgt {
 		return cmd, errors.New("missing provider; run catchup --help for usage")
 	}
@@ -206,6 +215,24 @@ func isProviderName(s string) bool {
 // a query with no explicit selector means list mode.
 func normalize(cmd *Command) error {
 	t := cmd.Target
+	if cmd.Action == "fork" {
+		switch {
+		case cmd.List:
+			return errors.New("fork cannot be combined with --list")
+		case cmd.MetaOnly:
+			return errors.New("fork cannot be combined with -I")
+		case cmd.LastN > 0:
+			return errors.New("fork cannot be combined with --last")
+		case cmd.SinceCompact:
+			return errors.New("fork cannot be combined with --since-compact")
+		case t.Query != "":
+			return errors.New("fork cannot be combined with -q")
+		case t.Rank > 0:
+			return errors.New("fork cannot be combined with a /rank selector")
+		case t.SessionID != "":
+			return errors.New("fork cannot be combined with --id")
+		}
+	}
 	switch {
 	case t.SessionID != "" && t.Rank > 0:
 		return errors.New("--id cannot be combined with a /rank selector")

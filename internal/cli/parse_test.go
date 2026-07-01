@@ -18,6 +18,16 @@ func TestParse(t *testing.T) {
 			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
 		},
 		{
+			name: "fork latest across providers",
+			args: []string{"fork"},
+			want: Command{Action: "fork", Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "fork latest provider",
+			args: []string{"fork", "codex"},
+			want: Command{Action: "fork", Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
 			name: "flags may precede the target",
 			args: []string{"--html", "claude"},
 			want: Command{Target: session.Target{Provider: "claude"}, Format: session.FormatHTML, Limit: DefaultLimit},
@@ -67,32 +77,32 @@ func TestParse(t *testing.T) {
 			args: []string{"--help"},
 			want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
 		},
-	{
-		name: "--help before target",
-		args: []string{"--help", "claude"},
-		want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
-	},
-	{
-		name: "-n sets limit",
-		args: []string{"codex", "-n", "5"},
-		want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: 5},
-	},
-	{
-		name: "--limit sets limit",
-		args: []string{"codex", "--limit", "5"},
-		want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: 5},
-	},
-	{
-		name: "-I sets meta-only",
-		args: []string{"codex", "-I"},
-		want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, MetaOnly: true, Limit: DefaultLimit},
-	},
-	{
-		name: "--info sets meta-only",
-		args: []string{"codex", "--info"},
-		want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, MetaOnly: true, Limit: DefaultLimit},
-	},
-}
+		{
+			name: "--help before target",
+			args: []string{"--help", "claude"},
+			want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
+		},
+		{
+			name: "-n sets limit",
+			args: []string{"codex", "-n", "5"},
+			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: 5},
+		},
+		{
+			name: "--limit sets limit",
+			args: []string{"codex", "--limit", "5"},
+			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: 5},
+		},
+		{
+			name: "-I sets meta-only",
+			args: []string{"codex", "-I"},
+			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, MetaOnly: true, Limit: DefaultLimit},
+		},
+		{
+			name: "--info sets meta-only",
+			args: []string{"codex", "--info"},
+			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, MetaOnly: true, Limit: DefaultLimit},
+		},
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -119,6 +129,11 @@ func TestParseRejects(t *testing.T) {
 		{"codex", "extra"},               // two targets
 		{"codex", "--bogus"},             // unknown flag
 		{"codex", "-n", "0"},             // non-positive limit
+		{"fork", "codex/2"},              // fork always selects latest
+		{"fork", "codex", "--id", "x"},   // fork does not take selectors
+		{"fork", "codex", "--list"},      // fork is not a render mode
+		{"fork", "codex", "--last", "1"}, // fork is not a trim mode
+		{"fork", "--last", "1"},          // same rejection without provider
 	}
 	for _, args := range bad {
 		if _, err := Parse(args); err == nil {

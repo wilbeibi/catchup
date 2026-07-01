@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,7 +89,7 @@ func piAgentRoot(t *testing.T) session.Roots {
 func runWithCwd(t *testing.T, roots session.Roots, cwd string, args ...string) string {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), args, roots, nil, cwd, &out, &errOut); err != nil {
+	if err := Run(context.Background(), args, roots, nil, cwd, nil, &out, &errOut); err != nil {
 		t.Fatalf("Run(%v) error: %v (stderr: %s)", args, err, errOut.String())
 	}
 	return out.String()
@@ -223,7 +224,7 @@ func TestCurrentSessionBeatsNewest(t *testing.T) {
 	// right one of several sessions sharing a directory is picked.
 	var got, errOut bytes.Buffer
 	current := map[string]string{session.ProviderClaude: "sess-old"}
-	if err := Run(context.Background(), []string{"claude"}, roots, current, cwd, &got, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"claude"}, roots, current, cwd, nil, &got, &errOut); err != nil {
 		t.Fatalf("Run error: %v (stderr: %s)", err, errOut.String())
 	}
 	if !strings.Contains(got.String(), "session: sess-old") {
@@ -236,8 +237,111 @@ func TestCurrentSessionBeatsNewest(t *testing.T) {
 
 func TestRunUnknownProvider(t *testing.T) {
 	var out, errOut bytes.Buffer
-	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, nil, "", &out, &errOut)
+	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, nil, "", nil, &out, &errOut)
 	if err == nil || !strings.Contains(err.Error(), "unknown provider") {
 		t.Errorf("expected unknown provider error, got %v", err)
 	}
+}
+
+func TestRunForkProvider(t *testing.T) {
+	roots := codexRoot(t)
+	var got session.Source
+	withForkRunner(t, func(ctx context.Context, src session.Source, stdin io.Reader, stdout, stderr io.Writer) error {
+		got = src
+		return nil
+	})
+
+	var out, errOut bytes.Buffer
+	if err := Run(context.Background(), []string{"fork", "codex"}, roots, nil, "/home/u/src/proj", nil, &out, &errOut); err != nil {
+		t.Fatalf("Run fork error: %v (stderr: %s)", err, errOut.String())
+	}
+	if got.Ref.Provider != session.ProviderCodex || got.Ref.SessionID != "sess-1" {
+		t.Fatalf("fork dispatched %+v, want codex sess-1", got.Ref)
+	}
+}
+
+func TestRunForkLatestAcrossProviders(t *testing.T) {
+	now := time.Now()
+	roots := session.Roots{
+		Codex:    t.TempDir(),
+		Claude:   t.TempDir(),
+		OpenCode: t.TempDir(),
+		PiAgent:  t.TempDir(),
+	}
+
+	codexDir := filepath.Join(roots.Codex, "sessions", "2026", "06", "26")
+	if err := os.MkdirAll(codexDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	codexPath := filepath.Join(codexDir, "rollout-old-codex.jsonl")
+	codexBody := `{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta","payload":{"id":"old-codex","cwd":"/home/u/src/proj","cli_version":"0.1"}}
+{"timestamp":"2026-06-26T21:31:55.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"old codex"}]}}
+`
+	if err := os.WriteFile(codexPath, []byte(codexBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(codexPath, now.Add(-time.Hour), now.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	piDir := filepath.Join(roots.PiAgent, "sessions", "--home-u-src-proj--")
+	if err := os.MkdirAll(piDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	piPath := filepath.Join(piDir, "2026-06-28T02-50-19-365Z_new-pi.jsonl")
+	piBody := `{"type":"session","version":3,"id":"new-pi","timestamp":"2026-06-28T02:50:19.365Z","cwd":"/home/u/src/proj"}
+{"type":"message","id":"m1","parentId":null,"timestamp":"2026-06-28T02:50:23.414Z","message":{"role":"user","content":[{"type":"text","text":"new pi"}]}}
+`
+	if err := os.WriteFile(piPath, []byte(piBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(piPath, now, now); err != nil {
+		t.Fatal(err)
+	}
+
+	var got session.Source
+	withForkRunner(t, func(ctx context.Context, src session.Source, stdin io.Reader, stdout, stderr io.Writer) error {
+		got = src
+		return nil
+	})
+
+	var out, errOut bytes.Buffer
+	if err := Run(context.Background(), []string{"fork"}, roots, nil, "/home/u/src/proj", nil, &out, &errOut); err != nil {
+		t.Fatalf("Run fork latest error: %v (stderr: %s)", err, errOut.String())
+	}
+	if got.Ref.Provider != session.ProviderPiAgent || got.Ref.SessionID != "new-pi" {
+		t.Fatalf("fork dispatched %+v, want pi-agent new-pi", got.Ref)
+	}
+}
+
+func TestForkCommand(t *testing.T) {
+	tests := []struct {
+		name string
+		src  session.Source
+		want string
+	}{
+		{"codex", session.Source{Ref: session.Ref{Provider: session.ProviderCodex, SessionID: "c1"}}, "codex fork c1"},
+		{"claude", session.Source{Ref: session.Ref{Provider: session.ProviderClaude, SessionID: "cl1"}}, "claude --resume cl1 --fork-session"},
+		{"opencode", session.Source{Ref: session.Ref{Provider: session.ProviderOpenCode, SessionID: "o1"}}, "opencode --session o1 --fork"},
+		{"pi path", session.Source{Ref: session.Ref{Provider: session.ProviderPiAgent, SessionID: "p1"}, Path: "/tmp/pi.jsonl"}, "pi --fork /tmp/pi.jsonl"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name, args, err := forkCommand(tt.src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := strings.Join(append([]string{name}, args...), " ")
+			if got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func withForkRunner(t *testing.T, runner forkRunner) {
+	t.Helper()
+	old := runFork
+	runFork = runner
+	t.Cleanup(func() { runFork = old })
 }

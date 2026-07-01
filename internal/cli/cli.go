@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os/exec"
 
 	"github.com/wilbeibi/catchup/internal/claude"
 	"github.com/wilbeibi/catchup/internal/codex"
@@ -18,6 +19,7 @@ import (
 )
 
 const helpText = `Usage: catchup <provider>[/<rank>] [flags]
+       catchup fork [provider]
 
 Providers: codex, claude, opencode, pi-agent
 
@@ -41,13 +43,19 @@ Examples:
   catchup codex/3             3rd most recent Codex session
   catchup claude --last 5     last 5 exchanges
   catchup claude --since-compact  tail after last compaction
+  catchup fork                fork the latest session in this directory
+  catchup fork codex          fork the latest Codex session in this directory
 `
+
+type forkRunner func(context.Context, session.Source, io.Reader, io.Writer, io.Writer) error
+
+var runFork forkRunner = execFork
 
 // Run executes one invocation. current maps a provider name to the id of the
 // session we are running inside, when that agent injects one (see
 // session.ResolveCurrent); it lets the default selection target the live
 // session exactly rather than guessing by recency.
-func Run(ctx context.Context, args []string, roots session.Roots, current map[string]string, cwd string, stdout, stderr io.Writer) error {
+func Run(ctx context.Context, args []string, roots session.Roots, current map[string]string, cwd string, stdin io.Reader, stdout, stderr io.Writer) error {
 	cmd, err := Parse(args)
 	if err != nil {
 		return err
@@ -56,6 +64,14 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 	if cmd.Help {
 		fmt.Fprint(stdout, helpText)
 		return nil
+	}
+
+	if cmd.Action == "fork" {
+		src, err := locateForkSource(ctx, roots, cmd, cwd)
+		if err != nil {
+			return err
+		}
+		return runFork(ctx, src, stdin, stdout, stderr)
 	}
 
 	prov, err := selectProvider(cmd.Target.Provider)
@@ -94,6 +110,15 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 	return render.Thread(stdout, thread, cmd.Format)
 }
 
+func providerNames() []string {
+	return []string{
+		session.ProviderCodex,
+		session.ProviderClaude,
+		session.ProviderOpenCode,
+		session.ProviderPiAgent,
+	}
+}
+
 // selectProvider maps a provider name to its implementation. The set is closed
 // and small, so this is a switch, not a registry.
 func selectProvider(name string) (session.Provider, error) {
@@ -108,6 +133,97 @@ func selectProvider(name string) (session.Provider, error) {
 		return piagent.New(), nil
 	default:
 		return nil, fmt.Errorf("unknown provider %q (want codex, claude, opencode, or pi-agent); run catchup --help", name)
+	}
+}
+
+func locateForkSource(ctx context.Context, roots session.Roots, cmd Command, cwd string) (session.Source, error) {
+	if cmd.Target.Provider != "" {
+		prov, err := selectProvider(cmd.Target.Provider)
+		if err != nil {
+			return session.Source{}, err
+		}
+		return newestInCwd(ctx, prov, roots, cmd.Target.Provider, cwd)
+	}
+
+	var latest session.Source
+	var have bool
+	var failures []error
+	for _, name := range providerNames() {
+		prov, err := selectProvider(name)
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		src, err := newestInCwd(ctx, prov, roots, name, cwd)
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		if !have || src.UpdatedAt.After(latest.UpdatedAt) {
+			latest, have = src, true
+		}
+	}
+	if have {
+		return latest, nil
+	}
+	if len(failures) > 0 {
+		return session.Source{}, fmt.Errorf("fork: no sessions found in %q", cwd)
+	}
+	return session.Source{}, fmt.Errorf("fork: no providers available")
+}
+
+func newestInCwd(ctx context.Context, prov session.Provider, roots session.Roots, name, cwd string) (session.Source, error) {
+	opts := session.ListOptions{Cwd: cwd, Limit: 1}
+	src, err := prov.ResolveRank(ctx, roots, opts, 1)
+	if err != nil {
+		return session.Source{}, err
+	}
+	if src.Ref.Provider == "" {
+		src.Ref.Provider = name
+	}
+	return src, nil
+}
+
+func execFork(ctx context.Context, src session.Source, stdin io.Reader, stdout, stderr io.Writer) error {
+	name, args, err := forkCommand(src)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd.Run()
+}
+
+func forkCommand(src session.Source) (string, []string, error) {
+	switch src.Ref.Provider {
+	case session.ProviderCodex:
+		if src.Ref.SessionID == "" {
+			return "", nil, fmt.Errorf("fork codex: missing session id")
+		}
+		return "codex", []string{"fork", src.Ref.SessionID}, nil
+	case session.ProviderClaude:
+		if src.Ref.SessionID == "" {
+			return "", nil, fmt.Errorf("fork claude: missing session id")
+		}
+		return "claude", []string{"--resume", src.Ref.SessionID, "--fork-session"}, nil
+	case session.ProviderOpenCode:
+		if src.Ref.SessionID == "" {
+			return "", nil, fmt.Errorf("fork opencode: missing session id")
+		}
+		return "opencode", []string{"--session", src.Ref.SessionID, "--fork"}, nil
+	case session.ProviderPiAgent:
+		target := src.Ref.SessionID
+		if src.Path != "" {
+			target = src.Path
+		}
+		if target == "" {
+			return "", nil, fmt.Errorf("fork pi-agent: missing session id or path")
+		}
+		return "pi", []string{"--fork", target}, nil
+	default:
+		return "", nil, fmt.Errorf("fork: unsupported provider %q", src.Ref.Provider)
 	}
 }
 

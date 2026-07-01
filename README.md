@@ -98,6 +98,19 @@ catchup opencode   # latest OpenCode session in this project
 catchup pi-agent   # latest Pi Agent session in this project
 ```
 
+### Fork the latest session
+
+```bash
+catchup fork                 # fork the newest session in this project, across agents
+catchup fork codex           # fork the newest Codex session in this project
+catchup fork claude          # fork the newest Claude Code session in this project
+catchup fork opencode        # fork the newest OpenCode session in this project
+catchup fork pi-agent        # fork the newest Pi Agent session in this project
+```
+
+`fork` dispatches to the agent's native fork command, so the new agent keeps
+real session context instead of receiving a rendered handoff transcript.
+
 ### Find the right session
 
 ```bash
@@ -139,6 +152,13 @@ catchup codex --json                   # structured JSON
 | `--md` · `--html` · `--json` | output format (default `--md`) |
 | `-h, --help` | print usage |
 
+Forking:
+
+| Command | What it does |
+|---|---|
+| `fork` | fork the newest session in the current directory across all providers |
+| `fork <provider>` | fork the newest current-directory session for one provider |
+
 ## Supported agents
 
 - Codex
@@ -153,6 +173,8 @@ catchup codex --json                   # structured JSON
 **No raw replay.** If you need every tool call, result, and reasoning step for debugging, catchup is the wrong tool — grep the raw `.jsonl` or `.db` files directly.
 
 **No writing.** catchup is read-only. It doesn't modify, delete, or tag sessions.
+The `fork` subcommand is the exception: it launches the selected agent's native
+fork command.
 
 ## License
 
