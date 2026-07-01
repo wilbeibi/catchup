@@ -8,7 +8,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/wilbeibi/catchup/internal/claude"
 	"github.com/wilbeibi/catchup/internal/codex"
@@ -20,6 +22,7 @@ import (
 
 const helpText = `Usage: catchup <provider>[/<rank>] [flags]
        catchup fork [provider]
+       catchup install-skill [provider]
 
 Providers: codex, claude, opencode, pi-agent
 
@@ -45,6 +48,8 @@ Examples:
   catchup claude --since-compact  tail after last compaction
   catchup fork                fork the latest session in this directory
   catchup fork codex          fork the latest Codex session in this directory
+  catchup install-skill       install catchup's SKILL.md for every detected agent
+  catchup install-skill codex install catchup's SKILL.md for Codex only
 `
 
 type forkRunner func(context.Context, session.Source, io.Reader, io.Writer, io.Writer) error
@@ -54,8 +59,11 @@ var runFork forkRunner = execFork
 // Run executes one invocation. current maps a provider name to the id of the
 // session we are running inside, when that agent injects one (see
 // session.ResolveCurrent); it lets the default selection target the live
-// session exactly rather than guessing by recency.
-func Run(ctx context.Context, args []string, roots session.Roots, current map[string]string, cwd string, stdin io.Reader, stdout, stderr io.Writer) error {
+// session exactly rather than guessing by recency. skillDirs maps a provider
+// name to its global Agent Skills directory (see session.ResolveSkillDirs)
+// and skillMD is the SKILL.md content to install there; both are only used by
+// the install-skill action.
+func Run(ctx context.Context, args []string, roots session.Roots, current map[string]string, skillDirs map[string]string, skillMD []byte, cwd string, stdin io.Reader, stdout, stderr io.Writer) error {
 	cmd, err := Parse(args)
 	if err != nil {
 		return err
@@ -72,6 +80,10 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 			return err
 		}
 		return runFork(ctx, src, stdin, stdout, stderr)
+	}
+
+	if cmd.Action == "install-skill" {
+		return installSkill(cmd.Target.Provider, skillDirs, skillMD, stdout)
 	}
 
 	prov, err := selectProvider(cmd.Target.Provider)
@@ -170,6 +182,36 @@ func locateForkSource(ctx context.Context, roots session.Roots, cmd Command, cwd
 		return session.Source{}, fmt.Errorf("fork: no sessions found in %q", cwd)
 	}
 	return session.Source{}, fmt.Errorf("fork: no providers available")
+}
+
+// installSkill writes skillMD to "<dir>/catchup/SKILL.md" for one provider, or
+// for every provider in providerNames() when provider is "". Providers with no
+// entry in skillDirs are skipped rather than erroring, so the closed provider
+// set and the skill-directory set can evolve independently.
+func installSkill(provider string, skillDirs map[string]string, skillMD []byte, stdout io.Writer) error {
+	names := providerNames()
+	if provider != "" {
+		if _, err := selectProvider(provider); err != nil {
+			return err
+		}
+		names = []string{provider}
+	}
+
+	for _, name := range names {
+		dir, ok := skillDirs[name]
+		if !ok {
+			continue
+		}
+		path := filepath.Join(dir, "catchup", "SKILL.md")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return fmt.Errorf("install-skill %s: %w", name, err)
+		}
+		if err := os.WriteFile(path, skillMD, 0o644); err != nil {
+			return fmt.Errorf("install-skill %s: %w", name, err)
+		}
+		fmt.Fprintf(stdout, "installed %s\n", path)
+	}
+	return nil
 }
 
 func newestInCwd(ctx context.Context, prov session.Provider, roots session.Roots, name, cwd string) (session.Source, error) {

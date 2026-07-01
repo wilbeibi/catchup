@@ -29,3 +29,5 @@ Always run `--list` first when unsure which session the user means — don't gue
 - Conversation only: user/assistant messages, numbered and timestamped. Tool calls and reasoning are already stripped.
 - Default Markdown; `--json` / `--html` for scripts and sharing.
 - `-I` for metadata only (who/when/where/model).
+
+Run `catchup --help` for the full flag list.

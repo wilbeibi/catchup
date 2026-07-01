@@ -89,7 +89,7 @@ func piAgentRoot(t *testing.T) session.Roots {
 func runWithCwd(t *testing.T, roots session.Roots, cwd string, args ...string) string {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), args, roots, nil, cwd, nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), args, roots, nil, nil, nil, cwd, nil, &out, &errOut); err != nil {
 		t.Fatalf("Run(%v) error: %v (stderr: %s)", args, err, errOut.String())
 	}
 	return out.String()
@@ -224,7 +224,7 @@ func TestCurrentSessionBeatsNewest(t *testing.T) {
 	// right one of several sessions sharing a directory is picked.
 	var got, errOut bytes.Buffer
 	current := map[string]string{session.ProviderClaude: "sess-old"}
-	if err := Run(context.Background(), []string{"claude"}, roots, current, cwd, nil, &got, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"claude"}, roots, current, nil, nil, cwd, nil, &got, &errOut); err != nil {
 		t.Fatalf("Run error: %v (stderr: %s)", err, errOut.String())
 	}
 	if !strings.Contains(got.String(), "session: sess-old") {
@@ -237,7 +237,7 @@ func TestCurrentSessionBeatsNewest(t *testing.T) {
 
 func TestRunUnknownProvider(t *testing.T) {
 	var out, errOut bytes.Buffer
-	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, nil, "", nil, &out, &errOut)
+	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, nil, nil, nil, "", nil, &out, &errOut)
 	if err == nil || !strings.Contains(err.Error(), "unknown provider") {
 		t.Errorf("expected unknown provider error, got %v", err)
 	}
@@ -252,7 +252,7 @@ func TestRunForkProvider(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), []string{"fork", "codex"}, roots, nil, "/home/u/src/proj", nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"fork", "codex"}, roots, nil, nil, nil, "/home/u/src/proj", nil, &out, &errOut); err != nil {
 		t.Fatalf("Run fork error: %v (stderr: %s)", err, errOut.String())
 	}
 	if got.Ref.Provider != session.ProviderCodex || got.Ref.SessionID != "sess-1" {
@@ -306,7 +306,7 @@ func TestRunForkLatestAcrossProviders(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), []string{"fork"}, roots, nil, "/home/u/src/proj", nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"fork"}, roots, nil, nil, nil, "/home/u/src/proj", nil, &out, &errOut); err != nil {
 		t.Fatalf("Run fork latest error: %v (stderr: %s)", err, errOut.String())
 	}
 	if got.Ref.Provider != session.ProviderPiAgent || got.Ref.SessionID != "new-pi" {
@@ -336,6 +336,47 @@ func TestForkCommand(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRunInstallSkillProvider(t *testing.T) {
+	dir := t.TempDir()
+	skillDirs := map[string]string{session.ProviderCodex: dir}
+
+	var out, errOut bytes.Buffer
+	if err := Run(context.Background(), []string{"install-skill", "codex"}, session.Roots{}, nil, skillDirs, []byte("# catchup skill\n"), "", nil, &out, &errOut); err != nil {
+		t.Fatalf("Run install-skill error: %v (stderr: %s)", err, errOut.String())
+	}
+
+	got, err := os.ReadFile(filepath.Join(dir, "catchup", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("SKILL.md not written: %v", err)
+	}
+	if string(got) != "# catchup skill\n" {
+		t.Errorf("SKILL.md content = %q, want %q", got, "# catchup skill\n")
+	}
+	if !strings.Contains(out.String(), filepath.Join(dir, "catchup", "SKILL.md")) {
+		t.Errorf("expected installed path in output, got:\n%s", out.String())
+	}
+}
+
+func TestRunInstallSkillAllProviders(t *testing.T) {
+	skillDirs := map[string]string{
+		session.ProviderCodex:    t.TempDir(),
+		session.ProviderClaude:   t.TempDir(),
+		session.ProviderOpenCode: t.TempDir(),
+		session.ProviderPiAgent:  t.TempDir(),
+	}
+
+	var out, errOut bytes.Buffer
+	if err := Run(context.Background(), []string{"install-skill"}, session.Roots{}, nil, skillDirs, []byte("content"), "", nil, &out, &errOut); err != nil {
+		t.Fatalf("Run install-skill error: %v (stderr: %s)", err, errOut.String())
+	}
+
+	for name, dir := range skillDirs {
+		if _, err := os.Stat(filepath.Join(dir, "catchup", "SKILL.md")); err != nil {
+			t.Errorf("%s: SKILL.md not written: %v", name, err)
+		}
 	}
 }
 

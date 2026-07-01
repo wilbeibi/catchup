@@ -40,6 +40,24 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 	return Roots{Codex: codex, Claude: claude, OpenCode: opencode, PiAgent: piAgent}
 }
 
+// ResolveSkillDirs returns each provider's global Agent Skills directory,
+// keyed by provider name — the base path under which "catchup/SKILL.md" is
+// installed. These follow each agent's own skill-discovery convention, which
+// is not always the provider's history root:
+//
+//	Codex    : <home>/.agents/skills          (fixed; ignores $CODEX_HOME)
+//	Claude   : roots.Claude/skills             (respects $CLAUDE_CONFIG_DIR)
+//	OpenCode : <home>/.config/opencode/skills  (fixed; not $XDG_DATA_HOME)
+//	PiAgent  : roots.PiAgent/skills            (respects $PI_CODING_AGENT_DIR)
+func ResolveSkillDirs(roots Roots, home string) map[string]string {
+	return map[string]string{
+		ProviderCodex:    filepath.Join(home, ".agents", "skills"),
+		ProviderClaude:   filepath.Join(roots.Claude, "skills"),
+		ProviderOpenCode: filepath.Join(home, ".config", "opencode", "skills"),
+		ProviderPiAgent:  filepath.Join(roots.PiAgent, "skills"),
+	}
+}
+
 // ResolveCurrent reports the session each provider says we are running inside,
 // keyed by provider name. Only Claude Code injects such a signal today
 // ($CLAUDE_CODE_SESSION_ID, set in every shell it spawns); Codex and OpenCode

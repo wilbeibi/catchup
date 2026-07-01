@@ -35,51 +35,10 @@ You jump between coding agents — Claude Code, Codex, OpenCode, Pi Agent — ea
 go install github.com/wilbeibi/catchup@latest
 ```
 
-<details>
-<summary>Add skill to Claude Code</summary>
-
 ```bash
-mkdir -p ~/.claude/skills/catchup
-curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md \
-  -o ~/.claude/skills/catchup/SKILL.md
+catchup install-skill          # writes SKILL.md to every detected agent's skills directory
+catchup install-skill codex    # or just one: codex, claude, opencode, pi-agent
 ```
-
-</details>
-
-<details>
-<summary>Add skill to Codex</summary>
-
-```bash
-mkdir -p ~/.agents/skills/catchup
-curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md \
-  -o ~/.agents/skills/catchup/SKILL.md
-```
-
-</details>
-
-<details>
-<summary>Add skill to OpenCode</summary>
-
-OpenCode uses Claude Code skills by default.
-
-```bash
-mkdir -p ~/.claude/skills/catchup
-curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md \
-  -o ~/.claude/skills/catchup/SKILL.md
-```
-
-</details>
-
-<details>
-<summary>Add skill to Pi Agent</summary>
-
-```bash
-mkdir -p ~/.pi/agent/skills/catchup
-curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md \
-  -o ~/.pi/agent/skills/catchup/SKILL.md
-```
-
-</details>
 
 Restart the agent, then ask it to "catch up on the last session".
 
@@ -110,6 +69,16 @@ catchup fork pi-agent        # fork the newest Pi Agent session in this director
 
 `fork` dispatches to the agent's native fork command, so the new agent keeps
 real session context instead of receiving a rendered handoff transcript.
+
+### Install the skill
+
+```bash
+catchup install-skill          # every detected agent
+catchup install-skill claude   # just one
+```
+
+Writes `SKILL.md` to each agent's own skills directory so it can invoke
+`catchup` on its own — no manual copy-paste.
 
 ### Find the right session
 
@@ -158,6 +127,13 @@ Forking:
 |---|---|
 | `fork` | fork the newest session in the current directory across all providers |
 | `fork <provider>` | fork the newest current-directory session for one provider |
+
+Installing the skill:
+
+| Command | What it does |
+|---|---|
+| `install-skill` | write `SKILL.md` to every detected agent's skills directory |
+| `install-skill <provider>` | write `SKILL.md` to one agent's skills directory |
 
 ## Supported agents
 

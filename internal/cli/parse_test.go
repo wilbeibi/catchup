@@ -28,6 +28,16 @@ func TestParse(t *testing.T) {
 			want: Command{Action: "fork", Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
 		},
 		{
+			name: "install-skill for every provider",
+			args: []string{"install-skill"},
+			want: Command{Action: "install-skill", Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "install-skill for one provider",
+			args: []string{"install-skill", "codex"},
+			want: Command{Action: "install-skill", Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
 			name: "flags may precede the target",
 			args: []string{"--html", "claude"},
 			want: Command{Target: session.Target{Provider: "claude"}, Format: session.FormatHTML, Limit: DefaultLimit},
@@ -119,21 +129,23 @@ func TestParse(t *testing.T) {
 
 func TestParseRejects(t *testing.T) {
 	bad := [][]string{
-		{},                               // missing provider
-		{"agents://codex/latest"},        // legacy scheme
-		{"codex/019f-abcdef"},            // session id mistaken as a rank
-		{"codex/role/user"},              // path/role form
-		{"codex?query=x"},                // query-string form
-		{"codex/2", "--list"},            // rank + list conflict
-		{"codex", "--id", "x", "--list"}, // id + list conflict
-		{"codex", "extra"},               // two targets
-		{"codex", "--bogus"},             // unknown flag
-		{"codex", "-n", "0"},             // non-positive limit
-		{"fork", "codex/2"},              // fork always selects latest
-		{"fork", "codex", "--id", "x"},   // fork does not take selectors
-		{"fork", "codex", "--list"},      // fork is not a render mode
-		{"fork", "codex", "--last", "1"}, // fork is not a trim mode
-		{"fork", "--last", "1"},          // same rejection without provider
+		{},                                   // missing provider
+		{"agents://codex/latest"},            // legacy scheme
+		{"codex/019f-abcdef"},                // session id mistaken as a rank
+		{"codex/role/user"},                  // path/role form
+		{"codex?query=x"},                    // query-string form
+		{"codex/2", "--list"},                // rank + list conflict
+		{"codex", "--id", "x", "--list"},     // id + list conflict
+		{"codex", "extra"},                   // two targets
+		{"codex", "--bogus"},                 // unknown flag
+		{"codex", "-n", "0"},                 // non-positive limit
+		{"fork", "codex/2"},                  // fork always selects latest
+		{"fork", "codex", "--id", "x"},       // fork does not take selectors
+		{"fork", "codex", "--list"},          // fork is not a render mode
+		{"fork", "codex", "--last", "1"},     // fork is not a trim mode
+		{"fork", "--last", "1"},              // same rejection without provider
+		{"install-skill", "codex/2"},         // install-skill does not take a rank
+		{"install-skill", "codex", "--list"}, // install-skill is not a render mode
 	}
 	for _, args := range bad {
 		if _, err := Parse(args); err == nil {

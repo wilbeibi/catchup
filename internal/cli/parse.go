@@ -41,8 +41,8 @@ type Command struct {
 func Parse(args []string) (Command, error) {
 	cmd := Command{Format: session.FormatMarkdown, Limit: DefaultLimit}
 
-	if len(args) > 0 && args[0] == "fork" {
-		cmd.Action = "fork"
+	if len(args) > 0 && (args[0] == "fork" || args[0] == "install-skill") {
+		cmd.Action = args[0]
 		args = args[1:]
 	}
 
@@ -142,7 +142,7 @@ func Parse(args []string) (Command, error) {
 	if cmd.Help {
 		return cmd, nil // skip target validation; help text is provider-agnostic
 	}
-	if cmd.Action == "fork" && !haveTgt {
+	if cmd.Action != "" && !haveTgt {
 		return cmd, normalize(&cmd)
 	}
 	if !haveTgt {
@@ -215,22 +215,24 @@ func isProviderName(s string) bool {
 // a query with no explicit selector means list mode.
 func normalize(cmd *Command) error {
 	t := cmd.Target
-	if cmd.Action == "fork" {
+	if cmd.Action != "" {
+		// Both action subcommands (fork, install-skill) take only an optional
+		// bare provider — no render-mode selectors or trims apply to either.
 		switch {
 		case cmd.List:
-			return errors.New("fork cannot be combined with --list")
+			return fmt.Errorf("%s cannot be combined with --list", cmd.Action)
 		case cmd.MetaOnly:
-			return errors.New("fork cannot be combined with -I")
+			return fmt.Errorf("%s cannot be combined with -I", cmd.Action)
 		case cmd.LastN > 0:
-			return errors.New("fork cannot be combined with --last")
+			return fmt.Errorf("%s cannot be combined with --last", cmd.Action)
 		case cmd.SinceCompact:
-			return errors.New("fork cannot be combined with --since-compact")
+			return fmt.Errorf("%s cannot be combined with --since-compact", cmd.Action)
 		case t.Query != "":
-			return errors.New("fork cannot be combined with -q")
+			return fmt.Errorf("%s cannot be combined with -q", cmd.Action)
 		case t.Rank > 0:
-			return errors.New("fork cannot be combined with a /rank selector")
+			return fmt.Errorf("%s cannot be combined with a /rank selector", cmd.Action)
 		case t.SessionID != "":
-			return errors.New("fork cannot be combined with --id")
+			return fmt.Errorf("%s cannot be combined with --id", cmd.Action)
 		}
 	}
 	switch {

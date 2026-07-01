@@ -8,12 +8,16 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
 
 	"github.com/wilbeibi/catchup/internal/cli"
 	"github.com/wilbeibi/catchup/internal/session"
 )
+
+//go:embed SKILL.md
+var skillMD []byte
 
 func main() {
 	ctx := context.Background()
@@ -30,8 +34,9 @@ func main() {
 
 	roots := session.ResolveRoots(os.Getenv, home)
 	current := session.ResolveCurrent(os.Getenv)
+	skillDirs := session.ResolveSkillDirs(roots, home)
 
-	if err := cli.Run(ctx, os.Args[1:], roots, current, cwd, os.Stdin, os.Stdout, os.Stderr); err != nil {
+	if err := cli.Run(ctx, os.Args[1:], roots, current, skillDirs, skillMD, cwd, os.Stdin, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "catchup:", err)
 		os.Exit(1)
 	}
