@@ -37,24 +37,24 @@ The skill source is at https://raw.githubusercontent.com/wilbeibi/catchup/main/S
 
 Agent handoff:
 
-- `catchup <provider>` — latest session for that provider in the current directory (`claude`, `codex`, `opencode`, `pi-agent`).
+- `catchup <agent>` — latest session for that agent in the current directory (`claude`, `codex`, `opencode`, `pi-agent`).
 
 Human browsing:
 
-- `catchup <provider> --list` — list sessions in the current directory, usually the best manual starting point.
-- `catchup <provider>/N` — the N-th most recent session in the current directory (e.g. `catchup codex/3`).
-- `catchup <provider> --id <session-id>` — an exact session id, ignoring the directory filter.
+- `catchup <agent> --list` — list sessions in the current directory, usually the best manual starting point.
+- `catchup <agent>/N` — the N-th most recent session in the current directory (e.g. `catchup codex/3`).
+- `catchup <agent> --id <session-id>` — an exact session id, ignoring the directory filter.
 
 Search:
 
-- `catchup <provider> -q "text"` — filter current-directory sessions by keyword (implies `--list`).
-- `catchup <provider> -n, --limit <N>` — cap listing rows (default 20).
+- `catchup <agent> -q "text"` — filter current-directory sessions by keyword (implies `--list`).
+- `catchup <agent> -n, --limit <N>` — cap listing rows (default 20).
 
 Limit the output:
 
-- `catchup <provider> --last <N>` — keep only the last N exchanges.
-- `catchup <provider> --since-compact` — keep the final compaction segment, or the whole session if there is none.
-- `catchup <provider> --info` — print session metadata only, no messages.
+- `catchup <agent> --last <N>` — keep only the last N exchanges.
+- `catchup <agent> --since-compact` — keep the final compaction segment, or the whole session if there is none.
+- `catchup <agent> --info` — print session metadata only, no messages.
 
 Change the format:
 
@@ -65,8 +65,8 @@ Change the format:
 
 Fork:
 
-- `catchup fork` — fork the newest session in the current directory, across all providers.
-- `catchup fork <provider>` — fork the newest current-directory session for one provider. Launches that agent's own native fork command (`codex fork`, `claude --resume --fork-session`, `opencode --session --fork`, `pi --fork`).
+- `catchup fork` — fork the newest session in the current directory, across all agents.
+- `catchup fork <agent>` — fork the newest current-directory session for one agent. Launches that agent's own native fork command (`codex fork`, `claude --resume --fork-session`, `opencode --session --fork`, `pi --fork`).
 
 ## Supported agents
 

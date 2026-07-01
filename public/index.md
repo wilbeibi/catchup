@@ -8,7 +8,7 @@ Open-source CLI · Go · MIT · https://catchup.pages.dev/
 
 catchup reads the local session history of an AI coding agent and prints a clean Markdown transcript of only the user/assistant conversation. Tool calls, reasoning traces, and token noise are removed, so the next agent can recover what happened without you re-explaining the project state.
 
-- **Built for agent handoff.** Your next agent runs `catchup claude`, `catchup codex`, `catchup opencode`, or `catchup pi-agent` to recover the relevant conversation.
+- **Built for agent handoff.** Your next agent runs `catchup <agent>` for `codex`, `claude`, `opencode`, or `pi-agent` to recover the relevant conversation.
 - **Just the conversation.** User and assistant messages only; tool calls, reasoning, and token accounting are stripped.
 - **Still readable by humans.** Browsing manually? Start with `catchup codex --list`, then open the exact session you want.
 - **Fork back in.** `catchup fork` hands off to the agent's own native fork command, so the next session picks up real state instead of a rendered transcript.

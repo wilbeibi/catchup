@@ -5,10 +5,10 @@
 catchup solves a concrete problem: developers jump between coding agents, and each stores its history in a different place and format. When one agent hits a usage limit or you want a second opinion, the next agent has no context. catchup gives the agent a simple command it can run itself to recover prior work without you re-explaining the project state.
 
 Key facts:
-- Agent handoff commands: `catchup claude`, `catchup codex`, `catchup opencode`, `catchup pi-agent` — clean Markdown regardless of source.
-- Human browsing starts with `catchup <provider> --list`, for example `catchup codex --list`.
+- Agent handoff command: `catchup <agent>` for `codex`, `claude`, `opencode`, or `pi-agent` — clean Markdown regardless of source.
+- Human browsing starts with `catchup <agent> --list`, for example `catchup codex --list`.
 - Output is Markdown by default; `--html` and `--json` are also available.
-- `catchup fork [provider]` resumes the newest session natively, via the agent's own fork command.
+- `catchup fork [agent]` resumes the newest session natively, via the agent's own fork command.
 - Install with Go: `go install github.com/wilbeibi/catchup@latest`.
 - Ships as a Claude Code / Codex / OpenCode / Pi Agent skill (SKILL.md) so an agent can run it itself to "catch up on the last session".
 
@@ -19,12 +19,12 @@ Key facts:
 - [SKILL.md](https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md): The agent skill definition that teaches a coding agent how to invoke catchup.
 
 ## Usage
-- Read a session: `catchup <provider>` reads the latest session for that agent in the current directory.
-- Pick a session: `catchup <provider>/N` reads the N-th most recent; `--id <id>` selects an exact session id.
-- Find a session: `catchup <provider> --list` lists sessions; `-q, --query <text>` filters by keyword.
+- Read a session: `catchup <agent>` reads the latest session for that agent in the current directory.
+- Pick a session: `catchup <agent>/N` reads the N-th most recent; `--id <id>` selects an exact session id.
+- Find a session: `catchup <agent> --list` lists sessions; `-q, --query <text>` filters by keyword.
 - Trim output: `--last <N>` keeps the last N exchanges; `--since-compact` keeps the final compaction segment; `--info` shows metadata only.
 - Change format: `--md` (default), `--html`, `--json`.
-- Fork back in: `catchup fork [provider]` resumes the newest matching session using that agent's own native fork command.
+- Fork back in: `catchup fork [agent]` resumes the newest matching session using that agent's own native fork command.
 
 ## Supported agents
 - Claude Code
