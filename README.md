@@ -46,8 +46,8 @@ catchup <agent> --id <id>      # exact session from any directory
 catchup <agent> --last 4       # last 4 exchanges
 catchup <agent> --json         # Markdown by default; also --html
 
-catchup fork                   # fork the newest session across agents
-catchup fork <agent>           # fork that agent's newest session
+catchup fork                   # fork the newest coding agent session
+catchup fork <agent>           # fork a specific agent's newest session
 catchup install-skill <agent>  # install the skill for one agent
 ```
 
@@ -55,7 +55,7 @@ catchup install-skill <agent>  # install the skill for one agent
 
 - One agent at a time. It does not merge histories.
 - Conversation only. It strips tool calls, command output, and reasoning traces.
-- Read-only, except `fork`, which launches the selected agent's native fork command.
+- Read-only, except `fork`. Same-agent fork preserves context cache. Dispatches to native fork, so sessions inherit real context, not a handoff transcript.
 
 ## License
 
