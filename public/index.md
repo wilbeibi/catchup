@@ -23,12 +23,9 @@ MIT-licensed, no config.
 
 ## Supported agents
 
-- Claude Code — `catchup claude --list`
-- Codex — `catchup codex --list`
-- OpenCode — `catchup opencode --list`
-- Pi Agent — `catchup pi-agent --list`
+Claude Code · Codex · OpenCode · Pi Agent
 
-No cross-agent mixing, no raw replay: each agent's history stays separate and unabridged.
+Each agent keeps its own history format; catchup normalizes the output.
 
 ## Links
 

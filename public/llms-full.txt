@@ -70,10 +70,10 @@ Fork:
 
 ## Supported agents
 
-- Claude Code — agent handoff: `catchup claude`; human browsing: `catchup claude --list`
-- Codex — agent handoff: `catchup codex`; human browsing: `catchup codex --list`
-- OpenCode — agent handoff: `catchup opencode`; human browsing: `catchup opencode --list`
-- Pi Agent — agent handoff: `catchup pi-agent`; human browsing: `catchup pi-agent --list`
+- Claude Code (`claude`)
+- Codex (`codex`)
+- OpenCode (`opencode`)
+- Pi Agent (`pi-agent`)
 
 Each produces the same clean output regardless of how the source agent stored its history.
 
