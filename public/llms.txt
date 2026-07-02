@@ -9,7 +9,7 @@ Key facts:
 - The agent is optional: bare `catchup` reads the newest session in the current directory, whichever agent wrote it.
 - Human browsing starts with `catchup <agent> --list`, for example `catchup codex --list`.
 - Output is Markdown by default; `--html` and `--json` are also available.
-- `catchup fork [agent]` resumes the newest session natively, via the agent's own fork command — same agent only; switching agents goes through the transcript.
+- `catchup fork [agent]` resumes the newest session natively, via the agent's own fork command. Add `--into <agent>` to continue in a *different* agent, seeded with the transcript.
 - Install with Go: `go install github.com/wilbeibi/catchup@latest`, then `catchup install-skill`.
 - `install-skill` writes catchup's SKILL.md for every detected agent (or one: `catchup install-skill codex`), so an agent can run it itself to "catch up on the last session".
 
@@ -25,7 +25,7 @@ Key facts:
 - Find a session: `catchup <agent> --list` lists sessions; `-q, --query <text>` filters by keyword.
 - Trim output: `--last <N>` keeps the last N exchanges; `--since-compact` keeps the final compaction segment; `-i, --info` shows metadata only.
 - Change format: `--md` (default), `--html`, `--json`.
-- Fork back in: `catchup fork [agent]` resumes the newest matching session using that agent's own native fork command (same agent only).
+- Fork back in: `catchup fork [agent]` resumes the newest matching session using that agent's own native fork command; `catchup fork codex --into claude` continues a Codex session in Claude, seeded with the transcript.
 
 ## Supported agents
 - Claude Code

@@ -11,7 +11,7 @@ catchup reads the local session history of an AI coding agent and prints a clean
 - **Built for agent handoff.** Your next agent runs `catchup <agent>` for `codex`, `claude`, `opencode`, or `pi-agent` to recover the relevant conversation — add `--since-compact` to pick up from the last compaction.
 - **Just the conversation.** User and assistant messages only; tool calls, reasoning, and token accounting are stripped.
 - **Still readable by humans.** Browsing manually? Start with `catchup codex --list` — or bare `catchup`, which reads the newest session in the directory, whichever agent wrote it.
-- **Fork back in.** `catchup fork` hands off to the agent's own native fork command, so the next session picks up real state instead of a rendered transcript. Same agent only — for switching agents, the transcript is the handoff.
+- **Fork back in.** `catchup fork` hands off to the agent's own native fork command, so the next session picks up real state instead of a rendered transcript. Crossing agents? `catchup fork codex --into claude` starts Claude seeded with the Codex transcript.
 
 ## Install
 

@@ -69,7 +69,9 @@ Fork:
 - `catchup fork` — fork the newest session in the current directory, across all agents.
 - `catchup fork <agent>` — fork the newest current-directory session for one agent. Launches that agent's own native fork command (`codex fork`, `claude --resume --fork-session`, `opencode --session --fork`, `pi --fork`).
 
-Fork resumes with the agent's real session state, but only the agent that owns the session — for switching agents, the transcript is the handoff.
+- `catchup fork <agent> --into <other-agent>` — continue the session in a different agent. Cross-agent state cannot be transplanted, so this renders the transcript and launches the target agent with it as the opening prompt (`--last` / `--since-compact` bound what gets seeded). The same-agent case is rejected in favor of the native fork.
+
+Native fork resumes with the agent's real session state; `--into` crosses agents with the conversation, not the state.
 
 ## Supported agents
 
