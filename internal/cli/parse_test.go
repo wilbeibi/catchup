@@ -38,6 +38,16 @@ func TestParse(t *testing.T) {
 			want: Command{Action: "fork", Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
 		},
 		{
+			name: "fork into another agent",
+			args: []string{"fork", "codex", "--into", "claude"},
+			want: Command{Action: "fork", Into: "claude", Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "fork into allows trims",
+			args: []string{"fork", "--into", "claude", "--since-compact"},
+			want: Command{Action: "fork", Into: "claude", SinceCompact: true, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
 			name: "install-skill for every provider",
 			args: []string{"install-skill"},
 			want: Command{Action: "install-skill", Format: session.FormatMarkdown, Limit: DefaultLimit},
@@ -153,6 +163,9 @@ func TestParseRejects(t *testing.T) {
 		{"fork", "codex", "--list"},          // fork is not a render mode
 		{"fork", "codex", "--last", "1"},     // fork is not a trim mode
 		{"fork", "--last", "1"},              // same rejection without provider
+		{"codex", "--into", "claude"},        // --into only applies to fork
+		{"fork", "codex", "--into", "claude", "--list"}, // --into is not a render mode
+		{"install-skill", "codex", "--into", "claude"},  // --into only applies to fork
 		{"install-skill", "codex/2"},         // install-skill does not take a rank
 		{"install-skill", "codex", "--list"}, // install-skill is not a render mode
 	}

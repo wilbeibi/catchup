@@ -409,3 +409,48 @@ func withForkRunner(t *testing.T, runner forkRunner) {
 	runFork = runner
 	t.Cleanup(func() { runFork = old })
 }
+
+func withIntoRunner(t *testing.T, runner intoRunner) {
+	t.Helper()
+	old := runInto
+	runInto = runner
+	t.Cleanup(func() { runInto = old })
+}
+
+func TestRunForkInto(t *testing.T) {
+	roots := codexRoot(t)
+	var gotName string
+	var gotArgs []string
+	withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		gotName, gotArgs = name, args
+		return nil
+	})
+
+	var out, errOut bytes.Buffer
+	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude"}, roots, nil, nil, nil, "/home/u/src/proj", nil, &out, &errOut); err != nil {
+		t.Fatalf("Run fork --into error: %v (stderr: %s)", err, errOut.String())
+	}
+	if gotName != "claude" {
+		t.Fatalf("fork --into launched %q, want claude", gotName)
+	}
+	if len(gotArgs) != 1 || !strings.Contains(gotArgs[0], "hello from cli test") {
+		t.Fatalf("fork --into prompt missing transcript, got %q", gotArgs)
+	}
+	if !strings.Contains(gotArgs[0], "prior codex session") {
+		t.Fatalf("fork --into prompt missing source framing, got %q", gotArgs[0])
+	}
+}
+
+func TestRunForkIntoSameAgent(t *testing.T) {
+	roots := codexRoot(t)
+	withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		t.Fatal("runner should not be called for a same-agent --into")
+		return nil
+	})
+
+	var out, errOut bytes.Buffer
+	err := Run(context.Background(), []string{"fork", "codex", "--into", "codex"}, roots, nil, nil, nil, "/home/u/src/proj", nil, &out, &errOut)
+	if err == nil || !strings.Contains(err.Error(), "native fork") {
+		t.Fatalf("want same-agent rejection pointing at native fork, got %v", err)
+	}
+}

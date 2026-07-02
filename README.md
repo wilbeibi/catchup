@@ -56,15 +56,16 @@ catchup <agent> --json           # render JSON; also --html
 ```bash
 catchup fork                     # fork the newest session across agents
 catchup fork <agent>             # fork that agent's newest session
+catchup fork codex --into claude # continue a Codex session in Claude
 ```
 
-Same agent and you want to continue where it left off → `fork`. Switching agents, recalling old work, or starting a clean context → read.
+Same agent, continuing where it left off → `fork` (native, full state). Crossing agents → `fork --into`, which starts the other agent with the transcript as its first prompt. Recalling old work or starting a clean context → read.
 
 ## Boundaries
 
 - One agent at a time. It does not merge histories.
 - Conversation only. It strips tool calls, command output, and reasoning traces.
-- Read-only, except `fork`. Same-agent fork preserves context cache. Dispatches to native fork, so sessions inherit real context, not a handoff transcript.
+- Read-only, except `fork`. Same-agent fork preserves context cache. Dispatches to native fork, so sessions inherit real context, not a handoff transcript. `fork --into` is the exception that crosses agents: it seeds the new agent with the transcript — conversation, not native state.
 
 ## License
 

@@ -5,6 +5,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -21,7 +22,7 @@ import (
 )
 
 const helpText = `Usage: catchup [agent[/<rank>]] [flags]
-       catchup fork [agent]
+       catchup fork [agent] [--into <agent>]
        catchup install-skill [agent]
 
 Agents: codex, claude, opencode, pi-agent
@@ -38,6 +39,7 @@ Flags:
   --html              output HTML
   --md, --markdown    output Markdown (default)
   -n, --limit <N>     cap listing rows (default 20)
+  --into <agent>      with fork: start a different agent, seeded with the transcript
   -h, --help          print this help
 
 Examples:
@@ -50,6 +52,7 @@ Examples:
   catchup claude --since-compact  tail after last compaction
   catchup fork                fork the latest session in this directory
   catchup fork codex          fork the latest Codex session in this directory
+  catchup fork codex --into claude  continue the Codex session in Claude
   catchup install-skill       install catchup's SKILL.md for every detected agent
   catchup install-skill codex install catchup's SKILL.md for Codex only
 `
@@ -80,6 +83,9 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		src, err := locateForkSource(ctx, roots, cmd, cwd)
 		if err != nil {
 			return err
+		}
+		if cmd.Into != "" {
+			return forkInto(ctx, src, cmd, stdin, stdout, stderr)
 		}
 		return runFork(ctx, src, stdin, stdout, stderr)
 	}
@@ -261,6 +267,73 @@ func execFork(ctx context.Context, src session.Source, stdin io.Reader, stdout, 
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	return cmd.Run()
+}
+
+type intoRunner func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error
+
+var runInto intoRunner = execInto
+
+func execInto(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd.Run()
+}
+
+// forkInto is the cross-agent half of fork: it cannot transplant one agent's
+// native state into another, so it renders the source session's transcript and
+// launches the target agent with that transcript as its opening prompt. The
+// same-agent case is rejected because the native fork is strictly better there.
+func forkInto(ctx context.Context, src session.Source, cmd Command, stdin io.Reader, stdout, stderr io.Writer) error {
+	if cmd.Into == src.Ref.Provider {
+		return fmt.Errorf("--into %s: the session is already %s's; use catchup fork %s for a native fork with full state", cmd.Into, cmd.Into, cmd.Into)
+	}
+	if _, err := selectProvider(cmd.Into); err != nil {
+		return err
+	}
+	prov, err := selectProvider(src.Ref.Provider)
+	if err != nil {
+		return err
+	}
+	thread, err := prov.Read(ctx, src)
+	if err != nil {
+		return err
+	}
+	if cmd.SinceCompact {
+		thread = sinceCompact(thread)
+	}
+	if cmd.LastN > 0 {
+		thread = lastTurns(thread, cmd.LastN)
+	}
+	var buf bytes.Buffer
+	if err := render.Thread(&buf, thread, session.FormatMarkdown); err != nil {
+		return err
+	}
+	prompt := fmt.Sprintf("Continue the work from this prior %s session in this directory. Its transcript follows; pick up where it left off.\n\n%s",
+		src.Ref.Provider, buf.String())
+	name, args, err := intoCommand(cmd.Into, prompt)
+	if err != nil {
+		return err
+	}
+	return runInto(ctx, name, args, stdin, stdout, stderr)
+}
+
+// intoCommand maps a target agent to its "start interactive with an opening
+// prompt" invocation, the seeding counterpart of forkCommand's native resumes.
+func intoCommand(target, prompt string) (string, []string, error) {
+	switch target {
+	case session.ProviderCodex:
+		return "codex", []string{prompt}, nil
+	case session.ProviderClaude:
+		return "claude", []string{prompt}, nil
+	case session.ProviderOpenCode:
+		return "opencode", []string{"--prompt", prompt}, nil
+	case session.ProviderPiAgent:
+		return "pi", []string{prompt}, nil
+	default:
+		return "", nil, fmt.Errorf("--into: unsupported agent %q", target)
+	}
 }
 
 func forkCommand(src session.Source) (string, []string, error) {

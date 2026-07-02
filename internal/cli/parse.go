@@ -18,6 +18,7 @@ const DefaultLimit = 20
 // place and the rest of the program works with structured data.
 type Command struct {
 	Action       string // optional action subcommand; empty means render history
+	Into         string // --into <agent>: with fork, seed that agent with the transcript
 	Target       session.Target
 	Format       session.Format
 	MetaOnly     bool // -i: render metadata/frontmatter only
@@ -108,6 +109,12 @@ func Parse(args []string) (Command, error) {
 				return cmd, err
 			}
 			cmd.Target.SessionID = v
+		case "--into":
+			v, err := value()
+			if err != nil {
+				return cmd, err
+			}
+			cmd.Into = v
 		case "-n", "--limit":
 			v, err := value()
 			if err != nil {
@@ -241,17 +248,24 @@ func isProviderName(s string) bool {
 // a query with no explicit selector means list mode.
 func normalize(cmd *Command) error {
 	t := cmd.Target
+	if cmd.Into != "" && cmd.Action != "fork" {
+		return errors.New("--into only applies to fork")
+	}
 	if cmd.Action != "" {
 		// Both action subcommands (fork, install-skill) take only an optional
-		// bare provider — no render-mode selectors or trims apply to either.
+		// bare provider — no render-mode selectors apply to either. The trims
+		// are the one exception: fork --into seeds another agent with a
+		// rendered transcript, so --last / --since-compact meaningfully bound
+		// what gets seeded.
+		intoFork := cmd.Into != ""
 		switch {
 		case cmd.List:
 			return fmt.Errorf("%s cannot be combined with --list", cmd.Action)
 		case cmd.MetaOnly:
 			return fmt.Errorf("%s cannot be combined with -i", cmd.Action)
-		case cmd.LastN > 0:
+		case cmd.LastN > 0 && !intoFork:
 			return fmt.Errorf("%s cannot be combined with --last", cmd.Action)
-		case cmd.SinceCompact:
+		case cmd.SinceCompact && !intoFork:
 			return fmt.Errorf("%s cannot be combined with --since-compact", cmd.Action)
 		case t.Query != "":
 			return fmt.Errorf("%s cannot be combined with -q", cmd.Action)
