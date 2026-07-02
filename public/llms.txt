@@ -5,12 +5,13 @@
 catchup solves a concrete problem: developers jump between coding agents, and each stores its history in a different place and format. When one agent hits a usage limit or you want a second opinion, the next agent has no context. catchup gives the agent a simple command it can run itself to recover prior work without you re-explaining the project state.
 
 Key facts:
-- Agent handoff command: `catchup <agent>` for `codex`, `claude`, `opencode`, or `pi-agent` — clean Markdown regardless of source.
+- Agent handoff command: `catchup <agent>` for `codex`, `claude`, `opencode`, or `pi-agent` — clean Markdown regardless of source. Add `--since-compact` to pick up from the last compaction.
+- The agent is optional: bare `catchup` reads the newest session in the current directory, whichever agent wrote it.
 - Human browsing starts with `catchup <agent> --list`, for example `catchup codex --list`.
 - Output is Markdown by default; `--html` and `--json` are also available.
-- `catchup fork [agent]` resumes the newest session natively, via the agent's own fork command.
-- Install with Go: `go install github.com/wilbeibi/catchup@latest`.
-- Ships as a Claude Code / Codex / OpenCode / Pi Agent skill (SKILL.md) so an agent can run it itself to "catch up on the last session".
+- `catchup fork [agent]` resumes the newest session natively, via the agent's own fork command — same agent only; switching agents goes through the transcript.
+- Install with Go: `go install github.com/wilbeibi/catchup@latest`, then `catchup install-skill`.
+- `install-skill` writes catchup's SKILL.md for every detected agent (or one: `catchup install-skill codex`), so an agent can run it itself to "catch up on the last session".
 
 ## Documentation
 - [Full reference (llms-full.txt)](https://catchup.pages.dev/llms-full.txt): Complete command list, usage scenarios, comparisons, and facts in one Markdown file.
@@ -19,12 +20,12 @@ Key facts:
 - [SKILL.md](https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md): The agent skill definition that teaches a coding agent how to invoke catchup.
 
 ## Usage
-- Read a session: `catchup <agent>` reads the latest session for that agent in the current directory.
+- Read a session: `catchup <agent>` reads the latest session for that agent in the current directory; bare `catchup` picks whichever agent has the newest session.
 - Pick a session: `catchup <agent>/N` reads the N-th most recent; `--id <id>` selects an exact session id.
 - Find a session: `catchup <agent> --list` lists sessions; `-q, --query <text>` filters by keyword.
-- Trim output: `--last <N>` keeps the last N exchanges; `--since-compact` keeps the final compaction segment; `--info` shows metadata only.
+- Trim output: `--last <N>` keeps the last N exchanges; `--since-compact` keeps the final compaction segment; `-i, --info` shows metadata only.
 - Change format: `--md` (default), `--html`, `--json`.
-- Fork back in: `catchup fork [agent]` resumes the newest matching session using that agent's own native fork command.
+- Fork back in: `catchup fork [agent]` resumes the newest matching session using that agent's own native fork command (same agent only).
 
 ## Supported agents
 - Claude Code

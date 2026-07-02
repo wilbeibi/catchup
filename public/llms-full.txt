@@ -12,7 +12,7 @@ catchup gives the next agent a simple command it can run itself to recover prior
 
 ## Concrete scenarios
 
-- Hitting a limit mid-task: Claude Code reaches its 5-hour usage limit during a refactor. In the same directory the next agent runs `catchup claude`, reads the output, and continues without being re-briefed.
+- Hitting a limit mid-task: Claude Code reaches its 5-hour usage limit during a refactor. In the same directory the next agent runs `catchup claude --since-compact`, reads the recap, and continues without being re-briefed.
 - Recalling earlier work: weeks later you ask a fresh agent about a past change. It runs `catchup codex -q "auth"` to locate the old session by keyword, then pulls it back into context by id.
 - Reviewing your own history: you read `catchup claude --last 4` to remind yourself what the last few exchanges actually decided, without scrolling through tool-call logs.
 
@@ -24,12 +24,12 @@ Install the binary with Go:
 go install github.com/wilbeibi/catchup@latest
 ```
 
-catchup also ships as a skill so an agent can run it itself. Download SKILL.md into the agent's skills directory:
+catchup also ships as a skill so an agent can run it itself:
 
-- Claude Code: `~/.claude/skills/catchup/SKILL.md`
-- Codex: `~/.agents/skills/catchup/SKILL.md`
-- OpenCode: uses Claude Code skills — `~/.claude/skills/catchup/SKILL.md`
-- Pi Agent: `~/.pi/agent/skills/catchup/SKILL.md`
+```
+catchup install-skill          # install for every detected agent
+catchup install-skill codex    # or for one agent only
+```
 
 The skill source is at https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md. After installing, restart the agent and ask it to "catch up on the last session".
 
@@ -38,6 +38,7 @@ The skill source is at https://raw.githubusercontent.com/wilbeibi/catchup/main/S
 Agent handoff:
 
 - `catchup <agent>` — latest session for that agent in the current directory (`claude`, `codex`, `opencode`, `pi-agent`).
+- `catchup` — the agent is optional: bare catchup reads the newest session in the current directory, whichever agent wrote it. Inside a live session the newest is usually your own, which pairs with `--since-compact` to recover context after a compaction.
 
 Human browsing:
 
@@ -54,7 +55,7 @@ Limit the output:
 
 - `catchup <agent> --last <N>` — keep only the last N exchanges.
 - `catchup <agent> --since-compact` — keep the final compaction segment, or the whole session if there is none.
-- `catchup <agent> --info` — print session metadata only, no messages.
+- `catchup <agent> -i, --info` — print session metadata only, no messages.
 
 Change the format:
 
@@ -67,6 +68,8 @@ Fork:
 
 - `catchup fork` — fork the newest session in the current directory, across all agents.
 - `catchup fork <agent>` — fork the newest current-directory session for one agent. Launches that agent's own native fork command (`codex fork`, `claude --resume --fork-session`, `opencode --session --fork`, `pi --fork`).
+
+Fork resumes with the agent's real session state, but only the agent that owns the session — for switching agents, the transcript is the handoff.
 
 ## Supported agents
 
