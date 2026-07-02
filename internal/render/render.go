@@ -28,7 +28,7 @@ func Thread(w io.Writer, t session.Thread, f session.Format) error {
 	}
 }
 
-// Meta renders only a session's metadata/frontmatter (the -I view).
+// Meta renders only a session's metadata/frontmatter (the -i view).
 func Meta(w io.Writer, s session.Source, f session.Format) error {
 	switch f {
 	case session.FormatMarkdown:

@@ -20,17 +20,18 @@ import (
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
-const helpText = `Usage: catchup <agent>[/<rank>] [flags]
+const helpText = `Usage: catchup [agent[/<rank>]] [flags]
        catchup fork [agent]
        catchup install-skill [agent]
 
 Agents: codex, claude, opencode, pi-agent
+Omit the agent to use whichever one has the newest session in this directory.
 
 Flags:
   --list              list recent sessions
   -q, --query <text>  filter by keyword (implies --list)
   --id <id>           select by exact session id
-  -I, --info          print metadata only, no messages
+  -i, --info          print metadata only, no messages
   --last <N>          show last N exchanges only
   --since-compact     show only the final compaction segment
   --json              output JSON
@@ -40,6 +41,7 @@ Flags:
   -h, --help          print this help
 
 Examples:
+  catchup                     latest session from any agent → Markdown
   catchup claude              latest Claude session → Markdown
   catchup claude --list       list recent Claude sessions
   catchup codex -q "deploy"   search Codex sessions by keyword
@@ -84,6 +86,17 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 
 	if cmd.Action == "install-skill" {
 		return installSkill(cmd.Target.Provider, skillDirs, skillMD, stdout)
+	}
+
+	// With no agent named, the agent owning the newest session in cwd is the
+	// target; the normal locate below then re-selects within that provider, so
+	// --list, -q, and the trims all work against the detected agent.
+	if cmd.Target.Provider == "" {
+		src, err := newestAcross(ctx, roots, cwd)
+		if err != nil {
+			return err
+		}
+		cmd.Target.Provider = src.Ref.Provider
 	}
 
 	prov, err := selectProvider(cmd.Target.Provider)
@@ -144,6 +157,9 @@ func selectProvider(name string) (session.Provider, error) {
 	case session.ProviderPiAgent:
 		return piagent.New(), nil
 	default:
+		if name == "list" {
+			return nil, fmt.Errorf(`unknown agent "list"; did you mean catchup --list?`)
+		}
 		return nil, fmt.Errorf("unknown agent %q (want codex, claude, opencode, or pi-agent); run catchup --help", name)
 	}
 }
@@ -156,7 +172,16 @@ func locateForkSource(ctx context.Context, roots session.Roots, cmd Command, cwd
 		}
 		return newestInCwd(ctx, prov, roots, cmd.Target.Provider, cwd)
 	}
+	src, err := newestAcross(ctx, roots, cwd)
+	if err != nil {
+		return session.Source{}, fmt.Errorf("fork: %w", err)
+	}
+	return src, nil
+}
 
+// newestAcross finds the single newest session in cwd across every provider.
+// It is what lets both a bare read and a bare fork omit the agent name.
+func newestAcross(ctx context.Context, roots session.Roots, cwd string) (session.Source, error) {
 	var latest session.Source
 	var have bool
 	var failures []error
@@ -179,9 +204,9 @@ func locateForkSource(ctx context.Context, roots session.Roots, cmd Command, cwd
 		return latest, nil
 	}
 	if len(failures) > 0 {
-		return session.Source{}, fmt.Errorf("fork: no sessions found in %q", cwd)
+		return session.Source{}, fmt.Errorf("no sessions found in %q", cwd)
 	}
-	return session.Source{}, fmt.Errorf("fork: no agents available")
+	return session.Source{}, fmt.Errorf("no agents available")
 }
 
 // installSkill writes skillMD to "<dir>/catchup/SKILL.md" for one provider, or

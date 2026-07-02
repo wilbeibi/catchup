@@ -18,6 +18,16 @@ func TestParse(t *testing.T) {
 			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
 		},
 		{
+			name: "bare invocation leaves the provider for detection",
+			args: []string{},
+			want: Command{Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "bare invocation accepts flags",
+			args: []string{"--list"},
+			want: Command{Format: session.FormatMarkdown, List: true, Limit: DefaultLimit},
+		},
+		{
 			name: "fork latest across providers",
 			args: []string{"fork"},
 			want: Command{Action: "fork", Format: session.FormatMarkdown, Limit: DefaultLimit},
@@ -93,18 +103,13 @@ func TestParse(t *testing.T) {
 			want: Command{Help: true, Limit: DefaultLimit, Format: session.FormatMarkdown},
 		},
 		{
-			name: "-n sets limit",
-			args: []string{"codex", "-n", "5"},
-			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: 5},
+			name: "--limit sets limit in query mode",
+			args: []string{"codex", "-q", "auth", "--limit", "5"},
+			want: Command{Target: session.Target{Provider: "codex", Query: "auth"}, Format: session.FormatMarkdown, List: true, Limit: 5},
 		},
 		{
-			name: "--limit sets limit",
-			args: []string{"codex", "--limit", "5"},
-			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: 5},
-		},
-		{
-			name: "-I sets meta-only",
-			args: []string{"codex", "-I"},
+			name: "-i sets meta-only",
+			args: []string{"codex", "-i"},
 			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, MetaOnly: true, Limit: DefaultLimit},
 		},
 		{
@@ -129,7 +134,7 @@ func TestParse(t *testing.T) {
 
 func TestParseRejects(t *testing.T) {
 	bad := [][]string{
-		{},                                   // missing provider
+		{"--id", "x"},                        // --id needs an explicit agent
 		{"agents://codex/latest"},            // legacy scheme
 		{"codex/019f-abcdef"},                // session id mistaken as a rank
 		{"codex/role/user"},                  // path/role form
@@ -139,6 +144,10 @@ func TestParseRejects(t *testing.T) {
 		{"codex", "extra"},                   // two targets
 		{"codex", "--bogus"},                 // unknown flag
 		{"codex", "-n", "0"},                 // non-positive limit
+		{"codex", "-n", "5"},                 // -n without a listing
+		{"-n", "5"},                          // -n without a listing, bare form
+		{"fork", "codex", "-n", "5"},         // -n without a listing, action form
+		{"claude", "59d0fbfa-5187-421b"},     // session id pasted as a second target
 		{"fork", "codex/2"},                  // fork always selects latest
 		{"fork", "codex", "--id", "x"},       // fork does not take selectors
 		{"fork", "codex", "--list"},          // fork is not a render mode

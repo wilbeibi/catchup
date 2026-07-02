@@ -260,7 +260,11 @@ func TestRunForkProvider(t *testing.T) {
 	}
 }
 
-func TestRunForkLatestAcrossProviders(t *testing.T) {
+// multiProviderRoots writes an older codex session and a newer pi-agent
+// session sharing one working directory, so "newest across providers" must
+// pick pi-agent. Used by both the bare fork and the bare read tests.
+func multiProviderRoots(t *testing.T) session.Roots {
+	t.Helper()
 	now := time.Now()
 	roots := session.Roots{
 		Codex:    t.TempDir(),
@@ -291,6 +295,7 @@ func TestRunForkLatestAcrossProviders(t *testing.T) {
 	piPath := filepath.Join(piDir, "2026-06-28T02-50-19-365Z_new-pi.jsonl")
 	piBody := `{"type":"session","version":3,"id":"new-pi","timestamp":"2026-06-28T02:50:19.365Z","cwd":"/home/u/src/proj"}
 {"type":"message","id":"m1","parentId":null,"timestamp":"2026-06-28T02:50:23.414Z","message":{"role":"user","content":[{"type":"text","text":"new pi"}]}}
+{"type":"message","id":"m2","parentId":"m1","timestamp":"2026-06-28T02:50:26.242Z","message":{"role":"assistant","content":[{"type":"text","text":"hi new pi"}]}}
 `
 	if err := os.WriteFile(piPath, []byte(piBody), 0o644); err != nil {
 		t.Fatal(err)
@@ -298,6 +303,11 @@ func TestRunForkLatestAcrossProviders(t *testing.T) {
 	if err := os.Chtimes(piPath, now, now); err != nil {
 		t.Fatal(err)
 	}
+	return roots
+}
+
+func TestRunForkLatestAcrossProviders(t *testing.T) {
+	roots := multiProviderRoots(t)
 
 	var got session.Source
 	withForkRunner(t, func(ctx context.Context, src session.Source, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -311,6 +321,19 @@ func TestRunForkLatestAcrossProviders(t *testing.T) {
 	}
 	if got.Ref.Provider != session.ProviderPiAgent || got.Ref.SessionID != "new-pi" {
 		t.Fatalf("fork dispatched %+v, want pi-agent new-pi", got.Ref)
+	}
+}
+
+func TestRunBareReadsLatestAcrossProviders(t *testing.T) {
+	roots := multiProviderRoots(t)
+	out := runWithCwd(t, roots, "/home/u/src/proj", "--last", "1")
+	for _, want := range []string{"agent: pi-agent", "session: new-pi", "new pi"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("bare read missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "old codex") {
+		t.Errorf("bare read picked the older codex session:\n%s", out)
 	}
 }
 

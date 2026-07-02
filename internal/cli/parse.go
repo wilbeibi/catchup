@@ -20,7 +20,7 @@ type Command struct {
 	Action       string // optional action subcommand; empty means render history
 	Target       session.Target
 	Format       session.Format
-	MetaOnly     bool // -I: render metadata/frontmatter only
+	MetaOnly     bool // -i: render metadata/frontmatter only
 	LastN        int  // --last N: keep only the last N exchanges/turns (0 = all)
 	SinceCompact bool // --since-compact: keep only the final compaction segment
 	List         bool // --list: print the ranked listing and exit
@@ -31,7 +31,10 @@ type Command struct {
 // Parse turns raw argv (excluding the program name) into a Command. It accepts
 // the fixed grammar:
 //
-//	catchup <agent>[/<rank>] [flags]
+//	catchup [agent[/<rank>]] [flags]
+//
+// The agent may be omitted; the cli then detects the agent with the newest
+// session in the working directory (Target.Provider stays empty here).
 //
 // Flags may appear before or after the target, which is why this is a small
 // hand-rolled parser rather than the stdlib flag package (which stops at the
@@ -50,6 +53,7 @@ func Parse(args []string) (Command, error) {
 		target    string
 		haveTgt   bool
 		formatSet bool
+		limitSet  bool
 	)
 
 	for i := 0; i < len(args); i++ {
@@ -88,7 +92,7 @@ func Parse(args []string) (Command, error) {
 			if err := setFormat(&cmd, &formatSet, session.FormatMarkdown); err != nil {
 				return cmd, err
 			}
-		case "-I", "--info":
+		case "-i", "--info":
 			cmd.MetaOnly = true
 		case "--list":
 			cmd.List = true
@@ -113,7 +117,7 @@ func Parse(args []string) (Command, error) {
 			if err != nil || n < 1 {
 				return cmd, fmt.Errorf("-n needs a positive integer, got %q", v)
 			}
-			cmd.Limit = n
+			cmd.Limit, limitSet = n, true
 		case "--last":
 			v, err := value()
 			if err != nil {
@@ -133,6 +137,9 @@ func Parse(args []string) (Command, error) {
 				return cmd, fmt.Errorf("unknown flag %q", tok)
 			}
 			if haveTgt {
+				if looksLikeSessionID(tok) {
+					return cmd, fmt.Errorf("unexpected extra argument %q; to select by session id use --id %s", tok, tok)
+				}
 				return cmd, fmt.Errorf("unexpected extra argument %q (only one agent target is allowed)", tok)
 			}
 			target, haveTgt = tok, true
@@ -142,19 +149,38 @@ func Parse(args []string) (Command, error) {
 	if cmd.Help {
 		return cmd, nil // skip target validation; help text is provider-agnostic
 	}
-	if cmd.Action != "" && !haveTgt {
-		return cmd, normalize(&cmd)
-	}
-	if !haveTgt {
-		return cmd, errors.New("missing agent; run catchup --help for usage")
-	}
-	if err := applyTarget(&cmd, target); err != nil {
-		return cmd, err
+	if haveTgt {
+		if err := applyTarget(&cmd, target); err != nil {
+			return cmd, err
+		}
 	}
 	if err := normalize(&cmd); err != nil {
 		return cmd, err
 	}
+	// Checked after normalize so that -q's implicit list mode counts as a
+	// listing. Outside a listing -n would be silently ignored, and a silent
+	// no-op is worse than an error — especially since -n is the flag people
+	// guess when they mean --last.
+	if limitSet && !cmd.List {
+		return cmd, errors.New("-n only applies to listings; did you mean --last?")
+	}
 	return cmd, nil
+}
+
+// looksLikeSessionID reports whether a stray argument is plausibly a session id
+// rather than a mistyped agent name, so the error can point at --id. Ids from
+// every provider are long and carry digits (UUIDs, ULID-ish stamps); agent
+// names are short and alphabetic.
+func looksLikeSessionID(s string) bool {
+	if len(s) < 8 {
+		return false
+	}
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			return true
+		}
+	}
+	return false
 }
 
 func setFormat(cmd *Command, set *bool, f session.Format) error {
@@ -222,7 +248,7 @@ func normalize(cmd *Command) error {
 		case cmd.List:
 			return fmt.Errorf("%s cannot be combined with --list", cmd.Action)
 		case cmd.MetaOnly:
-			return fmt.Errorf("%s cannot be combined with -I", cmd.Action)
+			return fmt.Errorf("%s cannot be combined with -i", cmd.Action)
 		case cmd.LastN > 0:
 			return fmt.Errorf("%s cannot be combined with --last", cmd.Action)
 		case cmd.SinceCompact:
@@ -236,6 +262,8 @@ func normalize(cmd *Command) error {
 		}
 	}
 	switch {
+	case t.SessionID != "" && t.Provider == "":
+		return errors.New("--id needs an agent name; id formats are per-agent")
 	case t.SessionID != "" && t.Rank > 0:
 		return errors.New("--id cannot be combined with a /rank selector")
 	case t.SessionID != "" && cmd.List:
@@ -245,7 +273,7 @@ func normalize(cmd *Command) error {
 	case t.Rank > 0 && cmd.List:
 		return errors.New("a /rank selector cannot be combined with --list")
 	case cmd.MetaOnly && cmd.List:
-		return errors.New("-I cannot be combined with --list")
+		return errors.New("-i cannot be combined with --list")
 	case cmd.LastN > 0 && cmd.SinceCompact:
 		return errors.New("--last cannot be combined with --since-compact; they are alternative trims")
 	}
