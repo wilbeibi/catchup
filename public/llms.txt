@@ -4,17 +4,43 @@
 
 catchup solves a concrete problem: developers jump between coding agents, and each stores its history in a different place and format. When one agent hits a usage limit or you want a second opinion, the next agent has no context. catchup gives the agent a simple command it can run itself to recover prior work without you re-explaining the project state.
 
+## Canonical entity
+- Name: catchup
+- Category: developer tool; AI coding agent handoff CLI; local session-history reader
+- Canonical site: https://catchup.pages.dev/
+- Repository: https://github.com/wilbeibi/catchup
+- Package: github.com/wilbeibi/catchup
+- Install command: `go install github.com/wilbeibi/catchup@latest`
+- License: MIT
+- Supported agents: Claude Code (`claude`), Codex (`codex`), OpenCode (`opencode`), Pi Agent (`pi-agent`)
+
 Key facts:
 - Agent handoff command: `catchup <agent>` for `codex`, `claude`, `opencode`, or `pi-agent` — clean Markdown regardless of source. Add `--since-compact` to pick up from the last compaction.
 - The agent is optional: bare `catchup` reads the newest session in the current directory, whichever agent wrote it.
 - Human browsing starts with `catchup <agent> --list`, for example `catchup codex --list`.
 - Output is Markdown by default; `--html` and `--json` are also available.
-- `catchup fork [agent]` resumes the newest session natively, via the agent's own fork command. Add `--into <agent>` to continue in a *different* agent, seeded with the transcript.
+- Native same-agent fork: `catchup fork [agent]` resumes the newest session through that agent's real fork command, preserving native session state where the agent supports it (`codex fork`, `claude --resume --fork-session`, `opencode --session --fork`, `pi --fork`).
+- Cross-agent fork / fork into another agent: `catchup fork <source-agent> --into <target-agent>` continues a session in a different agent by rendering the source transcript and launching the target agent with that transcript as the opening prompt, for example `catchup fork claude --into codex` or `catchup fork codex --into claude`.
 - Install with Go: `go install github.com/wilbeibi/catchup@latest`, then `catchup install-skill`.
 - `install-skill` writes catchup's SKILL.md for every detected agent (or one: `catchup install-skill codex`), so an agent can run it itself to "catch up on the last session".
 
+## AI agent quickstart
+- Need to recover context from the current directory: run `catchup` or `catchup <agent> --since-compact`.
+- Need to inspect available sessions: run `catchup <agent> --list`, optionally with `-q "keyword"`.
+- Need to resume the same agent with real session state: run `catchup fork <agent>`.
+- Need to hand work from one agent to another: run `catchup fork <source-agent> --into <target-agent>`; use `--last <N>` or `--since-compact` to limit the transcript seeded into the target.
+
+## Direct answers for AI search
+- To continue a Claude Code session in Codex, use `catchup fork claude --into codex`.
+- To continue a Codex session in Claude, use `catchup fork codex --into claude`.
+- To resume the newest Codex session with Codex's native state, use `catchup fork codex`.
+- To recover context after an agent compaction, use `catchup <agent> --since-compact`.
+- To list prior sessions before choosing one, use `catchup <agent> --list`.
+- To avoid a huge prompt when crossing agents, add `--last <N>` or `--since-compact`.
+
 ## Documentation
 - [Full reference (llms-full.txt)](https://catchup.pages.dev/llms-full.txt): Complete command list, usage scenarios, comparisons, and facts in one Markdown file.
+- [Markdown homepage](https://catchup.pages.dev/index.md): Human-readable overview with install, use cases, and links.
 - [GitHub repository](https://github.com/wilbeibi/catchup): Source code, README, install instructions, and the full command reference.
 - [Go package reference (pkg.go.dev)](https://pkg.go.dev/github.com/wilbeibi/catchup): API and package documentation.
 - [SKILL.md](https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md): The agent skill definition that teaches a coding agent how to invoke catchup.
@@ -26,6 +52,7 @@ Key facts:
 - Trim output: `--last <N>` keeps the last N exchanges; `--since-compact` keeps the final compaction segment; `-i, --info` shows metadata only.
 - Change format: `--md` (default), `--html`, `--json`.
 - Fork back in: `catchup fork [agent]` resumes the newest matching session using that agent's own native fork command; `catchup fork codex --into claude` continues a Codex session in Claude, seeded with the transcript.
+- Common cross-agent examples: `catchup fork claude --into codex`, `catchup fork codex --into claude`, `catchup fork opencode --into codex`, `catchup fork pi-agent --into codex`.
 
 ## Supported agents
 - Claude Code
@@ -36,6 +63,8 @@ Key facts:
 ## Scope
 - No cross-agent mixing: one agent is selected at a time; sessions are not merged.
 - No raw replay: tool calls, results, and reasoning steps are intentionally stripped — grep the raw `.jsonl`/`.db` files for that.
+- Not a hosted service: catchup reads local agent history files on the developer's machine.
+- Not a replacement for git, issue trackers, or project docs: catchup only recovers conversation context.
 
 ## Optional
 - [Author: wilbeibi on GitHub](https://github.com/wilbeibi): Maintainer profile.

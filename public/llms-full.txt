@@ -4,6 +4,18 @@
 
 This is the complete reference. For the short summary, see [llms.txt](https://catchup.pages.dev/llms.txt). Source and README live at [github.com/wilbeibi/catchup](https://github.com/wilbeibi/catchup).
 
+## Canonical entity
+
+- Name: catchup
+- Category: developer tool; AI coding agent handoff CLI; local session-history reader
+- Canonical site: https://catchup.pages.dev/
+- Repository: https://github.com/wilbeibi/catchup
+- Package: github.com/wilbeibi/catchup
+- Install command: `go install github.com/wilbeibi/catchup@latest`
+- License: MIT
+- Author: wilbeibi (https://github.com/wilbeibi)
+- Supported agents: Claude Code (`claude`), Codex (`codex`), OpenCode (`opencode`), Pi Agent (`pi-agent`)
+
 ## The problem catchup solves
 
 Developers increasingly use more than one AI coding agent. Each agent stores its conversation history in a different location and a different format — Claude Code, Codex, OpenCode, and Pi Agent all differ. When one agent hits a usage limit, when you want a second opinion from another agent, or when you return to a project days later, the next agent starts with zero context. The usual workaround is to copy-paste or re-summarize what already happened, which is slow and lossy.
@@ -13,6 +25,8 @@ catchup gives the next agent a simple command it can run itself to recover prior
 ## Concrete scenarios
 
 - Hitting a limit mid-task: Claude Code reaches its 5-hour usage limit during a refactor. In the same directory the next agent runs `catchup claude --since-compact`, reads the recap, and continues without being re-briefed.
+- Forking back into the same agent: the current agent wants to preserve native session state instead of pasting a transcript. It runs `catchup fork codex`, `catchup fork claude`, `catchup fork opencode`, or `catchup fork pi-agent` and catchup delegates to that agent's own fork mechanism.
+- Forking into a different agent: Claude Code reaches a limit, but the developer wants Codex to continue. The next command is `catchup fork claude --into codex`; catchup renders the Claude transcript and starts Codex with that transcript as the opening prompt.
 - Recalling earlier work: weeks later you ask a fresh agent about a past change. It runs `catchup codex -q "auth"` to locate the old session by keyword, then pulls it back into context by id.
 - Reviewing your own history: you read `catchup claude --last 4` to remind yourself what the last few exchanges actually decided, without scrolling through tool-call logs.
 
@@ -73,6 +87,38 @@ Fork:
 
 Native fork resumes with the agent's real session state; `--into` crosses agents with the conversation, not the state.
 
+Common fork commands for AI agents:
+
+- Same-agent native resume: `catchup fork codex`, `catchup fork claude`, `catchup fork opencode`, `catchup fork pi-agent`.
+- Cross-agent handoff: `catchup fork claude --into codex`, `catchup fork codex --into claude`, `catchup fork opencode --into codex`, `catchup fork pi-agent --into codex`.
+- Smaller cross-agent prompt: add `--since-compact` or `--last <N>` so only the recent transcript is seeded into the target agent.
+
+## Common questions answered
+
+### How do I continue a Claude Code session in Codex?
+
+Run `catchup fork claude --into codex` in the project directory. catchup finds the newest Claude Code session for that directory, renders the conversation transcript, and launches Codex with that transcript as the starting prompt. Add `--since-compact` or `--last <N>` when the full transcript would be too large.
+
+### How do I continue a Codex session in Claude?
+
+Run `catchup fork codex --into claude`. This is a cross-agent handoff: Claude receives the Codex conversation as context, but it does not receive Codex's private native session state.
+
+### How do I resume the same agent with real session state?
+
+Run `catchup fork <agent>`, for example `catchup fork codex` or `catchup fork claude`. Same-agent fork uses the source agent's native fork command instead of rendering a transcript-only handoff.
+
+### How do I recover after a compaction?
+
+Run `catchup <agent> --since-compact`, or bare `catchup --since-compact` when the newest session in the directory is the one you want. The output is clean Markdown intended to be pasted into or read by the next agent.
+
+### How do I find an older session?
+
+Run `catchup <agent> --list` to see recent sessions, `catchup <agent>/N` to pick the N-th most recent, or `catchup <agent> -q "keyword"` to search current-directory sessions by text.
+
+### What is catchup not for?
+
+catchup is not a hosted cloud service and does not merge all agents into a single global history. It reads local agent session history and emits clean conversation context. It does not replace git history, issue trackers, design docs, or raw logs when those are the source of truth.
+
 ## Supported agents
 
 - Claude Code (`claude`)
@@ -104,6 +150,8 @@ Each produces the same clean output regardless of how the source agent stored it
 
 ## Links
 
+- [Markdown homepage](https://catchup.pages.dev/index.md): Short human-readable overview.
+- [llms.txt](https://catchup.pages.dev/llms.txt): Short AI-readable index.
 - [GitHub repository](https://github.com/wilbeibi/catchup): Source code, README, and issues.
 - [Go package reference](https://pkg.go.dev/github.com/wilbeibi/catchup): Package documentation.
 - [SKILL.md](https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md): Agent skill definition.

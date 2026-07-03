@@ -32,4 +32,5 @@ Each agent keeps its own history format; catchup normalizes the output.
 
 - [GitHub](https://github.com/wilbeibi/catchup) — source, README, issues
 - [pkg.go.dev](https://pkg.go.dev/github.com/wilbeibi/catchup) — package reference
+- [AI summary](https://catchup.pages.dev/llms.txt) — canonical short index for AI agents and answer engines
 - [Full AI reference](https://catchup.pages.dev/llms-full.txt) — complete command list, scenarios, comparisons

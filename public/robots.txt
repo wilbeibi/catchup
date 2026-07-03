@@ -1,11 +1,22 @@
 # catchup — https://catchup.pages.dev/
 # Crawlers are classified by purpose. This site opts INTO AI search visibility.
 # Reference: the bots below are grouped so you can flip any category to Disallow.
+#
+# Canonical AI-readable docs:
+# - https://catchup.pages.dev/llms.txt
+# - https://catchup.pages.dev/llms-full.txt
+# - https://catchup.pages.dev/index.md
+# These files are also listed in sitemap.xml. robots.txt controls crawler
+# access; llms.txt is the curated Markdown index for AI agents.
 
 # ---------------------------------------------------------------------------
 # Default: everything is allowed.
 # ---------------------------------------------------------------------------
 User-agent: *
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /index.md
+Allow: /sitemap.xml
 Allow: /
 
 # --- AI search & retrieval (drives AI-search answers — keep allowed) --------
