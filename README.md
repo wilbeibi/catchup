@@ -2,13 +2,13 @@
 
 # catchup
 
-### Hand a coding-agent session to the next agent — or read it as clean Markdown
+### Pick up a coding agent session without starting over
 
 </div>
 
-`catchup` reads local agent history and prints the conversation: user and assistant messages, with tool calls and reasoning traces removed. `catchup fork` re-enters a session — natively for the same agent, or seeding a different agent with the transcript.
+`catchup` is for the moment an agent hits a limit and you don't want to explain the whole job again. It pulls the useful part of the local session into clean Markdown. `catchup fork` picks the work back up in the same agent or a different one.
 
-Use it when an agent hits a limit, you switch tools, or you need to recall what happened in an older session.
+Use it when you switch tools, pick up older work, or want a clean record of what happened.
 
 <div align="center">
 
@@ -33,11 +33,17 @@ catchup install-skill <agent>  # ...or for one agent only
 
 Restart the agent, then ask it to catch up on the last session.
 
+I use `catchup` with [herdr](https://herdr.dev) day to day. The [wilbeibi/herdr-catchup](https://github.com/wilbeibi/herdr-catchup) plugin adds pane actions for summary, fork, and handoff:
+
+```bash
+herdr plugin install wilbeibi/herdr-catchup
+```
+
 ## Usage
 
-Use `<agent>` as `codex`, `claude`, `opencode`, or `pi-agent`. Omit it and catchup uses whichever agent has the newest session in this directory — inside a live session, that's usually the session you're in.
+Use `<agent>` as `codex`, `claude`, `opencode`, or `pi-agent`. Omit it and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
 
-**For you** — run in your terminal to re-enter a session:
+**For you:** run in your terminal to re-enter a session:
 
 ```bash
 catchup fork                     # fork the newest session across agents
@@ -45,7 +51,7 @@ catchup fork <agent>             # fork that agent's newest session
 catchup fork codex --into claude # continue a Codex session in Claude
 ```
 
-**For agents** — run inside a session to read prior work:
+**For agents:** run inside a session to read prior work:
 
 ```bash
 catchup <agent> --since-compact  # another agent's latest, since compaction
@@ -59,13 +65,15 @@ catchup <agent> --last 4         # read last 4 exchanges
 catchup <agent> --json           # render JSON; also --html
 ```
 
-Same agent, continuing where it left off → `fork` (native, full state). Crossing agents → `fork --into`, which starts the other agent with the transcript as its first prompt. Recalling old work or starting a clean context → read.
+Use `fork` to continue with the same agent and keep native session state. Use `fork --into` to start another agent with the transcript. Use read commands when you want old work in a clean context.
 
 ## Boundaries
 
 - One agent at a time. It does not merge histories.
 - Conversation only. It strips tool calls, command output, and reasoning traces.
-- Read-only, except `fork`. Same-agent fork preserves context cache. Dispatches to native fork, so sessions inherit real context, not a handoff transcript. `fork --into` is the exception that crosses agents: it seeds the new agent with the transcript — conversation, not native state.
+- Read-only, except `fork`.
+- Same-agent `fork` uses the agent's native resume path, so it keeps real session state.
+- Cross-agent `fork --into` seeds the new agent with a transcript, not native state.
 
 ## License
 
