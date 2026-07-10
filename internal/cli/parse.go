@@ -10,7 +10,7 @@ import (
 )
 
 // DefaultLimit is the number of rows a listing returns when -n is not given.
-const DefaultLimit = 20
+const DefaultLimit = session.DefaultListLimit
 
 // Command is the fully parsed, normalized form of a single catchup invocation:
 // what to select (Target) and how to present it. It is the parser's only
@@ -28,6 +28,7 @@ type Command struct {
 	List         bool // --list: print the ranked listing and exit
 	Limit        int  // -n N: cap listing rows (defaults to DefaultLimit)
 	Help         bool // --help, -h: print usage and exit
+	Version      bool // --version: print the binary version and exit
 }
 
 // Parse turns raw argv (excluding the program name) into a Command. It accepts
@@ -146,6 +147,8 @@ func Parse(args []string) (Command, error) {
 			cmd.SinceCompact = true
 		case "-h", "--help":
 			cmd.Help = true
+		case "--version":
+			cmd.Version = true
 		default:
 			if strings.HasPrefix(tok, "-") && tok != "-" {
 				return cmd, fmt.Errorf("unknown flag %q", tok)
@@ -160,8 +163,8 @@ func Parse(args []string) (Command, error) {
 		}
 	}
 
-	if cmd.Help {
-		return cmd, nil // skip target validation; help text is provider-agnostic
+	if cmd.Help || cmd.Version {
+		return cmd, nil // skip target validation; neither output involves a provider
 	}
 	if haveTgt {
 		if err := applyTarget(&cmd, target); err != nil {
@@ -305,6 +308,11 @@ func normalize(cmd *Command) error {
 	// -q implies list mode unless a concrete row was selected by rank or id.
 	if t.Query != "" && t.Rank == 0 && t.SessionID == "" {
 		cmd.List = true
+	}
+	// Checked after the implicit rule so -q listings are covered too. There
+	// is no HTML listing view; ignoring the flag would be a silent no-op.
+	if cmd.List && cmd.Format == session.FormatHTML {
+		return errors.New("--html does not apply to listings; use --json or the default table")
 	}
 	return nil
 }

@@ -58,6 +58,36 @@ func jsonMeta(w io.Writer, s session.Source) error {
 	return encode(w, makeSourceDoc(s))
 }
 
+// summaryDoc is one row of a JSON listing. Like the other wire types, its
+// field names are the stable contract integrations script against.
+type summaryDoc struct {
+	Rank      int    `json:"rank"`
+	Agent     string `json:"agent"`
+	SessionID string `json:"session_id,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+	Title     string `json:"title,omitempty"`
+	Cwd       string `json:"cwd,omitempty"`
+	Preview   string `json:"preview,omitempty"`
+}
+
+// jsonList encodes a listing as a JSON array. An empty listing is [], not an
+// error: "no matches" and "failure" stay distinguishable by exit code.
+func jsonList(w io.Writer, summaries []session.Summary) error {
+	docs := make([]summaryDoc, len(summaries))
+	for i, s := range summaries {
+		docs[i] = summaryDoc{
+			Rank:      s.Rank,
+			Agent:     s.Ref.Provider,
+			SessionID: s.Ref.SessionID,
+			UpdatedAt: rfc3339(s.UpdatedAt),
+			Title:     s.Title,
+			Cwd:       s.Cwd,
+			Preview:   s.Preview,
+		}
+	}
+	return encode(w, docs)
+}
+
 func makeSourceDoc(s session.Source) sourceDoc {
 	return sourceDoc{
 		Agent:     s.Ref.Provider,

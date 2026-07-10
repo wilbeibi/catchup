@@ -42,12 +42,26 @@ func Meta(w io.Writer, s session.Source, f session.Format) error {
 	}
 }
 
-// List renders a ranked listing as a plain table. It adapts to terminal width:
-// columns are "#", "UPDATED", "TITLE", "SESSION". TITLE gets the remaining
-// space after fixed columns and the longest session ID in the batch.
-// Columns are aligned with display-width-aware padding so CJK characters
-// (2 columns each in terminals) align correctly.
-func List(w io.Writer, provider string, summaries []session.Summary) error {
+// List renders a ranked listing: a plain table by default, or a JSON array
+// for scripts. HTML has no listing view; the cli rejects that combination
+// before it gets here.
+func List(w io.Writer, provider string, summaries []session.Summary, f session.Format) error {
+	switch f {
+	case session.FormatJSON:
+		return jsonList(w, summaries)
+	case session.FormatMarkdown:
+		return tableList(w, provider, summaries)
+	default:
+		return fmt.Errorf("render: unsupported listing format %s", f)
+	}
+}
+
+// tableList renders the human listing. It adapts to terminal width: columns
+// are "#", "UPDATED", "TITLE", "SESSION". TITLE gets the remaining space
+// after fixed columns and the longest session ID in the batch. Columns are
+// aligned with display-width-aware padding so CJK characters (2 columns each
+// in terminals) align correctly.
+func tableList(w io.Writer, provider string, summaries []session.Summary) error {
 	if len(summaries) == 0 {
 		_, err := fmt.Fprintf(w, "no %s sessions found\n", provider)
 		return err

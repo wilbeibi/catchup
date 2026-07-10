@@ -39,8 +39,6 @@ import (
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
-const defaultLimit = 20
-
 // Provider reads the OpenCode SQLite database. It is stateless; each call opens
 // the database read-only and closes it, so concurrent OpenCode writes are never
 // blocked.
@@ -64,26 +62,6 @@ func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) 
 	return loadSession(ctx, db, path, id)
 }
 
-func (p *Provider) ResolveRank(ctx context.Context, roots session.Roots, opts session.ListOptions, rank int) (session.Source, error) {
-	if rank < 1 {
-		return session.Source{}, fmt.Errorf("opencode: rank must be >= 1")
-	}
-	db, path, err := open(roots.OpenCode)
-	if err != nil {
-		return session.Source{}, err
-	}
-	defer db.Close()
-
-	sums, err := listSessions(ctx, db, path, opts.Query, opts.Cwd, rank)
-	if err != nil {
-		return session.Source{}, err
-	}
-	if rank > len(sums) {
-		return session.Source{}, fmt.Errorf("opencode: rank %d out of range (%d matching sessions)", rank, len(sums))
-	}
-	return loadSession(ctx, db, path, sums[rank-1].Ref.SessionID)
-}
-
 func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread, error) {
 	if src.Ref.SessionID == "" {
 		return session.Thread{}, errors.New("opencode: source has no session id")
@@ -98,16 +76,12 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 }
 
 func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = defaultLimit
-	}
 	db, path, err := open(roots.OpenCode)
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
-	return listSessions(ctx, db, path, opts.Query, opts.Cwd, limit)
+	return listSessions(ctx, db, path, opts.Query, opts.Cwd, opts.EffectiveLimit())
 }
 
 // --- database access --------------------------------------------------------

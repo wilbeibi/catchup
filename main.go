@@ -23,11 +23,6 @@ var skillMD []byte
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
-		fmt.Println("catchup", version)
-		return
-	}
-
 	ctx := context.Background()
 
 	home, err := os.UserHomeDir()
@@ -44,7 +39,7 @@ func main() {
 	current := session.ResolveCurrent(os.Getenv)
 	skillDirs := session.ResolveSkillDirs(roots, home)
 
-	if err := cli.Run(ctx, os.Args[1:], roots, current, skillDirs, skillMD, cwd, os.Stdin, os.Stdout, os.Stderr); err != nil {
+	if err := cli.Run(ctx, os.Args[1:], roots, current, skillDirs, skillMD, version, cwd, os.Stdin, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "catchup:", err)
 		os.Exit(1)
 	}

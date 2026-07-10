@@ -16,11 +16,14 @@
 // skipped.
 //
 // Subagent conversations write brain transcripts indistinguishable from
-// top-level ones. The CLI's <root>/history.jsonl, however, records only
-// user-initiated conversations ({display, workspace, conversationId}), so it
-// doubles as the directory index: cwd filtering matches its workspace field,
-// which also keeps subagents out of listings. Conversations older than the
-// conversationId field predates are reachable by --id only.
+// top-level ones. The CLI's <root>/history.jsonl, however, records one line
+// per user-typed prompt ({display, workspace, timestamp, conversationId}), so
+// it doubles as the directory index — and keeps subagents out of cwd-filtered
+// listings. One wrinkle, verified against real stores: a conversation's first
+// prompt is logged before its id exists, so that line has no conversationId
+// and single-prompt conversations never get one. Those are joined back to
+// their transcript by matching the first user turn's text (closest timestamp
+// on ties); see history.matchStart.
 package agy
 
 import (
@@ -38,8 +41,6 @@ import (
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
-const defaultLimit = 20
-
 // Provider reads Antigravity CLI brain transcripts.
 type Provider struct{}
 
@@ -49,6 +50,16 @@ func New() *Provider { return &Provider{} }
 var _ session.Provider = (*Provider)(nil)
 
 func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) (session.Source, error) {
+	// The transcript path is a pure function of the conversation id, so an
+	// explicit id needs no enumeration — which is also what keeps conversations
+	// too old for history.jsonl reachable.
+	if id != "" {
+		fi, err := transcriptOf(roots.Agy, id)
+		if err != nil {
+			return session.Source{}, fmt.Errorf("agy: no session with id %q", id)
+		}
+		return resolveSource(fi, roots.Agy), nil
+	}
 	files, err := sessionFiles(roots.Agy)
 	if err != nil {
 		return session.Source{}, err
@@ -56,29 +67,21 @@ func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) 
 	if len(files) == 0 {
 		return session.Source{}, fmt.Errorf("agy: no sessions found under %s", roots.Agy)
 	}
-	if id == "" {
-		return sourceOf(files[0], loadHistory(roots.Agy)), nil
-	}
-	for _, fi := range files {
-		if fi.id == id {
-			return sourceOf(fi, loadHistory(roots.Agy)), nil
-		}
-	}
-	return session.Source{}, fmt.Errorf("agy: no session with id %q", id)
+	return resolveSource(files[0], roots.Agy), nil
 }
 
-func (p *Provider) ResolveRank(ctx context.Context, roots session.Roots, opts session.ListOptions, rank int) (session.Source, error) {
-	if rank < 1 {
-		return session.Source{}, fmt.Errorf("agy: rank must be >= 1")
+// resolveSource builds a Source for one transcript, paying one extra
+// transcript read for the matchStart join when history.jsonl has no id line
+// for it (single-prompt conversations).
+func resolveSource(fi fileInfo, root string) session.Source {
+	h := loadHistory(root)
+	src := sourceOf(fi, h)
+	if src.Metadata["cwd"] == "" {
+		if entries, _, err := readEntries(fi); err == nil {
+			applyStart(&src, entries, h)
+		}
 	}
-	sums, err := listSessions(roots.Agy, opts.Query, opts.Cwd, rank)
-	if err != nil {
-		return session.Source{}, err
-	}
-	if rank > len(sums) {
-		return session.Source{}, fmt.Errorf("agy: rank %d out of range (%d matching sessions)", rank, len(sums))
-	}
-	return p.Resolve(ctx, roots, sums[rank-1].Ref.SessionID)
+	return src
 }
 
 func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread, error) {
@@ -98,11 +101,7 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 }
 
 func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	return listSessions(roots.Agy, opts.Query, opts.Cwd, limit)
+	return listSessions(roots.Agy, opts.Query, opts.Cwd, opts.EffectiveLimit())
 }
 
 // --- file enumeration -------------------------------------------------------
@@ -111,6 +110,16 @@ type fileInfo struct {
 	path string
 	mod  time.Time
 	id   string // conversation id, the brain directory's name
+}
+
+// transcriptOf stats the brain transcript belonging to one conversation id.
+func transcriptOf(root, id string) (fileInfo, error) {
+	p := filepath.Join(root, "brain", id, ".system_generated", "logs", "transcript.jsonl")
+	info, err := os.Stat(p)
+	if err != nil {
+		return fileInfo{}, err
+	}
+	return fileInfo{path: p, mod: info.ModTime(), id: id}, nil
 }
 
 // sessionFiles returns every brain transcript under <root>/brain, newest
@@ -129,12 +138,11 @@ func sessionFiles(root string) ([]fileInfo, error) {
 		if !c.IsDir() {
 			continue
 		}
-		p := filepath.Join(dir, c.Name(), ".system_generated", "logs", "transcript.jsonl")
-		info, err := os.Stat(p)
+		fi, err := transcriptOf(root, c.Name())
 		if err != nil {
 			continue
 		}
-		files = append(files, fileInfo{path: p, mod: info.ModTime(), id: c.Name()})
+		files = append(files, fi)
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
 	return files, nil
@@ -143,23 +151,32 @@ func sessionFiles(root string) ([]fileInfo, error) {
 // --- history index ----------------------------------------------------------
 
 // historyEntry is one line of <root>/history.jsonl: the prompt the user typed
-// (display), where they typed it (workspace), and which conversation it
-// started or continued. Lines from older CLIs lack conversationId.
+// (display), where and when they typed it (workspace, epoch-millisecond
+// timestamp), and which conversation it belongs to — absent on a
+// conversation's opening prompt, which is logged before the id exists.
 type historyEntry struct {
 	Display        string `json:"display"`
 	Workspace      string `json:"workspace"`
+	Timestamp      int64  `json:"timestamp"`
 	ConversationID string `json:"conversationId"`
 }
 
-// loadHistory indexes history.jsonl by conversation id. The first entry for a
-// conversation names it (Display); the workspace of any entry locates it.
-// A missing or unreadable file yields an empty index, which degrades listing
-// metadata but never fails a read.
-func loadHistory(root string) map[string]historyEntry {
-	index := map[string]historyEntry{}
+// history indexes history.jsonl two ways: byID for lines that carry a
+// conversation id (a conversation's second prompt onward), and starts for the
+// id-less opening prompts that matchStart joins back to transcripts by
+// content. Single-prompt conversations exist only in starts.
+type history struct {
+	byID   map[string]historyEntry
+	starts []historyEntry
+}
+
+// loadHistory reads <root>/history.jsonl. A missing or unreadable file yields
+// an empty index, which degrades listing metadata but never fails a read.
+func loadHistory(root string) history {
+	h := history{byID: map[string]historyEntry{}}
 	f, err := os.Open(filepath.Join(root, "history.jsonl"))
 	if err != nil {
-		return index
+		return h
 	}
 	defer f.Close()
 	dec := json.NewDecoder(f)
@@ -169,24 +186,73 @@ func loadHistory(root string) map[string]historyEntry {
 			break
 		}
 		if e.ConversationID == "" {
+			h.starts = append(h.starts, e)
 			continue
 		}
-		if first, ok := index[e.ConversationID]; ok {
-			e.Display = first.Display // keep the opening prompt as the title
+		if first, ok := h.byID[e.ConversationID]; ok {
+			e.Display = first.Display // keep the earliest prompt as the title
 		}
-		index[e.ConversationID] = e
+		h.byID[e.ConversationID] = e
 	}
-	return index
+	return h
 }
 
-func sourceOf(fi fileInfo, index map[string]historyEntry) session.Source {
+// matchStart finds the id-less history line that opened this conversation:
+// the line whose display text is the transcript's first user turn. The same
+// prompt typed in different directories ("housekeeping") ties on text, so the
+// closest timestamp to that turn wins.
+func (h history) matchStart(entries []session.Entry) (historyEntry, bool) {
+	var first session.Entry
+	for _, e := range entries {
+		if e.Kind == session.KindMessage && e.Role == session.RoleUser {
+			first = e
+			break
+		}
+	}
+	if first.Text == "" {
+		return historyEntry{}, false
+	}
+	var best historyEntry
+	bestDiff := int64(-1)
+	for _, s := range h.starts {
+		if strings.TrimSpace(s.Display) != first.Text {
+			continue
+		}
+		diff := s.Timestamp - first.Time.UnixMilli()
+		if diff < 0 {
+			diff = -diff
+		}
+		if bestDiff < 0 || diff < bestDiff {
+			best, bestDiff = s, diff
+		}
+	}
+	return best, bestDiff >= 0
+}
+
+// applyStart fills cwd/title from the matchStart join for a Source that
+// history.jsonl does not locate by id. A no-op when cwd is already known.
+func applyStart(src *session.Source, entries []session.Entry, h history) {
+	if src.Metadata["cwd"] != "" {
+		return
+	}
+	s, ok := h.matchStart(entries)
+	if !ok {
+		return
+	}
+	src.Metadata["cwd"] = s.Workspace
+	if src.Metadata["title"] == "" {
+		src.Metadata["title"] = s.Display
+	}
+}
+
+func sourceOf(fi fileInfo, h history) session.Source {
 	src := session.Source{
 		Ref:       session.Ref{Provider: session.ProviderAgy, SessionID: fi.id},
 		Path:      fi.path,
 		UpdatedAt: fi.mod,
 		Metadata:  map[string]string{},
 	}
-	if e, ok := index[fi.id]; ok {
+	if e, ok := h.byID[fi.id]; ok {
 		if e.Workspace != "" {
 			src.Metadata["cwd"] = e.Workspace
 		}
@@ -205,68 +271,41 @@ func sourceOf(fi fileInfo, index map[string]historyEntry) session.Source {
 // --- listing ----------------------------------------------------------------
 
 // listSessions walks transcripts newest-first and collects up to limit
-// summaries. When cwd is set, only conversations whose history.jsonl
-// workspace matches exactly are included — which also excludes subagent
-// conversations, since those never reach history.jsonl.
+// summaries. When cwd is set, only conversations located in that directory by
+// history.jsonl (by id, or by matchStart for single-prompt conversations) are
+// included — which also excludes subagent conversations, since those never
+// reach history.jsonl.
 func listSessions(root, query, cwd string, limit int) ([]session.Summary, error) {
 	files, err := sessionFiles(root)
 	if err != nil {
 		return nil, err
 	}
-	index := loadHistory(root)
+	h := loadHistory(root)
 	q := strings.ToLower(query)
 	out := make([]session.Summary, 0, limit)
 	for _, fi := range files {
 		if len(out) >= limit {
 			break
 		}
-		if cwd != "" && index[fi.id].Workspace != cwd {
-			continue
-		}
-		src := sourceOf(fi, index)
 		entries, _, err := readEntries(fi)
 		if err != nil || len(entries) == 0 {
 			continue
 		}
-		t := session.Thread{Source: src, Entries: entries}
-		if q != "" && !strings.Contains(strings.ToLower(visibleText(t)), q) {
+		src := sourceOf(fi, h)
+		applyStart(&src, entries, h)
+		if cwd != "" && src.Metadata["cwd"] != cwd {
 			continue
 		}
-		out = append(out, session.Summary{
-			Ref:       src.Ref,
-			UpdatedAt: src.UpdatedAt,
-			Title:     src.Metadata["title"],
-			Cwd:       src.Metadata["cwd"],
-			Preview:   preview(t),
-		})
+		t := session.Thread{Source: src, Entries: entries}
+		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {
+			continue
+		}
+		out = append(out, t.Summary())
 	}
 	for i := range out {
 		out[i].Rank = i + 1
 	}
 	return out, nil
-}
-
-func preview(t session.Thread) string {
-	for _, e := range t.Entries {
-		if e.Kind == session.KindMessage && e.Role == session.RoleUser && e.Text != "" {
-			return e.Text
-		}
-	}
-	for _, e := range t.Entries {
-		if e.Text != "" {
-			return e.Text
-		}
-	}
-	return ""
-}
-
-func visibleText(t session.Thread) string {
-	var b strings.Builder
-	for _, e := range t.Entries {
-		b.WriteString(e.Text)
-		b.WriteByte('\n')
-	}
-	return b.String()
 }
 
 // --- parsing ----------------------------------------------------------------
@@ -291,7 +330,7 @@ func readEntries(fi fileInfo) ([]session.Entry, []string, error) {
 	for dec.More() {
 		var step agyStep
 		if dec.Decode(&step) != nil {
-			warnings = append(warnings, "skipped a malformed record")
+			warnings = append(warnings, "stopped reading at a malformed record")
 			break
 		}
 		ts := parseTime(step.CreatedAt)

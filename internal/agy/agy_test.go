@@ -2,9 +2,9 @@ package agy
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -61,12 +61,19 @@ func testRoot(t *testing.T) session.Roots {
 {"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-06-09T20:30:05Z","content":"Checks pass."}
 `, older.Add(30*time.Minute))
 
-	writeHistory(t, root,
+	// conv-other is a single-prompt conversation: its only history line was
+	// written before the conversation id existed, so it has no conversationId
+	// and is joined back by matchStart. The decoy line shares its display text
+	// but sits in another workspace with a far timestamp.
+	deployTS := time.Date(2026, 6, 9, 20, 0, 3, 0, time.UTC).UnixMilli()
+	decoyTS := time.Date(2026, 6, 8, 9, 0, 0, 0, time.UTC).UnixMilli()
+	writeHistory(t, root, fmt.Sprintf(
 		`{"display":"is every plugin updatable","timestamp":1,"workspace":"/home/u/freshrss","conversationId":"conv-main"}
 {"display":"update them all","timestamp":2,"workspace":"/home/u/freshrss","conversationId":"conv-main"}
-{"display":"fix the deploy","timestamp":3,"workspace":"/home/u/deploy","conversationId":"conv-other"}
-{"display":"an id-less line from an old CLI","timestamp":4,"workspace":"/home/u/old"}
-`)
+{"display":"fix the deploy","timestamp":%d,"workspace":"/home/u/elsewhere"}
+{"display":"fix the deploy","timestamp":%d,"workspace":"/home/u/deploy"}
+{"display":"an id-less line matching no transcript","timestamp":4,"workspace":"/home/u/old"}
+`, decoyTS, deployTS))
 	return session.Roots{Agy: root}
 }
 
@@ -148,22 +155,49 @@ func TestListAgySessions(t *testing.T) {
 	if len(byQuery) != 1 || byQuery[0].Ref.SessionID != "conv-other" {
 		t.Fatalf("query got %+v, want only conv-other", byQuery)
 	}
+
+	// conv-other's history line has no conversationId (single-prompt
+	// conversation); matchStart joins it by first-turn text, and the closest
+	// timestamp beats the decoy workspace sharing the same display.
+	joined, err := p.List(ctx, roots, session.ListOptions{Cwd: "/home/u/deploy"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(joined) != 1 || joined[0].Ref.SessionID != "conv-other" {
+		t.Fatalf("cwd join got %+v, want only conv-other", joined)
+	}
+	if joined[0].Title != "fix the deploy" {
+		t.Errorf("joined title = %q, want the opening prompt", joined[0].Title)
+	}
+	if wrong, _ := p.List(ctx, roots, session.ListOptions{Cwd: "/home/u/elsewhere"}); len(wrong) != 0 {
+		t.Errorf("decoy workspace matched %+v, want none", wrong)
+	}
 }
 
-func TestResolveRankAgy(t *testing.T) {
+// Resolving by id constructs the transcript path directly, so a conversation
+// absent from history.jsonl (a subagent's, or one predating conversationId) is
+// still reachable — just without cwd/title metadata.
+func TestResolveSubagentByID(t *testing.T) {
 	roots := testRoot(t)
 	p := New()
 	ctx := context.Background()
 
-	src, err := p.ResolveRank(ctx, roots, session.ListOptions{}, 3)
+	src, err := p.Resolve(ctx, roots, "conv-sub")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if src.Ref.SessionID != "conv-other" {
-		t.Errorf("rank 3 = %s, want conv-other (oldest)", src.Ref.SessionID)
+	if src.Ref.SessionID != "conv-sub" {
+		t.Errorf("id = %s, want conv-sub", src.Ref.SessionID)
 	}
-	if _, err := p.ResolveRank(ctx, roots, session.ListOptions{}, 9); err == nil || !strings.Contains(err.Error(), "out of range") {
-		t.Errorf("want out-of-range error, got %v", err)
+	if src.Metadata["cwd"] != "" {
+		t.Errorf("cwd = %q, want empty (conv-sub is not in history.jsonl)", src.Metadata["cwd"])
+	}
+	thread, err := p.Read(ctx, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(thread.Entries) != 2 {
+		t.Errorf("got %d entries, want 2", len(thread.Entries))
 	}
 }
 

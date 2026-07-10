@@ -3,15 +3,17 @@
 // that maps a user's request onto one of those sessions.
 //
 // This package performs no I/O and knows nothing about the CLI or about output
-// formats. The provider packages (internal/codex, internal/claude,
+// formats. The provider packages (internal/codex, internal/claude, internal/agy,
 // internal/opencode, internal/piagent) implement Provider against real history
 // on disk; the cli layer turns user input into a request and hands the result to
-// the renderer (internal/render). Keeping the nouns here, free of any behavior,
-// is what lets the other layers stay independent of one another.
+// the renderer (internal/render). Keeping the nouns here, with only pure
+// projections over them, is what lets the other layers stay independent of one
+// another.
 package session
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -101,6 +103,45 @@ type Thread struct {
 	Warnings []string
 }
 
+// Preview returns the thread's first user message, or failing that its first
+// non-empty entry: the one-line hook a listing shows for the session.
+func (t Thread) Preview() string {
+	for _, e := range t.Entries {
+		if e.Kind == KindMessage && e.Role == RoleUser && e.Text != "" {
+			return e.Text
+		}
+	}
+	for _, e := range t.Entries {
+		if e.Text != "" {
+			return e.Text
+		}
+	}
+	return ""
+}
+
+// VisibleText returns every entry's text joined by newlines: the haystack a
+// listing's keyword query matches against.
+func (t Thread) VisibleText() string {
+	var b strings.Builder
+	for _, e := range t.Entries {
+		b.WriteString(e.Text)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// Summary projects a read thread into one listing row. Rank is left zero; the
+// lister stamps it after filtering.
+func (t Thread) Summary() Summary {
+	return Summary{
+		Ref:       t.Source.Ref,
+		UpdatedAt: t.Source.UpdatedAt,
+		Title:     t.Source.Metadata["title"],
+		Cwd:       t.Source.Metadata["cwd"],
+		Preview:   t.Preview(),
+	}
+}
+
 // Summary is one row of a listing: a Source projected for display, carrying the
 // 1-based Rank that will re-select it on a later invocation.
 type Summary struct {
@@ -112,29 +153,39 @@ type Summary struct {
 	Preview   string
 }
 
+// DefaultListLimit is the row cap a listing falls back to when the caller sets
+// no limit.
+const DefaultListLimit = 20
+
 // ListOptions controls listing and rank resolution. Query is a literal,
 // case-insensitive match over visible text. Cwd filters to sessions whose
 // working directory matches exactly; empty means no directory filter. Limit caps
-// the number of rows; zero means the caller should apply its default.
+// the number of rows; zero means DefaultListLimit applies.
 type ListOptions struct {
 	Query string
 	Cwd   string
 	Limit int
 }
 
+// EffectiveLimit returns Limit, or DefaultListLimit when Limit is unset.
+func (o ListOptions) EffectiveLimit() int {
+	if o.Limit <= 0 {
+		return DefaultListLimit
+	}
+	return o.Limit
+}
+
 // Provider maps a user's request onto a concrete session for one agent tool.
-// The four methods are orthogonal on purpose: Resolve and ResolveRank only
-// locate a Source, Read only parses one Source into a Thread, and List only
-// enumerates Sources for display. Implementations touch the filesystem or a
-// database; none of them format output.
+// The three methods are orthogonal on purpose: Resolve only locates a Source,
+// Read only parses one Source into a Thread, and List only enumerates Sources
+// for display. Rank-based selection is the same List-then-Resolve composition
+// for every provider, so it lives once at the call site (cli) instead of here.
+// Implementations touch the filesystem or a database; none of them format
+// output.
 type Provider interface {
 	// Resolve returns the newest session when id is empty, or the session with
 	// exactly that id otherwise.
 	Resolve(ctx context.Context, roots Roots, id string) (Source, error)
-
-	// ResolveRank returns the rank-th Source (1-based) from the same ordering
-	// List would produce for opts.
-	ResolveRank(ctx context.Context, roots Roots, opts ListOptions, rank int) (Source, error)
 
 	// Read parses a located Source into its visible timeline.
 	Read(ctx context.Context, src Source) (Thread, error)

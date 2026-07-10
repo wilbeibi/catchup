@@ -7,11 +7,13 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/wilbeibi/catchup/internal/agy"
 	"github.com/wilbeibi/catchup/internal/claude"
@@ -43,6 +45,7 @@ Flags:
   --into <agent>      with fork: start a different agent, seeded with the transcript
   --model <name>      with fork: launch the agent with this model (use the
                       launched agent's own model name, e.g. gpt-5.6)
+  --version           print the catchup version
   -h, --help          print this help
 
 Examples:
@@ -71,8 +74,9 @@ var runFork forkRunner = execFork
 // session exactly rather than guessing by recency. skillDirs maps a provider
 // name to its global Agent Skills directory (see session.ResolveSkillDirs)
 // and skillMD is the SKILL.md content to install there; both are only used by
-// the install-skill action.
-func Run(ctx context.Context, args []string, roots session.Roots, current map[string]string, skillDirs map[string]string, skillMD []byte, cwd string, stdin io.Reader, stdout, stderr io.Writer) error {
+// the install-skill action. version is the stamped build version --version
+// reports.
+func Run(ctx context.Context, args []string, roots session.Roots, current map[string]string, skillDirs map[string]string, skillMD []byte, version, cwd string, stdin io.Reader, stdout, stderr io.Writer) error {
 	cmd, err := Parse(args)
 	if err != nil {
 		return err
@@ -80,6 +84,10 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 
 	if cmd.Help {
 		fmt.Fprint(stdout, helpText)
+		return nil
+	}
+	if cmd.Version {
+		fmt.Fprintln(stdout, "catchup", version)
 		return nil
 	}
 
@@ -120,7 +128,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		if err != nil {
 			return err
 		}
-		return render.List(stdout, cmd.Target.Provider, summaries)
+		return render.List(stdout, cmd.Target.Provider, summaries, cmd.Format)
 	}
 
 	src, err := locate(ctx, prov, roots, cmd, cwd, current)
@@ -173,6 +181,9 @@ func selectProvider(name string) (session.Provider, error) {
 		if name == "list" {
 			return nil, fmt.Errorf(`unknown agent "list"; did you mean catchup --list?`)
 		}
+		if name == "version" {
+			return nil, fmt.Errorf(`unknown agent "version"; did you mean catchup --version?`)
+		}
 		if name == "antigravity" {
 			return nil, fmt.Errorf(`unknown agent "antigravity"; Antigravity's agent name is agy`)
 		}
@@ -220,7 +231,16 @@ func newestAcross(ctx context.Context, roots session.Roots, cwd string) (session
 		return latest, nil
 	}
 	if len(failures) > 0 {
-		return session.Source{}, fmt.Errorf("no sessions found in %q", cwd)
+		// Every provider struck out; each failure line already carries its
+		// own hint (where that agent's sessions actually are, or that it has
+		// none), so the aggregate reads as a diagnosis, not a dead end.
+		var b strings.Builder
+		fmt.Fprintf(&b, "no sessions found in %s", cwd)
+		for _, f := range failures {
+			b.WriteString("\n  ")
+			b.WriteString(f.Error())
+		}
+		return session.Source{}, errors.New(b.String())
 	}
 	return session.Source{}, fmt.Errorf("no agents available")
 }
@@ -255,9 +275,19 @@ func installSkill(provider string, skillDirs map[string]string, skillMD []byte, 
 	return nil
 }
 
+// newestInCwd resolves a provider's newest session in cwd. When there is
+// none, the error says where that provider's sessions actually are, so a
+// first run in the wrong directory ends with a next step instead of a dead
+// end.
 func newestInCwd(ctx context.Context, prov session.Provider, roots session.Roots, name, cwd string) (session.Source, error) {
-	opts := session.ListOptions{Cwd: cwd, Limit: 1}
-	src, err := prov.ResolveRank(ctx, roots, opts, 1)
+	sums, err := prov.List(ctx, roots, session.ListOptions{Cwd: cwd, Limit: 1})
+	if err != nil {
+		return session.Source{}, err
+	}
+	if len(sums) == 0 {
+		return session.Source{}, fmt.Errorf("%s: no sessions in %s; %s", name, cwd, absenceHint(ctx, prov, roots))
+	}
+	src, err := prov.Resolve(ctx, roots, sums[0].Ref.SessionID)
 	if err != nil {
 		return session.Source{}, err
 	}
@@ -265,6 +295,44 @@ func newestInCwd(ctx context.Context, prov session.Provider, roots session.Roots
 		src.Ref.Provider = name
 	}
 	return src, nil
+}
+
+// absenceHint reports where a provider's sessions are when the current
+// directory has none: the newest session's directory and age, or the fact
+// that the provider has no readable history at all.
+func absenceHint(ctx context.Context, prov session.Provider, roots session.Roots) string {
+	sums, err := prov.List(ctx, roots, session.ListOptions{Limit: 1})
+	if err != nil || len(sums) == 0 {
+		return "no sessions anywhere"
+	}
+	s := sums[0]
+	where := s.Cwd
+	if where == "" {
+		where = "an unknown directory"
+	}
+	if s.UpdatedAt.IsZero() {
+		return fmt.Sprintf("newest is in %s", where)
+	}
+	return fmt.Sprintf("newest is in %s (%s)", where, s.UpdatedAt.Local().Format("2006-01-02 15:04"))
+}
+
+// resolveRank returns the rank-th Source (1-based) of the listing the provider
+// would produce for opts. Ranks resolve the same way for every provider — the
+// row order List returns — so the composition lives here once instead of
+// behind the Provider interface five times.
+func resolveRank(ctx context.Context, prov session.Provider, name string, roots session.Roots, opts session.ListOptions, rank int) (session.Source, error) {
+	if rank < 1 {
+		return session.Source{}, fmt.Errorf("%s: rank must be >= 1", name)
+	}
+	opts.Limit = rank
+	sums, err := prov.List(ctx, roots, opts)
+	if err != nil {
+		return session.Source{}, err
+	}
+	if rank > len(sums) {
+		return session.Source{}, fmt.Errorf("%s: rank %d out of range (%d matching sessions)", name, rank, len(sums))
+	}
+	return prov.Resolve(ctx, roots, sums[rank-1].Ref.SessionID)
 }
 
 func execFork(ctx context.Context, src session.Source, model string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -369,6 +437,11 @@ func intoCommand(target, prompt, model string) (string, []string, error) {
 // modelArgs renders a model selection as the target agent's flag pair, or
 // nothing when no model was requested. The value is passed verbatim: it
 // must be the launched agent's own model name.
+//
+// The flag spellings forkCommand and intoCommand emit are foreign CLIs'
+// surface and can drift; all five were last checked against the installed
+// CLIs' --help on 2026-07-10 (codex takes -m; agy, claude, opencode, and pi
+// take --model).
 func modelArgs(flag, model string) []string {
 	if model == "" {
 		return nil
@@ -431,13 +504,12 @@ func locate(ctx context.Context, prov session.Provider, roots session.Roots, cmd
 	case cmd.Target.SessionID != "":
 		return prov.Resolve(ctx, roots, cmd.Target.SessionID)
 	case cmd.Target.Rank > 0:
-		opts := session.ListOptions{Query: cmd.Target.Query, Cwd: cwd, Limit: cmd.Limit}
-		return prov.ResolveRank(ctx, roots, opts, cmd.Target.Rank)
+		opts := session.ListOptions{Query: cmd.Target.Query, Cwd: cwd}
+		return resolveRank(ctx, prov, cmd.Target.Provider, roots, opts, cmd.Target.Rank)
 	case current[cmd.Target.Provider] != "":
 		return prov.Resolve(ctx, roots, current[cmd.Target.Provider])
 	default:
-		opts := session.ListOptions{Cwd: cwd, Limit: 1}
-		return prov.ResolveRank(ctx, roots, opts, 1)
+		return newestInCwd(ctx, prov, roots, cmd.Target.Provider, cwd)
 	}
 }
 

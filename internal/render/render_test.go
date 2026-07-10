@@ -93,7 +93,7 @@ func TestList(t *testing.T) {
 		{Ref: session.Ref{Provider: "codex", SessionID: "019f05d8"}, Rank: 1,
 			UpdatedAt: time.Now(), Title: "skeleton", Cwd: "/src/catchup", Preview: "let's\nimplement"},
 	}
-	if err := List(&b, "codex", sums); err != nil {
+	if err := List(&b, "codex", sums, session.FormatMarkdown); err != nil {
 		t.Fatal(err)
 	}
 	out := b.String()
@@ -106,7 +106,7 @@ func TestList(t *testing.T) {
 	// Full session IDs are preserved so --id can restore them.
 	sums[0].Ref.SessionID = "deadbeef-cafe-babe-0123-456789abcdef"
 	b.Reset()
-	if err := List(&b, "codex", sums); err != nil {
+	if err := List(&b, "codex", sums, session.FormatMarkdown); err != nil {
 		t.Fatal(err)
 	}
 	out = b.String()
@@ -140,7 +140,7 @@ func TestListCJKAlignment(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	if err := List(&b, "codex", sums); err != nil {
+	if err := List(&b, "codex", sums, session.FormatMarkdown); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimRight(b.String(), "\n"), "\n")

@@ -32,8 +32,6 @@ import (
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
-const defaultLimit = 20
-
 // Provider reads Claude Code project transcripts.
 type Provider struct{}
 
@@ -69,20 +67,6 @@ func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) 
 	return session.Source{}, fmt.Errorf("claude: no session with id %q", id)
 }
 
-func (p *Provider) ResolveRank(ctx context.Context, roots session.Roots, opts session.ListOptions, rank int) (session.Source, error) {
-	if rank < 1 {
-		return session.Source{}, fmt.Errorf("claude: rank must be >= 1")
-	}
-	sums, err := listSessions(roots.Claude, opts.Query, opts.Cwd, rank)
-	if err != nil {
-		return session.Source{}, err
-	}
-	if rank > len(sums) {
-		return session.Source{}, fmt.Errorf("claude: rank %d out of range (%d matching sessions)", rank, len(sums))
-	}
-	return p.Resolve(ctx, roots, sums[rank-1].Ref.SessionID)
-}
-
 func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread, error) {
 	if src.Path == "" {
 		return session.Thread{}, errors.New("claude: source has no path")
@@ -95,11 +79,7 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 }
 
 func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	return listSessions(roots.Claude, opts.Query, opts.Cwd, limit)
+	return listSessions(roots.Claude, opts.Query, opts.Cwd, opts.EffectiveLimit())
 }
 
 // --- file enumeration -------------------------------------------------------
@@ -156,48 +136,15 @@ func listSessions(root, query, cwd string, limit int) ([]session.Summary, error)
 		if cwd != "" && t.Source.Metadata["cwd"] != cwd {
 			continue
 		}
-		if q != "" && !strings.Contains(strings.ToLower(visibleText(t)), q) {
+		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {
 			continue
 		}
-		out = append(out, summaryOf(t))
+		out = append(out, t.Summary())
 	}
 	for i := range out {
 		out[i].Rank = i + 1
 	}
 	return out, nil
-}
-
-func summaryOf(t session.Thread) session.Summary {
-	return session.Summary{
-		Ref:       t.Source.Ref,
-		UpdatedAt: t.Source.UpdatedAt,
-		Title:     t.Source.Metadata["title"],
-		Cwd:       t.Source.Metadata["cwd"],
-		Preview:   preview(t),
-	}
-}
-
-func preview(t session.Thread) string {
-	for _, e := range t.Entries {
-		if e.Kind == session.KindMessage && e.Role == session.RoleUser && e.Text != "" {
-			return e.Text
-		}
-	}
-	for _, e := range t.Entries {
-		if e.Text != "" {
-			return e.Text
-		}
-	}
-	return ""
-}
-
-func visibleText(t session.Thread) string {
-	var b strings.Builder
-	for _, e := range t.Entries {
-		b.WriteString(e.Text)
-		b.WriteByte('\n')
-	}
-	return b.String()
 }
 
 // --- parsing ----------------------------------------------------------------
@@ -258,7 +205,7 @@ func readThread(fi fileInfo) (session.Thread, error) {
 	for dec.More() {
 		var line claudeLine
 		if dec.Decode(&line) != nil {
-			warnings = append(warnings, "skipped a malformed record")
+			warnings = append(warnings, "stopped reading at a malformed record")
 			break
 		}
 		applyMeta(&src, line)

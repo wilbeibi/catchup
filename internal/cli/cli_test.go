@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -89,10 +90,95 @@ func piAgentRoot(t *testing.T) session.Roots {
 func runWithCwd(t *testing.T, roots session.Roots, cwd string, args ...string) string {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), args, roots, nil, nil, nil, cwd, nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), args, roots, nil, nil, nil, "test", cwd, nil, &out, &errOut); err != nil {
 		t.Fatalf("Run(%v) error: %v (stderr: %s)", args, err, errOut.String())
 	}
 	return out.String()
+}
+
+// fakeProvider serves a fixed newest-first listing so resolveRank's
+// composition can be tested without fixtures.
+type fakeProvider struct{ ids []string }
+
+func (f fakeProvider) Resolve(ctx context.Context, roots session.Roots, id string) (session.Source, error) {
+	for _, x := range f.ids {
+		if x == id {
+			return session.Source{Ref: session.Ref{Provider: "fake", SessionID: id}}, nil
+		}
+	}
+	return session.Source{}, fmt.Errorf("fake: no session with id %q", id)
+}
+
+func (f fakeProvider) Read(ctx context.Context, src session.Source) (session.Thread, error) {
+	return session.Thread{Source: src}, nil
+}
+
+func (f fakeProvider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
+	var out []session.Summary
+	for i, id := range f.ids {
+		if len(out) >= opts.EffectiveLimit() {
+			break
+		}
+		out = append(out, session.Summary{Ref: session.Ref{Provider: "fake", SessionID: id}, Rank: i + 1})
+	}
+	return out, nil
+}
+
+func TestResolveRank(t *testing.T) {
+	ctx := context.Background()
+	prov := fakeProvider{ids: []string{"newest", "middle", "oldest"}}
+
+	src, err := resolveRank(ctx, prov, "fake", session.Roots{}, session.ListOptions{}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if src.Ref.SessionID != "middle" {
+		t.Errorf("rank 2 = %s, want middle", src.Ref.SessionID)
+	}
+	if _, err := resolveRank(ctx, prov, "fake", session.Roots{}, session.ListOptions{}, 9); err == nil || !strings.Contains(err.Error(), "out of range") {
+		t.Errorf("want out-of-range error, got %v", err)
+	}
+	if _, err := resolveRank(ctx, prov, "fake", session.Roots{}, session.ListOptions{}, 0); err == nil || !strings.Contains(err.Error(), "rank must be >= 1") {
+		t.Errorf("want rank-must-be-positive error, got %v", err)
+	}
+}
+
+// A directory with no sessions must produce a next step, not a dead end: the
+// error names the directory that has the provider's newest session.
+func TestEmptyStateHint(t *testing.T) {
+	var out, errOut bytes.Buffer
+	err := Run(context.Background(), []string{"codex"}, codexRoot(t), nil, nil, nil, "test", "/somewhere/else", nil, &out, &errOut)
+	if err == nil {
+		t.Fatal("want error when cwd has no sessions")
+	}
+	for _, want := range []string{"no sessions in /somewhere/else", "newest is in /home/u/src/proj"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err, want)
+		}
+	}
+}
+
+func TestListJSON(t *testing.T) {
+	out := runWithCwd(t, codexRoot(t), "/home/u/src/proj", "codex", "--list", "--json")
+	var rows []map[string]any
+	if err := json.Unmarshal([]byte(out), &rows); err != nil {
+		t.Fatalf("listing is not JSON: %v\n%s", err, out)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1: %+v", len(rows), rows)
+	}
+	r := rows[0]
+	if r["session_id"] != "sess-1" || r["agent"] != "codex" || r["rank"] != float64(1) || r["cwd"] != "/home/u/src/proj" {
+		t.Errorf("row = %+v", r)
+	}
+}
+
+func TestListHTMLRejected(t *testing.T) {
+	var out, errOut bytes.Buffer
+	err := Run(context.Background(), []string{"codex", "--list", "--html"}, codexRoot(t), nil, nil, nil, "test", "", nil, &out, &errOut)
+	if err == nil || !strings.Contains(err.Error(), "--html does not apply to listings") {
+		t.Errorf("want listing-format rejection, got %v", err)
+	}
 }
 
 func TestRunCwdFiltering(t *testing.T) {
@@ -224,7 +310,7 @@ func TestCurrentSessionBeatsNewest(t *testing.T) {
 	// right one of several sessions sharing a directory is picked.
 	var got, errOut bytes.Buffer
 	current := map[string]string{session.ProviderClaude: "sess-old"}
-	if err := Run(context.Background(), []string{"claude"}, roots, current, nil, nil, cwd, nil, &got, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"claude"}, roots, current, nil, nil, "test", cwd, nil, &got, &errOut); err != nil {
 		t.Fatalf("Run error: %v (stderr: %s)", err, errOut.String())
 	}
 	if !strings.Contains(got.String(), "session: sess-old") {
@@ -237,7 +323,7 @@ func TestCurrentSessionBeatsNewest(t *testing.T) {
 
 func TestRunUnknownProvider(t *testing.T) {
 	var out, errOut bytes.Buffer
-	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, nil, nil, nil, "", nil, &out, &errOut)
+	err := Run(context.Background(), []string{"bogus"}, session.Roots{}, nil, nil, nil, "test", "", nil, &out, &errOut)
 	if err == nil || !strings.Contains(err.Error(), "unknown agent") {
 		t.Errorf("expected unknown agent error, got %v", err)
 	}
@@ -252,7 +338,7 @@ func TestRunForkProvider(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), []string{"fork", "codex"}, roots, nil, nil, nil, "/home/u/src/proj", nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"fork", "codex"}, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut); err != nil {
 		t.Fatalf("Run fork error: %v (stderr: %s)", err, errOut.String())
 	}
 	if got.Ref.Provider != session.ProviderCodex || got.Ref.SessionID != "sess-1" {
@@ -316,7 +402,7 @@ func TestRunForkLatestAcrossProviders(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), []string{"fork"}, roots, nil, nil, nil, "/home/u/src/proj", nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"fork"}, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut); err != nil {
 		t.Fatalf("Run fork latest error: %v (stderr: %s)", err, errOut.String())
 	}
 	if got.Ref.Provider != session.ProviderPiAgent || got.Ref.SessionID != "new-pi" {
@@ -370,7 +456,7 @@ func TestRunInstallSkillProvider(t *testing.T) {
 	skillDirs := map[string]string{session.ProviderCodex: dir}
 
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), []string{"install-skill", "codex"}, session.Roots{}, nil, skillDirs, []byte("# catchup skill\n"), "", nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"install-skill", "codex"}, session.Roots{}, nil, skillDirs, []byte("# catchup skill\n"), "test", "", nil, &out, &errOut); err != nil {
 		t.Fatalf("Run install-skill error: %v (stderr: %s)", err, errOut.String())
 	}
 
@@ -395,7 +481,7 @@ func TestRunInstallSkillAllProviders(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), []string{"install-skill"}, session.Roots{}, nil, skillDirs, []byte("content"), "", nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"install-skill"}, session.Roots{}, nil, skillDirs, []byte("content"), "test", "", nil, &out, &errOut); err != nil {
 		t.Fatalf("Run install-skill error: %v (stderr: %s)", err, errOut.String())
 	}
 
@@ -430,7 +516,7 @@ func TestRunForkInto(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude"}, roots, nil, nil, nil, "/home/u/src/proj", nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude"}, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut); err != nil {
 		t.Fatalf("Run fork --into error: %v (stderr: %s)", err, errOut.String())
 	}
 	if gotName != "claude" {
@@ -452,7 +538,7 @@ func TestRunForkIntoSameAgent(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	err := Run(context.Background(), []string{"fork", "codex", "--into", "codex"}, roots, nil, nil, nil, "/home/u/src/proj", nil, &out, &errOut)
+	err := Run(context.Background(), []string{"fork", "codex", "--into", "codex"}, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut)
 	if err == nil || !strings.Contains(err.Error(), "native fork") {
 		t.Fatalf("want same-agent rejection pointing at native fork, got %v", err)
 	}
