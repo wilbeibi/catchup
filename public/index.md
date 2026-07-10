@@ -1,6 +1,6 @@
 # catchup
 
-> Let your next coding agent catch itself up. catchup is a small CLI your agents can run to read prior Claude Code, Codex, OpenCode, and Pi Agent sessions and print clean, handoff-ready Markdown.
+> Let your next coding agent catch itself up. catchup is a small CLI your agents can run to read prior Claude Code, Codex, Antigravity, OpenCode, and Pi Agent sessions and print clean, handoff-ready Markdown.
 
 Open-source CLI · Go · MIT · https://catchup.pages.dev/
 
@@ -8,7 +8,7 @@ Open-source CLI · Go · MIT · https://catchup.pages.dev/
 
 catchup reads the local session history of an AI coding agent and prints a clean Markdown transcript of only the user/assistant conversation. Tool calls, reasoning traces, and token noise are removed, so the next agent can recover what happened without you re-explaining the project state.
 
-- **Built for agent handoff.** Your next agent runs `catchup <agent>` for `codex`, `claude`, `opencode`, or `pi-agent` to recover the relevant conversation — add `--since-compact` to pick up from the last compaction.
+- **Built for agent handoff.** Your next agent runs `catchup <agent>` for `codex`, `claude`, `agy`, `opencode`, or `pi-agent` to recover the relevant conversation — add `--since-compact` to pick up from the last compaction.
 - **Just the conversation.** User and assistant messages only; tool calls, reasoning, and token accounting are stripped.
 - **Still readable by humans.** Browsing manually? Start with `catchup codex --list` — or bare `catchup`, which reads the newest session in the directory, whichever agent wrote it.
 - **Fork back in.** `catchup fork` hands off to the agent's own native fork command, so the next session picks up real state instead of a rendered transcript. Crossing agents? `catchup fork codex --into claude` starts Claude seeded with the Codex transcript.
@@ -16,7 +16,15 @@ catchup reads the local session history of an AI coding agent and prints a clean
 ## Install
 
 ```
+# Homebrew
+brew install wilbeibi/tap/catchup
+
+# or prebuilt binary
+curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh
+
+# or with Go
 go install github.com/wilbeibi/catchup@latest
+
 catchup install-skill
 ```
 
@@ -24,7 +32,7 @@ MIT-licensed, no config. `install-skill` teaches every detected agent to run cat
 
 ## Supported agents
 
-Claude Code · Codex · OpenCode · Pi Agent
+Claude Code · Codex · Antigravity (agy) · OpenCode · Pi Agent
 
 Each agent keeps its own history format; catchup normalizes the output.
 

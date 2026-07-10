@@ -1,6 +1,6 @@
 # catchup — full reference
 
-> catchup is an open-source command-line tool, written in Go and MIT-licensed, that lets your next coding agent catch itself up. It reads local Claude Code, Codex, OpenCode, and Pi Agent session history and prints clean, handoff-ready Markdown containing only the user/assistant conversation, with tool calls, reasoning traces, and token noise removed.
+> catchup is an open-source command-line tool, written in Go and MIT-licensed, that lets your next coding agent catch itself up. It reads local Claude Code, Codex, Antigravity (agy), OpenCode, and Pi Agent session history and prints clean, handoff-ready Markdown containing only the user/assistant conversation, with tool calls, reasoning traces, and token noise removed.
 
 This is the complete reference. For the short summary, see [llms.txt](https://catchup.pages.dev/llms.txt). Source and README live at [github.com/wilbeibi/catchup](https://github.com/wilbeibi/catchup).
 
@@ -18,7 +18,7 @@ This is the complete reference. For the short summary, see [llms.txt](https://ca
 
 ## The problem catchup solves
 
-Developers increasingly use more than one AI coding agent. Each agent stores its conversation history in a different location and a different format — Claude Code, Codex, OpenCode, and Pi Agent all differ. When one agent hits a usage limit, when you want a second opinion from another agent, or when you return to a project days later, the next agent starts with zero context. The usual workaround is to copy-paste or re-summarize what already happened, which is slow and lossy.
+Developers increasingly use more than one AI coding agent. Each agent stores its conversation history in a different location and a different format — Claude Code, Codex, Antigravity (agy), OpenCode, and Pi Agent all differ. When one agent hits a usage limit, when you want a second opinion from another agent, or when you return to a project days later, the next agent starts with zero context. The usual workaround is to copy-paste or re-summarize what already happened, which is slow and lossy.
 
 catchup gives the next agent a simple command it can run itself to recover prior work. It reads any supported agent's raw history and emits one consistent, clean Markdown transcript. The output is small enough to paste directly into another agent's context window, and readable enough to skim yourself.
 

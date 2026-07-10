@@ -3,25 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>catchup - let your next coding agent catch itself up</title>
-<meta name="description" content="catchup is an open-source CLI your AI coding agents can run to read Claude Code, Codex, OpenCode &amp; Pi Agent history and print clean handoff Markdown.">
-<meta name="keywords" content="catchup, AI coding agent, Claude Code, Codex, OpenCode, Pi Agent, session history, context handoff, CLI, Go">
+<title>catchup - pick up a coding agent session without starting over</title>
+<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Antigravity, OpenCode, or Pi Agent session and hands it to the next agent. Hit a usage limit? catchup fork --into and keep going.">
+<meta name="keywords" content="catchup, AI coding agent, Claude Code, Codex, Antigravity, agy, OpenCode, Pi Agent, usage limit, session handoff, context handoff, CLI, Go">
 <meta property="og:type" content="website">
-<meta property="og:title" content="catchup — let your next coding agent catch itself up">
-<meta property="og:description" content="A small CLI your AI coding agents can run to read prior sessions and print clean handoff Markdown without tool-call noise.">
+<meta property="og:title" content="catchup — pick up a coding agent session without starting over">
+<meta property="og:description" content="Your agent hit its usage limit mid-task. One command hands the session to the next agent, already caught up.">
 <meta property="og:url" content="https://catchup.pages.dev/">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="catchup — let your next coding agent catch itself up">
-<meta name="twitter:description" content="A small CLI your AI coding agents can run to recover prior local session context.">
+<meta name="twitter:title" content="catchup — pick up a coding agent session without starting over">
+<meta name="twitter:description" content="Your agent hit its usage limit mid-task. One command hands the session to the next agent, already caught up.">
 <link rel="canonical" href="https://catchup.pages.dev/">
 <link rel="alternate" type="text/markdown" href="/index.md">
-<link rel="alternate" type="text/plain" href="/llms.txt" title="AI summary">
-<link rel="alternate" type="text/plain" href="/llms-full.txt" title="Full AI reference">
-<meta name="theme-color" content="#f7f4ec">
+<meta name="theme-color" content="#ffffff">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314130f'/%3E%3Ctext x='5.5' y='23' font-family='monospace' font-size='17' font-weight='700' fill='%235f7d3b'%3E%24%3C/text%3E%3Crect x='18' y='10' width='8' height='13' fill='%23c2792e'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -29,7 +24,7 @@
   "name": "catchup",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS, Linux, Windows",
-  "description": "CLI your AI coding agents can run to read Claude Code, Codex, OpenCode & Pi Agent session history and print clean handoff Markdown context.",
+  "description": "CLI that reads Claude Code, Codex, Antigravity, OpenCode & Pi Agent session history and hands the conversation to the next agent as clean Markdown.",
   "url": "https://catchup.pages.dev/",
   "downloadUrl": "https://github.com/wilbeibi/catchup",
   "softwareHelp": "https://pkg.go.dev/github.com/wilbeibi/catchup",
@@ -40,186 +35,243 @@
 </script>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
-  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; scroll-behavior: smooth; font-feature-settings: "kern", "liga", "calt"; }
-  html, body { margin: 0; background: #f7f4ec; }
-  ::selection { background: #c2792e33; }
-  a:focus-visible, button:focus-visible { outline: 2px solid #c2792e; outline-offset: 3px; border-radius: 5px; }
-  @keyframes cu-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
-  @keyframes cu-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-  @media (prefers-reduced-motion: no-preference) {
-    [data-reveal] { animation: cu-rise both; animation-timeline: view(); animation-range: entry 4% cover 20%; }
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; scroll-behavior: smooth; }
+  html, body { margin: 0; background: #ffffff; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #1b1a18;
+    font-size: 17px;
+    line-height: 1.55;
   }
-  @media (max-width: 760px) {
-    .cu-bashgrid { grid-template-columns: 1fr !important; }
-    .cu-arrow { display: none !important; }
-    .cu-how { grid-template-columns: 1fr !important; }
-    .cu-how > div { border-right: none !important; border-top: 1px solid #ddd5c2 !important; padding: 22px 0 0 !important; }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+  ::selection { background: #c2792e33; }
+  a:focus-visible, button:focus-visible { outline: 2px solid #9c5310; outline-offset: 3px; border-radius: 4px; }
+
+  .col   { max-width: 680px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+  .stage { max-width: 980px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+
+  /* nav */
+  nav { display: flex; align-items: center; justify-content: space-between; max-width: 980px; margin: 0 auto; padding: 24px; }
+  .wordmark { display: flex; align-items: baseline; text-decoration: none; color: #1b1a18; font-weight: 700; font-size: 18px; }
+  .wordmark .cursor { color: #9c5310; }
+  .navlinks { display: flex; gap: 22px; font-size: 14px; }
+  .navlinks a { color: #5a554c; text-decoration: none; }
+  .navlinks a:hover { color: #1b1a18; text-decoration: underline; }
+
+  /* hero: the spot */
+  header { padding: clamp(48px, 9vh, 110px) 0 12px; }
+  h1 { margin: 0 0 30px; font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
+  h1 .hi { display: block; font-size: clamp(56px, 9vw, 96px); line-height: 1; }
+  h1 .line { display: block; font-size: clamp(26px, 4.2vw, 40px); line-height: 1.15; margin-top: 22px; max-width: 18ch; }
+  .monologue p { margin: 0 0 18px; max-width: 58ch; font-size: clamp(17px, 1.9vw, 19px); text-wrap: pretty; }
+  .monologue .quiet { color: #5a554c; }
+
+  /* command blocks */
+  .cmd {
+    display: flex; align-items: center; gap: 12px; width: fit-content; max-width: 100%;
+    background: #1e1d1a; color: #f5f3ee; border: none; border-radius: 8px;
+    padding: 13px 16px; font-size: 14.5px; cursor: pointer; text-align: left;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    transition: background .15s ease;
+  }
+  .cmd:hover { background: #33312b; }
+  .cmd .p { color: #8fbf5f; flex-shrink: 0; }
+  .cmd .t { overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .cmd .copy { color: #a49c8b; font-size: 11px; white-space: nowrap; flex-shrink: 0; border-left: 1px solid #4a4639; padding-left: 12px; }
+
+  /* the white stage */
+  figure { margin: 0; padding: clamp(36px, 6vh, 72px) 0 0; }
+  figure .frame {
+    border-radius: 10px; overflow-x: auto; background: #1e1e2e;
+    box-shadow: 0 30px 40px -32px rgba(20, 18, 12, 0.5);
+  }
+  figure img { display: block; width: 100%; min-width: 720px; height: auto; }
+  figcaption { font-size: 14px; color: #5a554c; margin-top: 14px; max-width: 68ch; }
+  figcaption strong { color: #1b1a18; font-weight: 700; }
+
+  /* Q&A */
+  .qa { padding: clamp(56px, 9vh, 100px) 0 0; }
+  .qa h2 { font-size: clamp(24px, 3.2vw, 32px); letter-spacing: -0.015em; margin: 0 0 34px; }
+  .qa dl { margin: 0; }
+  .qa dt { font-weight: 700; font-size: 18px; margin: 26px 0 6px; }
+  .qa dt:first-child { margin-top: 0; }
+  .qa dd { margin: 0; color: #3c3831; max-width: 60ch; }
+  .qa dd code { background: #f0ede6; padding: 1px 6px; border-radius: 4px; font-size: 14px; color: #1b1a18; }
+
+  /* install */
+  .install { padding: clamp(56px, 9vh, 100px) 0 0; }
+  .install h2 { font-size: clamp(24px, 3.2vw, 32px); letter-spacing: -0.015em; margin: 0 0 10px; }
+  .install > .col > p { margin: 0 0 24px; color: #3c3831; max-width: 58ch; }
+  .install .cmds { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+  .install .alt { font-size: 14px; color: #5a554c; margin-top: 18px; }
+  .install .alt code { background: #f0ede6; padding: 1px 6px; border-radius: 4px; font-size: 13px; color: #1b1a18; }
+  .agents { margin-top: 34px; font-size: 15.5px; color: #3c3831; max-width: 62ch; }
+
+  /* end card */
+  .endcard { margin-top: clamp(64px, 10vh, 120px); background: #1e1d1a; color: #f5f3ee; }
+  .endcard .inner { max-width: 980px; margin: 0 auto; padding: clamp(48px, 8vh, 88px) 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 32px; }
+  .endcard .mark { font-weight: 700; font-size: clamp(40px, 6vw, 64px); letter-spacing: -0.02em; line-height: 1; }
+  .endcard .mark .cursor { color: #c2792e; animation: blink 1.1s steps(1) infinite; }
+  .endcard .tag { margin: 14px 0 0; color: #c7c0b1; font-size: 17px; }
+  .endcard .actions { display: flex; flex-direction: column; gap: 12px; }
+  .endcard .actions a { text-align: center; text-decoration: none; border-radius: 8px; padding: 13px 26px; font-size: 15px; }
+  .endcard .actions .primary { background: #f5f3ee; color: #1b1a18; font-weight: 700; }
+  .endcard .actions .primary:hover { background: #ffffff; }
+  .endcard .actions .secondary { color: #f5f3ee; border: 1px solid #55503f; }
+  .endcard .actions .secondary:hover { border-color: #c7c0b1; }
+
+  /* fine print */
+  footer { background: #1e1d1a; }
+  footer .inner { max-width: 980px; margin: 0 auto; padding: 0 24px 44px; border-top: 1px solid #3a372e; }
+  footer p.fine { color: #b3ab9a; font-size: 12.5px; line-height: 1.7; max-width: 90ch; margin: 20px 0 0; }
+  footer .links { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 18px; font-size: 13px; }
+  footer .links a { color: #c7c0b1; text-decoration: none; }
+  footer .links a:hover { color: #f5f3ee; text-decoration: underline; }
+
+  @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  /* lift is transform-only: the frame must stay visible when the scroll
+     timeline never fires (fullpage renders, older engines) */
+  @keyframes lift { from { transform: translateY(16px); } to { transform: none; } }
+  @media (prefers-reduced-motion: no-preference) {
+    .enter > * { animation: rise .7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .enter > *:nth-child(2) { animation-delay: .12s; }
+    .enter > *:nth-child(3) { animation-delay: .24s; }
+    .enter > *:nth-child(4) { animation-delay: .36s; }
+    .enter > *:nth-child(5) { animation-delay: .48s; }
+    figure .frame { animation: lift both; animation-timeline: view(); animation-range: entry 5% cover 22%; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; }
   }
-  /* hover states (replacing the framework's style-hover bindings) */
-  .cu-navlink { transition: color .15s ease; }
-  .cu-navlink:hover { color: #232019; }
-  .cu-ghbtn { transition: border-color .15s ease, background .15s ease; }
-  .cu-ghbtn:hover { border-color: var(--accent); background: #fffdf8; }
-  .cu-darkbtn { transition: background .15s ease; }
-  .cu-darkbtn:hover { background: #3a352a; }
-  .cu-card { transition: border-color .15s ease, background .15s ease; }
-  .cu-card:hover { border-color: var(--accent); background: #fffefb; }
+  @media (max-width: 560px) {
+    .cmd { width: 100%; }
+    .endcard .actions { width: 100%; }
+  }
 </style>
 </head>
 <body>
-<main style="--accent: #c2792e; --green: #5f7d3b; background: #f7f4ec; color: #232019; font-family: 'Newsreader', Georgia, serif; min-height: 100vh; background-image: radial-gradient(#e6dfcd 1px, transparent 1px); background-size: 26px 26px;">
 
-  <!-- NAV -->
-  <nav style="max-width: 1080px; margin: 0 auto; padding: 26px 32px; display: flex; align-items: center; justify-content: space-between;">
-    <a href="https://catchup.pages.dev/" style="display: flex; align-items: baseline; gap: 2px; text-decoration: none; color: #232019;">
-      <span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 19px; letter-spacing: -0.02em;">catchup</span>
-      <span style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 19px; font-weight: 600;">_</span>
-    </a>
-    <div style="display: flex; align-items: center; gap: 28px; font-family: 'IBM Plex Mono', monospace; font-size: 13px;">
-      <a href="https://pkg.go.dev/github.com/wilbeibi/catchup" style="color: #6b6354; text-decoration: none;" class="cu-navlink">docs</a>
-      <a href="https://github.com/wilbeibi/catchup" style="color: #232019; text-decoration: none; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #d9d1bd; padding: 7px 13px; border-radius: 6px;" class="cu-ghbtn">
-        <span style="color: var(--accent);">★</span> GitHub
-      </a>
+<nav>
+  <a class="wordmark" href="https://catchup.pages.dev/"><span>catchup</span><span class="cursor">_</span></a>
+  <div class="navlinks">
+    <a href="https://pkg.go.dev/github.com/wilbeibi/catchup">docs</a>
+    <a href="https://github.com/wilbeibi/catchup">GitHub</a>
+  </div>
+</nav>
+
+<header>
+  <div class="col enter">
+    <h1>
+      <span class="hi">Hi.</span>
+      <span class="line">Your coding agent just hit its usage limit.</span>
+    </h1>
+    <div class="monologue">
+      <p>It's 4:50 on a Friday. The fix is half done. The agent that knows why is locked out for five hours.</p>
+      <p>You could open another agent and retype everything the two of you figured out. Or you could type this:</p>
     </div>
-  </nav>
+    <button class="cmd" onclick="copyCmd(this, 'catchup fork claude --into codex')" aria-label="Copy the command: catchup fork claude --into codex">
+      <span class="p">$</span>
+      <span class="t">catchup fork claude --into codex</span>
+      <span class="copy">click to copy</span>
+    </button>
+    <div class="monologue" style="margin-top: 22px;">
+      <p>Codex opens, already caught up on the conversation. It picks up the job. <span class="quiet">That's the whole product.</span></p>
+    </div>
+  </div>
+</header>
 
-  <!-- HERO -->
-  <header style="max-width: 1080px; margin: 0 auto; padding: 64px 32px 40px;">
-    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin-bottom: 26px;">Open-source CLI · Go · MIT</div>
-    <h1 style="font-size: clamp(40px, 6.4vw, 76px); line-height: 1.02; font-weight: 500; letter-spacing: -0.025em; margin: 0; max-width: 16ch; text-wrap: balance;">Let your next coding agent <em style="font-style: italic; color: var(--accent);">catch itself up.</em></h1>
-    <p style="font-size: clamp(18px, 2.1vw, 22px); line-height: 1.5; color: #514a3d; max-width: 56ch; margin: 28px 0 0; text-wrap: pretty;">catchup is a small CLI your AI coding agents can run to read prior Claude Code, Codex, OpenCode, and Pi Agent sessions and print clean, handoff-ready Markdown. Agents continue work without you re-explaining what happened.</p>
+<div class="stage">
+  <figure>
+    <div class="frame">
+      <img src="assets/handoff.gif" alt="Claude Code hits its five-hour limit in the left terminal pane; in the right pane, catchup fork claude --into codex starts Codex seeded with the session and it continues the task." loading="eager">
+    </div>
+    <figcaption><strong>Actual footage.</strong> Claude Code hits its five-hour limit; one command hands the session to Codex.</figcaption>
+  </figure>
 
-    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 38px;">
-      <button onclick="copyInstall()" aria-label="Copy install command" style="display: inline-flex; align-items: center; gap: 12px; max-width: 100%; background: #232019; color: #f7f4ec; border: none; border-radius: 8px; padding: 13px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 14px; cursor: pointer; box-shadow: 0 1px 0 #00000018;" class="cu-darkbtn">
-        <span style="color: var(--green); flex-shrink: 0;">$</span>
-        <span style="overflow-x: auto; white-space: nowrap; -ms-overflow-style: none; scrollbar-width: none;">go install github.com/wilbeibi/catchup@latest</span>
-        <span style="color: #9b9482; font-size: 11px; white-space: nowrap; flex-shrink: 0; border-left: 1px solid #4a4639; padding-left: 12px;" id="cu-copylabel">click to copy</span>
+  <figure>
+    <div class="frame">
+      <img src="assets/recall.gif" alt="An agent searches past sessions by keyword with catchup -q, then opens the matching session by id." loading="lazy">
+    </div>
+    <figcaption><strong>Also works days later.</strong> Search old sessions by keyword, open the one you meant, keep going.</figcaption>
+  </figure>
+</div>
+
+<section class="qa">
+  <div class="col">
+    <h2>Reasonable questions</h2>
+    <dl>
+      <dt>What actually gets handed over?</dt>
+      <dd>The conversation: what you asked, what was decided, what's left. Tool calls, command output, and reasoning traces are stripped, so the next agent reads a clean transcript instead of a log file.</dd>
+
+      <dt>Same agent, new day?</dt>
+      <dd><code>catchup fork</code> resumes through the agent's own native path, with real session state. Cross-agent, <code>catchup fork claude --into codex</code> seeds the new agent with the transcript.</dd>
+
+      <dt>What about that session last week about rate limits?</dt>
+      <dd><code>catchup claude -q "rate limit"</code>. Search by keyword, list recent sessions, open an exact one by id.</dd>
+
+      <dt>Can my agent run it by itself?</dt>
+      <dd>Yes. <code>catchup install-skill</code> teaches your agents the command; after that, "catch up on the last Codex session" just works.</dd>
+
+      <dt>Does it merge histories across agents?</dt>
+      <dd>No. One agent at a time. It's a handoff, not a blender.</dd>
+    </dl>
+  </div>
+</section>
+
+<section class="install">
+  <div class="col">
+    <h2>Install it before you need it.</h2>
+    <p>One binary, no config, MIT-licensed. Works on macOS, Linux, and Windows.</p>
+    <div class="cmds">
+      <button class="cmd" onclick="copyCmd(this, 'curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh')" aria-label="Copy the install script command">
+        <span class="p">$</span>
+        <span class="t">curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh</span>
+        <span class="copy">click to copy</span>
       </button>
-      <a href="https://github.com/wilbeibi/catchup" style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: #232019; text-decoration: none; border-bottom: 1.5px solid var(--accent); padding-bottom: 2px;">View on GitHub →</a>
+      <button class="cmd" onclick="copyCmd(this, 'go install github.com/wilbeibi/catchup@latest')" aria-label="Copy the go install command">
+        <span class="p">$</span>
+        <span class="t">go install github.com/wilbeibi/catchup@latest</span>
+        <span class="copy">click to copy</span>
+      </button>
     </div>
-  </header>
+    <p class="alt">Then, optionally: <code>catchup install-skill</code> so your agents know it exists.</p>
+    <p class="agents">Works with <strong>Claude Code</strong>, <strong>Codex</strong>, <strong>Antigravity</strong> (<code>agy</code>), <strong>OpenCode</strong>, and <strong>Pi Agent</strong>. Any direction.</p>
+  </div>
+</section>
 
-  <!-- FIG 1: BEFORE / AFTER TERMINAL -->
-  <section data-reveal="" style="max-width: 1080px; margin: 0 auto; padding: 28px 32px 24px;">
-    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #8d8675;">
-      <span style="text-wrap: balance;">Fig. 1 — Claude Code hits its limit; one command hands the session to Codex</span>
-      <span style="color: #b8af9a; flex-shrink: 0;">no re-briefing</span>
+<div class="endcard">
+  <div class="inner">
+    <div>
+      <div class="mark">catchup<span class="cursor">_</span></div>
+      <p class="tag">Pick up a coding agent session without starting over.</p>
     </div>
-    <div style="border: 1px solid #d9d1bd; border-radius: 12px; overflow-x: auto; background: #1e1e2e; box-shadow: 0 24px 60px -28px #00000055;">
-      <img src="assets/handoff.gif" alt="Claude Code hits its 5-hour limit in the left terminal pane; in the right pane catchup fork --into codex starts Codex seeded with the Claude session and the task continues." style="display: block; width: 100%; min-width: 760px; height: auto;">
+    <div class="actions">
+      <a class="primary" href="https://github.com/wilbeibi/catchup">Star on GitHub</a>
+      <a class="secondary" href="https://pkg.go.dev/github.com/wilbeibi/catchup">Read the reference</a>
     </div>
-  </section>
+  </div>
+</div>
 
-  <!-- HOW IT WORKS -->
-  <section style="max-width: 1080px; margin: 0 auto; padding: 72px 32px 24px;">
-    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #8d8675; margin-bottom: 32px; border-top: 1px solid #ddd5c2; padding-top: 22px;">What it does</div>
-    <div class="cu-how" data-reveal="" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;">
-      <div style="padding: 4px 36px 4px 0; border-right: 1px solid #ddd5c2;">
-        <div style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 14px; margin-bottom: 16px;">I</div>
-        <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Built for agent handoff</h3>
-        <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;">Your next agent runs <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup &lt;agent&gt;</code> for <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">codex</code>, <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">claude</code>, <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">opencode</code>, or <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">pi-agent</code> to recover the relevant conversation.</p>
-      </div>
-      <div style="padding: 4px 36px; border-right: 1px solid #ddd5c2;">
-        <div style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 14px; margin-bottom: 16px;">II</div>
-        <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Just the conversation</h3>
-        <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;">User and assistant messages only. Tool calls, reasoning traces, and token noise are stripped — what's left is the thread you actually need.</p>
-      </div>
-      <div style="padding: 4px 36px; border-right: 1px solid #ddd5c2;">
-        <div style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 14px; margin-bottom: 16px;">III</div>
-        <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Readable by humans</h3>
-        <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;">Browsing manually? Start with <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup codex --list</code> — or bare <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup</code>, which reads the newest session in the directory, whichever agent wrote it.</p>
-      </div>
-      <div style="padding: 4px 0 4px 36px;">
-        <div style="font-family: 'IBM Plex Mono', monospace; color: var(--accent); font-size: 14px; margin-bottom: 16px;">IV</div>
-        <h3 style="font-size: 24px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.01em;">Fork back in</h3>
-        <p style="color: #514a3d; font-size: 16.5px; line-height: 1.55; margin: 0;">Run <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup fork</code> to hand off to the agent's own native fork command — real session state, not a rendered transcript. Crossing agents? <code style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; background: #ece5d4; padding: 1px 5px; border-radius: 4px;">catchup fork codex --into claude</code> seeds Claude with the Codex transcript.</p>
-      </div>
+<footer>
+  <div class="inner">
+    <p class="fine">Fine print: catchup is read-only, except <span class="mono">fork</span>. Same-agent forks use the agent's native resume, so they keep real session state. Cross-agent handoffs carry the transcript, not native state. One agent at a time; histories are not merged. Free, open source, MIT. Side effects may include finishing what you started.</p>
+    <div class="links">
+      <a href="https://github.com/wilbeibi/catchup">GitHub</a>
+      <a href="https://pkg.go.dev/github.com/wilbeibi/catchup">pkg.go.dev</a>
+      <a href="https://github.com/wilbeibi">@wilbeibi</a>
     </div>
-  </section>
-
-  <!-- SUPPORTED AGENTS -->
-  <section style="max-width: 1080px; margin: 0 auto; padding: 72px 32px 24px;">
-    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #8d8675; margin-bottom: 28px; border-top: 1px solid #ddd5c2; padding-top: 22px;">Supported agents</div>
-    <div data-reveal="" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px;">
-      
-        <div style="border: 1px solid #ddd5c2; border-top: 4px solid #d97742; border-radius: 10px; padding: 18px 18px 16px; background: #fffdf8; display: flex; align-items: center; gap: 13px;" class="cu-card">
-          <div aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #d97742; box-shadow: 0 0 0 7px #d9774218; flex: 0 0 auto;"></div>
-          <div>
-            <div style="font-size: 20px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.1;">Claude Code</div>
-            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #8d8675; margin-top: 5px;">claude</div>
-          </div>
-        </div>
-      
-        <div style="border: 1px solid #ddd5c2; border-top: 4px solid #6f63d8; border-radius: 10px; padding: 18px 18px 16px; background: #fffdf8; display: flex; align-items: center; gap: 13px;" class="cu-card">
-          <div aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #6f63d8; box-shadow: 0 0 0 7px #6f63d81a; flex: 0 0 auto;"></div>
-          <div>
-            <div style="font-size: 20px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.1;">Codex</div>
-            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #8d8675; margin-top: 5px;">codex</div>
-          </div>
-        </div>
-      
-        <div style="border: 1px solid #ddd5c2; border-top: 4px solid #232019; border-radius: 10px; padding: 18px 18px 16px; background: #fffdf8; display: flex; align-items: center; gap: 13px;" class="cu-card">
-          <div aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #232019; box-shadow: 0 0 0 7px #23201914; flex: 0 0 auto;"></div>
-          <div>
-            <div style="font-size: 20px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.1;">OpenCode</div>
-            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #8d8675; margin-top: 5px;">opencode</div>
-          </div>
-        </div>
-      
-        <div style="border: 1px solid #ddd5c2; border-top: 4px solid #6f8f45; border-radius: 10px; padding: 18px 18px 16px; background: #fffdf8; display: flex; align-items: center; gap: 13px;" class="cu-card">
-          <div aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #6f8f45; box-shadow: 0 0 0 7px #6f8f451a; flex: 0 0 auto;"></div>
-          <div>
-            <div style="font-size: 20px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.1;">Pi Agent</div>
-            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #8d8675; margin-top: 5px;">pi-agent</div>
-          </div>
-        </div>
-      
-    </div>
-    <p style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675; margin: 22px 0 0;">Each agent keeps its own history format; catchup normalizes the output.</p>
-  </section>
-
-  <!-- CLOSING CTA -->
-  <section data-reveal="" style="max-width: 1080px; margin: 0 auto; padding: 80px 32px 64px;">
-    <div style="border: 1px solid #d9d1bd; border-radius: 16px; background: #fffdf8; padding: clamp(36px, 5vw, 60px); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 28px;">
-      <div>
-        <h2 style="font-size: clamp(28px, 3.6vw, 40px); font-weight: 500; letter-spacing: -0.02em; margin: 0; max-width: 18ch; text-wrap: balance;">Hand the next agent a clean slate.</h2>
-        <p style="color: #514a3d; font-size: 17px; margin: 14px 0 0; max-width: 44ch;">One <code style="font-family: 'IBM Plex Mono', monospace; font-size: 14px;">go install</code> and you're set. MIT-licensed, no config.</p>
-      </div>
-      <div style="display: flex; flex-direction: column; gap: 12px; align-items: stretch;">
-        <a href="https://github.com/wilbeibi/catchup" style="text-align: center; background: #232019; color: #f7f4ec; text-decoration: none; border-radius: 8px; padding: 14px 26px; font-family: 'IBM Plex Mono', monospace; font-size: 14px;" class="cu-darkbtn"><span style="color: var(--green);">★</span> Star on GitHub</a>
-        <a href="https://pkg.go.dev/github.com/wilbeibi/catchup" style="text-align: center; color: #232019; text-decoration: none; border: 1px solid #d9d1bd; border-radius: 8px; padding: 14px 26px; font-family: 'IBM Plex Mono', monospace; font-size: 14px;" class="cu-ghbtn">Read the reference →</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- FOOTER -->
-  <footer style="border-top: 1px solid #ddd5c2;">
-    <div style="max-width: 1080px; margin: 0 auto; padding: 30px 32px 48px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8d8675;">
-      <div style="display: flex; align-items: baseline; gap: 2px;"><span style="font-weight: 600; color: #232019;">catchup</span><span style="color: var(--accent); font-weight: 600;">_</span><span style="margin-left: 12px;">MIT · © 2026</span></div>
-      <div style="display: flex; gap: 24px;">
-        <a href="https://github.com/wilbeibi/catchup" style="color: #8d8675; text-decoration: none;" class="cu-navlink">GitHub</a>
-        <a href="https://pkg.go.dev/github.com/wilbeibi/catchup" style="color: #8d8675; text-decoration: none;" class="cu-navlink">pkg.go.dev</a>
-        <a href="https://github.com/wilbeibi" style="color: #8d8675; text-decoration: none;" class="cu-navlink">@wilbeibi</a>
-      </div>
-    </div>
-  </footer>
-
-  
-
-</main>
+  </div>
+</footer>
 
 <script>
-  function copyInstall() {
-    var cmd = 'go install github.com/wilbeibi/catchup@latest';
+  function copyCmd(btn, cmd) {
     try { navigator.clipboard.writeText(cmd); } catch (e) {}
-    var el = document.getElementById('cu-copylabel');
+    var el = btn.querySelector('.copy');
     if (!el) return;
     el.textContent = 'copied ✓';
-    clearTimeout(window.__cuCopyT);
-    window.__cuCopyT = setTimeout(function () { el.textContent = 'click to copy'; }, 1600);
+    clearTimeout(btn.__t);
+    btn.__t = setTimeout(function () { el.textContent = 'click to copy'; }, 1600);
   }
 </script>
 </body>
