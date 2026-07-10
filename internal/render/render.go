@@ -54,8 +54,8 @@ func List(w io.Writer, provider string, summaries []session.Summary) error {
 	}
 
 	const gutter = 1
-	rankW := 3            // fits ranks up to 999
-	updW := 16            // "2006-01-02 15:04"
+	rankW := 3 // fits ranks up to 999
+	updW := 16 // "2006-01-02 15:04"
 	sidW := maxSidWidth(summaries)
 	titleW := termWidth(w) - rankW - updW - sidW - 3*gutter
 	if titleW < 15 {
