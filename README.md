@@ -6,13 +6,9 @@
 
 </div>
 
-`catchup` is for the moment an agent hits a limit and you don't want to explain the whole job again. It reads the session the last agent left on disk and picks the work back up in the same agent or a different one:
+`catchup` is for the moment an agent hits a limit and you don't want to explain the whole job again. It pulls the useful part of the local session into clean Markdown. `catchup fork` picks the work back up in the same agent or a different one.
 
-```bash
-catchup fork claude --into codex   # Claude hit its limit; Codex takes over, caught up
-```
-
-Works with Claude Code, Codex, Antigravity, OpenCode, and Pi Agent. Use it when you switch tools, pick up older work, or want a clean Markdown record of what happened.
+Use it when you switch tools, pick up older work, or want a clean record of what happened.
 
 <div align="center">
 
@@ -38,8 +34,8 @@ curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/insta
 # or with Go
 go install github.com/wilbeibi/catchup@latest
 
-catchup install-skill          # optional: teach your agents the command
-catchup install-skill <agent>  # ...or one agent only (agy has no skills dir; skipped)
+catchup install-skill          # optional: install the agent skill
+catchup install-skill <agent>  # ...or for one agent only
 ```
 
 Windows binaries are on the [releases page](https://github.com/wilbeibi/catchup/releases).
