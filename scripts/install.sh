@@ -1,6 +1,6 @@
 #!/bin/sh
 # Install the latest catchup release binary. No Go toolchain required.
-#   curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh
+# Invocation is documented in the README (https://github.com/wilbeibi/catchup).
 # Installs to ~/.local/bin (override with CATCHUP_INSTALL_DIR).
 set -eu
 
@@ -20,17 +20,34 @@ case "$arch" in
   *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 
-url="https://github.com/$REPO/releases/latest/download/catchup_${os}_${arch}.tar.gz"
+base="https://github.com/$REPO/releases/latest/download"
+archive="catchup_${os}_${arch}.tar.gz"
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+trap 'rm -f "$tmp/$archive" "$tmp/checksums.txt" "$tmp/catchup"; rmdir "$tmp"' EXIT
 
-echo "downloading $url"
-curl -fsSL "$url" -o "$tmp/catchup.tar.gz"
-tar -xzf "$tmp/catchup.tar.gz" -C "$tmp" catchup
+echo "downloading $base/$archive"
+curl -fsSL "$base/$archive" -o "$tmp/$archive"
+curl -fsSL "$base/checksums.txt" -o "$tmp/checksums.txt"
+
+# Verify the archive against the release's published sha256 before unpacking.
+want=$(grep " $archive\$" "$tmp/checksums.txt" | cut -d' ' -f1)
+if [ -z "$want" ]; then
+  echo "checksums.txt has no entry for $archive" >&2; exit 1
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+  got=$(sha256sum "$tmp/$archive" | cut -d' ' -f1)
+else
+  got=$(shasum -a 256 "$tmp/$archive" | cut -d' ' -f1)
+fi
+if [ "$want" != "$got" ]; then
+  echo "checksum mismatch for $archive (expected $want, got $got)" >&2; exit 1
+fi
+
+tar -xzf "$tmp/$archive" -C "$tmp" catchup
 
 mkdir -p "$DIR"
 install -m 0755 "$tmp/catchup" "$DIR/catchup"
-echo "installed $DIR/catchup ($("$DIR/catchup" --version))"
+echo "installed $DIR/catchup (verify with: catchup --version)"
 
 case ":$PATH:" in
   *":$DIR:"*) ;;
