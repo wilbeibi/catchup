@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>catchup - pick up a coding agent session without starting over</title>
-<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Antigravity, OpenCode, or Pi Agent session and hands it to the next agent. When one agent hits its usage limit, catchup fork --into lets another continue the work.">
+<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Antigravity, OpenCode, or Pi Agent session and hands it to the next agent. Hit a usage limit? catchup fork --into and keep going.">
 <meta name="keywords" content="catchup, AI coding agent, Claude Code, Codex, Antigravity, agy, OpenCode, Pi Agent, usage limit, session handoff, context handoff, CLI, Go">
 <meta property="og:type" content="website">
 <meta property="og:title" content="catchup - pick up a coding agent session without starting over">
@@ -69,7 +69,7 @@
   h1 .hi { display: block; font-size: clamp(56px, 9vw, 96px); line-height: 1; }
   h1 .line { display: block; font-size: clamp(26px, 4.2vw, 40px); line-height: 1.15; margin-top: 22px; max-width: 18ch; }
   .monologue p { margin: 0 0 18px; max-width: 58ch; font-size: clamp(17px, 1.9vw, 19px); text-wrap: pretty; }
-  .monologue .quiet { color: #5a554c; }
+  .monologue .mono { font-size: 0.82em; background: #f0ede6; padding: 1px 6px; border-radius: 4px; }
 
   /* command blocks */
   .cmd {
@@ -134,8 +134,7 @@
   /* fine print */
   footer { background: #1e1d1a; }
   footer .inner { max-width: 980px; margin: 0 auto; padding: 0 24px 44px; border-top: 1px solid #3a372e; }
-  footer p.fine { color: #b3ab9a; font-size: 12.5px; line-height: 1.7; max-width: 90ch; margin: 20px 0 0; }
-  footer .links { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 18px; font-size: 13px; }
+  footer .links { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 20px; font-size: 13px; }
   footer .links a { color: #c7c0b1; text-decoration: none; }
   footer .links a:hover { color: #f5f3ee; text-decoration: underline; }
 
@@ -179,7 +178,7 @@
       <span class="line">Your coding agent just hit its usage limit.</span>
     </h1>
     <div class="monologue">
-      <p>It's 4:50 on a Friday. The fix is half done. The agent that knows why is locked out for five hours.</p>
+      <p>It's 4:50 on a Friday. The fix is half done. Claude Code stops: <span class="mono">5-hour limit reached &#8729; resets 10pm</span>.</p>
       <p>You could open another agent and retype everything the two of you figured out. Or you could type this:</p>
     </div>
     <button class="cmd" onclick="copyCmd(this, 'catchup fork claude --into codex')" aria-label="Copy the command: catchup fork claude --into codex">
@@ -226,7 +225,7 @@
       <dd>Yes. <code>catchup install-skill</code> teaches your agents the command; after that, "catch up on the last Codex session" just works.</dd>
 
       <dt>Does it merge histories across agents?</dt>
-      <dd>No. It reads one agent's session at a time and hands that single session to one other agent.</dd>
+      <dd>No. One agent at a time. It's a handoff, not a blender.</dd>
     </dl>
   </div>
 </section>
@@ -267,7 +266,6 @@
 
 <footer>
   <div class="inner">
-    <p class="fine">Fine print: demos are vhs-scripted dramatizations of the real workflow, not screen recordings. catchup is read-only, except <span class="mono">fork</span>. Same-agent forks use the agent's native resume, so they keep real session state. Cross-agent handoffs carry the transcript, not native state. One agent at a time; histories are not merged. Free, open source, MIT.</p>
     <div class="links">
       <a href="https://github.com/wilbeibi/catchup">GitHub</a>
       <a href="https://pkg.go.dev/github.com/wilbeibi/catchup">pkg.go.dev</a>
