@@ -20,6 +20,7 @@ import (
 const (
 	ProviderCodex    = "codex"
 	ProviderClaude   = "claude"
+	ProviderAgy      = "agy" // Antigravity CLI
 	ProviderOpenCode = "opencode"
 	ProviderPiAgent  = "pi-agent"
 )
@@ -64,6 +65,7 @@ type Target struct {
 type Roots struct {
 	Codex    string
 	Claude   string
+	Agy      string
 	OpenCode string
 	PiAgent  string
 }

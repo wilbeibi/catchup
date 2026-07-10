@@ -19,7 +19,15 @@ import (
 //go:embed SKILL.md
 var skillMD []byte
 
+// version is stamped by goreleaser (-X main.version=...) on release builds.
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+		fmt.Println("catchup", version)
+		return
+	}
+
 	ctx := context.Background()
 
 	home, err := os.UserHomeDir()

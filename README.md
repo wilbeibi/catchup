@@ -25,11 +25,20 @@ Use it when you switch tools, pick up older work, or want a clean record of what
 ## Install
 
 ```bash
+# Homebrew
+brew install wilbeibi/tap/catchup
+
+# prebuilt binary (Linux/macOS, no Go needed)
+curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh
+
+# or with Go
 go install github.com/wilbeibi/catchup@latest
 
 catchup install-skill          # optional: install the agent skill
 catchup install-skill <agent>  # ...or for one agent only
 ```
+
+Windows binaries are on the [releases page](https://github.com/wilbeibi/catchup/releases).
 
 Restart the agent, then ask it to catch up on the last session.
 
@@ -41,7 +50,7 @@ herdr plugin install wilbeibi/herdr-catchup
 
 ## Usage
 
-Use `<agent>` as `codex`, `claude`, `opencode`, or `pi-agent`. Omit it and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
+Use `<agent>` as `codex`, `claude`, `agy` (Antigravity), `opencode`, or `pi-agent`. Omit it and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
 
 **For you:** run in your terminal to re-enter a session:
 

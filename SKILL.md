@@ -1,6 +1,6 @@
 ---
 name: catchup
-description: Recovers prior coding-agent session context by running `catchup <agent> --since-compact`, which extracts a clean summary of a previous Codex, Claude Code, OpenCode, or Pi Agent session. Use when the user says "catch up", "what did the last session do", "get me up to speed", "I switched agents", or asks to recover/summarize a previous session before continuing. Do NOT use for the current conversation, git history, or any non-agent log.
+description: Recovers prior coding-agent session context by running `catchup <agent> --since-compact`, which extracts a clean summary of a previous Codex, Claude Code, Antigravity, OpenCode, or Pi Agent session. Use when the user says "catch up", "what did the last session do", "get me up to speed", "I switched agents", or asks to recover/summarize a previous session before continuing. Do NOT use for the current conversation, git history, or any non-agent log.
 ---
 
 # catchup
@@ -18,7 +18,7 @@ catchup <agent>/3                # read 3rd newest session
 catchup <agent> --id <id>        # read exact session
 ```
 
-Agents: `codex`, `claude`, `opencode`, `pi-agent`.
+Agents: `codex`, `claude`, `agy` (Antigravity), `opencode`, `pi-agent`.
 
 ## Operation
 

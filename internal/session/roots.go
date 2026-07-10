@@ -8,6 +8,7 @@ import "path/filepath"
 //
 //	Codex    : $CODEX_HOME          else <home>/.codex
 //	Claude   : $CLAUDE_CONFIG_DIR   else <home>/.claude
+//	Agy      : <home>/.gemini/antigravity-cli (Antigravity documents no override)
 //	OpenCode : $XDG_DATA_HOME/opencode else <home>/.local/share/opencode
 //	PiAgent  : $PI_CODING_AGENT_DIR else <home>/.pi/agent
 //
@@ -25,6 +26,8 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		claude = filepath.Join(home, ".claude")
 	}
 
+	agy := filepath.Join(home, ".gemini", "antigravity-cli")
+
 	opencode := getenv("XDG_DATA_HOME")
 	if opencode != "" {
 		opencode = filepath.Join(opencode, "opencode")
@@ -37,7 +40,7 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		piAgent = filepath.Join(home, ".pi", "agent")
 	}
 
-	return Roots{Codex: codex, Claude: claude, OpenCode: opencode, PiAgent: piAgent}
+	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent}
 }
 
 // ResolveSkillDirs returns each provider's global Agent Skills directory,
@@ -49,6 +52,10 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 //	Claude   : roots.Claude/skills             (respects $CLAUDE_CONFIG_DIR)
 //	OpenCode : <home>/.config/opencode/skills  (fixed; not $XDG_DATA_HOME)
 //	PiAgent  : roots.PiAgent/skills            (respects $PI_CODING_AGENT_DIR)
+//
+// Agy is deliberately absent: Antigravity ships builtin skills but documents
+// no user skills directory, and installSkill skips providers without an
+// entry rather than writing to a guessed path.
 func ResolveSkillDirs(roots Roots, home string) map[string]string {
 	return map[string]string{
 		ProviderCodex:    filepath.Join(home, ".agents", "skills"),

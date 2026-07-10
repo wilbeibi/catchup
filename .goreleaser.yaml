@@ -1,0 +1,40 @@
+version: 2
+
+project_name: catchup
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github-native
+
+# Publishes the formula to wilbeibi/homebrew-tap; HOMEBREW_TAP_TOKEN is a
+# repo secret with push access to the tap.
+brews:
+  - repository:
+      owner: wilbeibi
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://catchup.pages.dev
+    description: Pick up a coding agent session without starting over
+    license: MIT

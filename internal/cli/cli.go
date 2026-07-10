@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/wilbeibi/catchup/internal/agy"
 	"github.com/wilbeibi/catchup/internal/claude"
 	"github.com/wilbeibi/catchup/internal/codex"
 	"github.com/wilbeibi/catchup/internal/opencode"
@@ -25,7 +26,7 @@ const helpText = `Usage: catchup [agent[/<rank>]] [flags]
        catchup fork [agent] [--into <agent>]
        catchup install-skill [agent]
 
-Agents: codex, claude, opencode, pi-agent
+Agents: codex, claude, agy (Antigravity), opencode, pi-agent
 Omit the agent to use whichever one has the newest session in this directory.
 
 Flags:
@@ -145,6 +146,7 @@ func providerNames() []string {
 	return []string{
 		session.ProviderCodex,
 		session.ProviderClaude,
+		session.ProviderAgy,
 		session.ProviderOpenCode,
 		session.ProviderPiAgent,
 	}
@@ -158,6 +160,8 @@ func selectProvider(name string) (session.Provider, error) {
 		return codex.New(), nil
 	case session.ProviderClaude:
 		return claude.New(), nil
+	case session.ProviderAgy:
+		return agy.New(), nil
 	case session.ProviderOpenCode:
 		return opencode.New(), nil
 	case session.ProviderPiAgent:
@@ -166,7 +170,10 @@ func selectProvider(name string) (session.Provider, error) {
 		if name == "list" {
 			return nil, fmt.Errorf(`unknown agent "list"; did you mean catchup --list?`)
 		}
-		return nil, fmt.Errorf("unknown agent %q (want codex, claude, opencode, or pi-agent); run catchup --help", name)
+		if name == "antigravity" {
+			return nil, fmt.Errorf(`unknown agent "antigravity"; Antigravity's agent name is agy`)
+		}
+		return nil, fmt.Errorf("unknown agent %q (want codex, claude, agy, opencode, or pi-agent); run catchup --help", name)
 	}
 }
 
@@ -327,6 +334,8 @@ func intoCommand(target, prompt string) (string, []string, error) {
 		return "codex", []string{prompt}, nil
 	case session.ProviderClaude:
 		return "claude", []string{prompt}, nil
+	case session.ProviderAgy:
+		return "agy", []string{"-i", prompt}, nil
 	case session.ProviderOpenCode:
 		return "opencode", []string{"--prompt", prompt}, nil
 	case session.ProviderPiAgent:
@@ -348,6 +357,12 @@ func forkCommand(src session.Source) (string, []string, error) {
 			return "", nil, fmt.Errorf("fork claude: missing session id")
 		}
 		return "claude", []string{"--resume", src.Ref.SessionID, "--fork-session"}, nil
+	case session.ProviderAgy:
+		if src.Ref.SessionID == "" {
+			return "", nil, fmt.Errorf("fork agy: missing session id")
+		}
+		// Antigravity has no fork; --conversation is its native resume.
+		return "agy", []string{"--conversation", src.Ref.SessionID}, nil
 	case session.ProviderOpenCode:
 		if src.Ref.SessionID == "" {
 			return "", nil, fmt.Errorf("fork opencode: missing session id")
