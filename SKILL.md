@@ -27,7 +27,7 @@ Agents: `codex`, `claude`, `agy` (Antigravity), `opencode`, `pi-agent`.
 - Unclear which session? Run `catchup <agent> --list` first — don't guess.
 - Unclear which flag fits the request (full session, `--last N`, a specific rank/id)? Ask the user instead of guessing.
 - `-q "topic"` implies `--list` — returns a listing, not a session read.
-- To *continue* the same agent's session with full state, suggest the user run `catchup fork` in their terminal — don't transcript-brief when a native fork fits better. To continue in a *different* agent from the terminal, `catchup fork <agent> into <other-agent>` starts the other agent seeded with the transcript. Add `--model <name>` (the launched agent's own model name) when the user wants a specific model.
+- To *continue* the same agent's session with full state, suggest the user run `catchup fork` in their terminal — don't transcript-brief when a native fork fits better. To continue in a *different* agent from the terminal, `catchup fork <agent> --into <other-agent>` starts the other agent seeded with the transcript. Add `--model <name>` (the launched agent's own model name) when the user wants a specific model.
 - Output: Markdown, conversation only, tool calls/reasoning already stripped; `-i` for metadata only.
 
 Run `catchup --help` for the full flag list.

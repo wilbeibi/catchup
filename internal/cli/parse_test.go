@@ -48,18 +48,8 @@ func TestParse(t *testing.T) {
 			want: Command{Action: "fork", Into: "claude", SinceCompact: true, Format: session.FormatMarkdown, Limit: DefaultLimit},
 		},
 		{
-			name: "bare into keyword",
-			args: []string{"fork", "claude", "into", "codex"},
-			want: Command{Action: "fork", Into: "codex", Target: session.Target{Provider: "claude"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
-		},
-		{
-			name: "bare into without a source agent",
-			args: []string{"fork", "into", "codex"},
-			want: Command{Action: "fork", Into: "codex", Format: session.FormatMarkdown, Limit: DefaultLimit},
-		},
-		{
-			name: "into with model",
-			args: []string{"fork", "claude", "into", "codex", "--model", "gpt-5.6"},
+			name: "--into with model",
+			args: []string{"fork", "claude", "--into", "codex", "--model", "gpt-5.6"},
 			want: Command{Action: "fork", Into: "codex", Model: "gpt-5.6", Target: session.Target{Provider: "claude"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
 		},
 		{
@@ -188,8 +178,6 @@ func TestParseRejects(t *testing.T) {
 		{"install-skill", "codex", "--into", "claude"},  // --into only applies to fork
 		{"install-skill", "codex/2"},                    // install-skill does not take a rank
 		{"install-skill", "codex", "--list"},            // install-skill is not a render mode
-		{"fork", "claude", "into"},                      // into needs an agent name
-		{"fork", "into", "codex", "into", "claude"},     // into given twice
 		{"claude", "--model", "gpt-5.6"},                // --model only applies to fork
 	}
 	for _, args := range bad {

@@ -23,7 +23,7 @@ import (
 )
 
 const helpText = `Usage: catchup [agent[/<rank>]] [flags]
-       catchup fork [agent] [into <agent>] [--model <name>]
+       catchup fork [agent] [--into <agent>] [--model <name>]
        catchup install-skill [agent]
 
 Agents: codex, claude, agy (Antigravity), opencode, pi-agent
@@ -40,7 +40,7 @@ Flags:
   --html              output HTML
   --md, --markdown    output Markdown (default)
   -n, --limit <N>     cap listing rows (default 20)
-  --into <agent>      alias for the bare into keyword
+  --into <agent>      with fork: start a different agent, seeded with the transcript
   --model <name>      with fork: launch the agent with this model (use the
                       launched agent's own model name, e.g. gpt-5.6)
   -h, --help          print this help
@@ -55,8 +55,8 @@ Examples:
   catchup claude --since-compact  tail after last compaction
   catchup fork                fork the latest session in this directory
   catchup fork codex          fork the latest Codex session in this directory
-  catchup fork codex into claude    continue the Codex session in Claude
-  catchup fork claude into codex --model gpt-5.6  ...on a specific model
+  catchup fork codex --into claude  continue the Codex session in Claude
+  catchup fork claude --into codex --model gpt-5.6  ...on a specific model
   catchup install-skill       install catchup's SKILL.md for every detected agent
   catchup install-skill codex install catchup's SKILL.md for Codex only
 `
@@ -172,9 +172,6 @@ func selectProvider(name string) (session.Provider, error) {
 	default:
 		if name == "list" {
 			return nil, fmt.Errorf(`unknown agent "list"; did you mean catchup --list?`)
-		}
-		if name == "into" {
-			return nil, fmt.Errorf(`"into" belongs to fork; usage: catchup fork [agent] into <agent>`)
 		}
 		if name == "antigravity" {
 			return nil, fmt.Errorf(`unknown agent "antigravity"; Antigravity's agent name is agy`)
@@ -365,7 +362,7 @@ func intoCommand(target, prompt, model string) (string, []string, error) {
 	case session.ProviderPiAgent:
 		return "pi", append(modelArgs("--model", model), prompt), nil
 	default:
-		return "", nil, fmt.Errorf("into: unsupported agent %q", target)
+		return "", nil, fmt.Errorf("--into: unsupported agent %q", target)
 	}
 }
 
