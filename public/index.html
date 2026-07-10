@@ -186,7 +186,7 @@
     <div class="frame">
       <img src="assets/handoff.gif" alt="Claude Code hits its five-hour limit in the left terminal pane; in the right pane, catchup fork claude --into codex starts Codex seeded with the session and it continues the task." loading="eager">
     </div>
-    <figcaption><strong>Actual footage.</strong> Claude Code hits its five-hour limit; one command hands the session to Codex.</figcaption>
+    <figcaption><strong>Scripted demo.</strong> Claude Code hits its five-hour limit; one command hands the session to Codex.</figcaption>
   </figure>
 
   <figure>
@@ -224,14 +224,14 @@
     <h2>Install it before you need it.</h2>
     <p>One binary, no config, MIT-licensed. Works on macOS, Linux, and Windows.</p>
     <div class="cmds">
+      <button class="cmd" onclick="copyCmd(this, 'brew install wilbeibi/tap/catchup')" aria-label="Copy the Homebrew install command">
+        <span class="p">$</span>
+        <span class="t">brew install wilbeibi/tap/catchup</span>
+        <span class="copy">click to copy</span>
+      </button>
       <button class="cmd" onclick="copyCmd(this, 'curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh')" aria-label="Copy the install script command">
         <span class="p">$</span>
         <span class="t">curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh</span>
-        <span class="copy">click to copy</span>
-      </button>
-      <button class="cmd" onclick="copyCmd(this, 'go install github.com/wilbeibi/catchup@latest')" aria-label="Copy the go install command">
-        <span class="p">$</span>
-        <span class="t">go install github.com/wilbeibi/catchup@latest</span>
         <span class="copy">click to copy</span>
       </button>
     </div>
@@ -255,7 +255,7 @@
 
 <footer>
   <div class="inner">
-    <p class="fine">Fine print: catchup is read-only, except <span class="mono">fork</span>. Same-agent forks use the agent's native resume, so they keep real session state. Cross-agent handoffs carry the transcript, not native state. One agent at a time; histories are not merged. Free, open source, MIT. Side effects may include finishing what you started.</p>
+    <p class="fine">Fine print: demos are vhs-scripted dramatizations of the real workflow, not screen recordings. catchup is read-only, except <span class="mono">fork</span>. Same-agent forks use the agent's native resume, so they keep real session state. Cross-agent handoffs carry the transcript, not native state. One agent at a time; histories are not merged. Free, open source, MIT. Side effects may include finishing what you started.</p>
     <div class="links">
       <a href="https://github.com/wilbeibi/catchup">GitHub</a>
       <a href="https://pkg.go.dev/github.com/wilbeibi/catchup">pkg.go.dev</a>

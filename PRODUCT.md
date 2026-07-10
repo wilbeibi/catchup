@@ -33,7 +33,7 @@ roman numerals, the previous design), terminal-dark cosplay, SaaS gradient.
   system mono for commands. No webfonts.
 - Color: white stage, near-black ink, terminal-green `$`, one ochre accent.
   Dark end-card band for the close, like an ad end-card.
-- Imagery: the two demo GIFs are the product footage; they sit on the stage
+- Imagery: the two demo GIFs are vhs-scripted demos (label them as such; no "actual footage" claims); they sit on the stage
   with a floor shadow.
 - Motion: staggered fade-up of the opening monologue lines; nothing else
   except a gentle reveal on the stage. Reduced-motion: everything static.
