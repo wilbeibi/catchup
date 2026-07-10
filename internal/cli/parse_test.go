@@ -48,6 +48,26 @@ func TestParse(t *testing.T) {
 			want: Command{Action: "fork", Into: "claude", SinceCompact: true, Format: session.FormatMarkdown, Limit: DefaultLimit},
 		},
 		{
+			name: "bare into keyword",
+			args: []string{"fork", "claude", "into", "codex"},
+			want: Command{Action: "fork", Into: "codex", Target: session.Target{Provider: "claude"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "bare into without a source agent",
+			args: []string{"fork", "into", "codex"},
+			want: Command{Action: "fork", Into: "codex", Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "into with model",
+			args: []string{"fork", "claude", "into", "codex", "--model", "gpt-5.6"},
+			want: Command{Action: "fork", Into: "codex", Model: "gpt-5.6", Target: session.Target{Provider: "claude"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "model on a native fork",
+			args: []string{"fork", "codex", "--model", "gpt-5.6-mini"},
+			want: Command{Action: "fork", Model: "gpt-5.6-mini", Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
 			name: "install-skill for every provider",
 			args: []string{"install-skill"},
 			want: Command{Action: "install-skill", Format: session.FormatMarkdown, Limit: DefaultLimit},
@@ -144,30 +164,33 @@ func TestParse(t *testing.T) {
 
 func TestParseRejects(t *testing.T) {
 	bad := [][]string{
-		{"--id", "x"},                        // --id needs an explicit agent
-		{"agents://codex/latest"},            // legacy scheme
-		{"codex/019f-abcdef"},                // session id mistaken as a rank
-		{"codex/role/user"},                  // path/role form
-		{"codex?query=x"},                    // query-string form
-		{"codex/2", "--list"},                // rank + list conflict
-		{"codex", "--id", "x", "--list"},     // id + list conflict
-		{"codex", "extra"},                   // two targets
-		{"codex", "--bogus"},                 // unknown flag
-		{"codex", "-n", "0"},                 // non-positive limit
-		{"codex", "-n", "5"},                 // -n without a listing
-		{"-n", "5"},                          // -n without a listing, bare form
-		{"fork", "codex", "-n", "5"},         // -n without a listing, action form
-		{"claude", "59d0fbfa-5187-421b"},     // session id pasted as a second target
-		{"fork", "codex/2"},                  // fork always selects latest
-		{"fork", "codex", "--id", "x"},       // fork does not take selectors
-		{"fork", "codex", "--list"},          // fork is not a render mode
-		{"fork", "codex", "--last", "1"},     // fork is not a trim mode
-		{"fork", "--last", "1"},              // same rejection without provider
-		{"codex", "--into", "claude"},        // --into only applies to fork
+		{"--id", "x"},                                   // --id needs an explicit agent
+		{"agents://codex/latest"},                       // legacy scheme
+		{"codex/019f-abcdef"},                           // session id mistaken as a rank
+		{"codex/role/user"},                             // path/role form
+		{"codex?query=x"},                               // query-string form
+		{"codex/2", "--list"},                           // rank + list conflict
+		{"codex", "--id", "x", "--list"},                // id + list conflict
+		{"codex", "extra"},                              // two targets
+		{"codex", "--bogus"},                            // unknown flag
+		{"codex", "-n", "0"},                            // non-positive limit
+		{"codex", "-n", "5"},                            // -n without a listing
+		{"-n", "5"},                                     // -n without a listing, bare form
+		{"fork", "codex", "-n", "5"},                    // -n without a listing, action form
+		{"claude", "59d0fbfa-5187-421b"},                // session id pasted as a second target
+		{"fork", "codex/2"},                             // fork always selects latest
+		{"fork", "codex", "--id", "x"},                  // fork does not take selectors
+		{"fork", "codex", "--list"},                     // fork is not a render mode
+		{"fork", "codex", "--last", "1"},                // fork is not a trim mode
+		{"fork", "--last", "1"},                         // same rejection without provider
+		{"codex", "--into", "claude"},                   // --into only applies to fork
 		{"fork", "codex", "--into", "claude", "--list"}, // --into is not a render mode
 		{"install-skill", "codex", "--into", "claude"},  // --into only applies to fork
-		{"install-skill", "codex/2"},         // install-skill does not take a rank
-		{"install-skill", "codex", "--list"}, // install-skill is not a render mode
+		{"install-skill", "codex/2"},                    // install-skill does not take a rank
+		{"install-skill", "codex", "--list"},            // install-skill is not a render mode
+		{"fork", "claude", "into"},                      // into needs an agent name
+		{"fork", "into", "codex", "into", "claude"},     // into given twice
+		{"claude", "--model", "gpt-5.6"},                // --model only applies to fork
 	}
 	for _, args := range bad {
 		if _, err := Parse(args); err == nil {

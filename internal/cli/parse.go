@@ -18,7 +18,8 @@ const DefaultLimit = 20
 // place and the rest of the program works with structured data.
 type Command struct {
 	Action       string // optional action subcommand; empty means render history
-	Into         string // --into <agent>: with fork, seed that agent with the transcript
+	Into         string // fork ... into <agent>: seed that agent with the transcript
+	Model        string // --model <name>: with fork, launch the agent with this model
 	Target       session.Target
 	Format       session.Format
 	MetaOnly     bool // -i: render metadata/frontmatter only
@@ -109,12 +110,21 @@ func Parse(args []string) (Command, error) {
 				return cmd, err
 			}
 			cmd.Target.SessionID = v
-		case "--into":
+		case "--into": // quiet alias for the bare `into` keyword
 			v, err := value()
 			if err != nil {
 				return cmd, err
 			}
+			if cmd.Into != "" && cmd.Into != v {
+				return cmd, fmt.Errorf("into given twice (%q and %q)", cmd.Into, v)
+			}
 			cmd.Into = v
+		case "--model":
+			v, err := value()
+			if err != nil {
+				return cmd, err
+			}
+			cmd.Model = v
 		case "-n", "--limit":
 			v, err := value()
 			if err != nil {
@@ -142,6 +152,20 @@ func Parse(args []string) (Command, error) {
 		default:
 			if strings.HasPrefix(tok, "-") && tok != "-" {
 				return cmd, fmt.Errorf("unknown flag %q", tok)
+			}
+			// In fork mode, bare `into` is grammar, not a target:
+			// catchup fork [agent] into <agent>. The word is reserved so it
+			// can never be mistaken for an agent name.
+			if cmd.Action == "fork" && tok == "into" {
+				if i+1 >= len(args) {
+					return cmd, errors.New("into needs an agent name; usage: catchup fork [agent] into <agent>")
+				}
+				i++
+				if cmd.Into != "" && cmd.Into != args[i] {
+					return cmd, fmt.Errorf("into given twice (%q and %q)", cmd.Into, args[i])
+				}
+				cmd.Into = args[i]
+				continue
 			}
 			if haveTgt {
 				if looksLikeSessionID(tok) {
@@ -250,6 +274,9 @@ func normalize(cmd *Command) error {
 	t := cmd.Target
 	if cmd.Into != "" && cmd.Action != "fork" {
 		return errors.New("--into only applies to fork")
+	}
+	if cmd.Model != "" && cmd.Action != "fork" {
+		return errors.New("--model only applies to fork; it names the launched agent's model")
 	}
 	if cmd.Action != "" {
 		// Both action subcommands (fork, install-skill) take only an optional

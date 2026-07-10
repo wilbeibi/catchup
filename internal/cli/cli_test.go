@@ -246,7 +246,7 @@ func TestRunUnknownProvider(t *testing.T) {
 func TestRunForkProvider(t *testing.T) {
 	roots := codexRoot(t)
 	var got session.Source
-	withForkRunner(t, func(ctx context.Context, src session.Source, stdin io.Reader, stdout, stderr io.Writer) error {
+	withForkRunner(t, func(ctx context.Context, src session.Source, model string, stdin io.Reader, stdout, stderr io.Writer) error {
 		got = src
 		return nil
 	})
@@ -310,7 +310,7 @@ func TestRunForkLatestAcrossProviders(t *testing.T) {
 	roots := multiProviderRoots(t)
 
 	var got session.Source
-	withForkRunner(t, func(ctx context.Context, src session.Source, stdin io.Reader, stdout, stderr io.Writer) error {
+	withForkRunner(t, func(ctx context.Context, src session.Source, model string, stdin io.Reader, stdout, stderr io.Writer) error {
 		got = src
 		return nil
 	})
@@ -339,18 +339,21 @@ func TestRunBareReadsLatestAcrossProviders(t *testing.T) {
 
 func TestForkCommand(t *testing.T) {
 	tests := []struct {
-		name string
-		src  session.Source
-		want string
+		name  string
+		src   session.Source
+		model string
+		want  string
 	}{
-		{"codex", session.Source{Ref: session.Ref{Provider: session.ProviderCodex, SessionID: "c1"}}, "codex fork c1"},
-		{"claude", session.Source{Ref: session.Ref{Provider: session.ProviderClaude, SessionID: "cl1"}}, "claude --resume cl1 --fork-session"},
-		{"opencode", session.Source{Ref: session.Ref{Provider: session.ProviderOpenCode, SessionID: "o1"}}, "opencode --session o1 --fork"},
-		{"pi path", session.Source{Ref: session.Ref{Provider: session.ProviderPiAgent, SessionID: "p1"}, Path: "/tmp/pi.jsonl"}, "pi --fork /tmp/pi.jsonl"},
+		{"codex", session.Source{Ref: session.Ref{Provider: session.ProviderCodex, SessionID: "c1"}}, "", "codex fork c1"},
+		{"claude", session.Source{Ref: session.Ref{Provider: session.ProviderClaude, SessionID: "cl1"}}, "", "claude --resume cl1 --fork-session"},
+		{"claude with model", session.Source{Ref: session.Ref{Provider: session.ProviderClaude, SessionID: "cl1"}}, "opus-5", "claude --resume cl1 --fork-session --model opus-5"},
+		{"opencode", session.Source{Ref: session.Ref{Provider: session.ProviderOpenCode, SessionID: "o1"}}, "", "opencode --session o1 --fork"},
+		{"pi path", session.Source{Ref: session.Ref{Provider: session.ProviderPiAgent, SessionID: "p1"}, Path: "/tmp/pi.jsonl"}, "", "pi --fork /tmp/pi.jsonl"},
+		{"codex with model", session.Source{Ref: session.Ref{Provider: session.ProviderCodex, SessionID: "c1"}}, "gpt-5.6", "codex fork c1 -m gpt-5.6"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			name, args, err := forkCommand(tt.src)
+			name, args, err := forkCommand(tt.src, tt.model)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -452,5 +455,41 @@ func TestRunForkIntoSameAgent(t *testing.T) {
 	err := Run(context.Background(), []string{"fork", "codex", "--into", "codex"}, roots, nil, nil, nil, "/home/u/src/proj", nil, &out, &errOut)
 	if err == nil || !strings.Contains(err.Error(), "native fork") {
 		t.Fatalf("want same-agent rejection pointing at native fork, got %v", err)
+	}
+}
+
+func TestIntoCommandModelPlacement(t *testing.T) {
+	tests := []struct {
+		target string
+		want   string // args joined, with PROMPT standing in for the prompt
+	}{
+		{session.ProviderCodex, "-m M PROMPT"},
+		{session.ProviderClaude, "--model M PROMPT"},
+		{session.ProviderAgy, "--model M -i PROMPT"},
+		{session.ProviderOpenCode, "--model M --prompt PROMPT"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.target, func(t *testing.T) {
+			_, args, err := intoCommand(tt.target, "PROMPT", "M")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(args, " "); got != tt.want {
+				t.Fatalf("args %q, want %q (model flag must precede the prompt)", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWarnLargeTranscript(t *testing.T) {
+	var small, big bytes.Buffer
+	warnLargeTranscript(&small, warnTranscriptBytes)
+	if small.Len() != 0 {
+		t.Errorf("warned at threshold: %q", small.String())
+	}
+	warnLargeTranscript(&big, warnTranscriptBytes*3)
+	msg := big.String()
+	if !strings.Contains(msg, "--last") || !strings.Contains(msg, "--since-compact") {
+		t.Errorf("warning must say what to do next, got %q", msg)
 	}
 }

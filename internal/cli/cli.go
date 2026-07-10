@@ -23,7 +23,7 @@ import (
 )
 
 const helpText = `Usage: catchup [agent[/<rank>]] [flags]
-       catchup fork [agent] [--into <agent>]
+       catchup fork [agent] [into <agent>] [--model <name>]
        catchup install-skill [agent]
 
 Agents: codex, claude, agy (Antigravity), opencode, pi-agent
@@ -40,7 +40,9 @@ Flags:
   --html              output HTML
   --md, --markdown    output Markdown (default)
   -n, --limit <N>     cap listing rows (default 20)
-  --into <agent>      with fork: start a different agent, seeded with the transcript
+  --into <agent>      alias for the bare into keyword
+  --model <name>      with fork: launch the agent with this model (use the
+                      launched agent's own model name, e.g. gpt-5.6)
   -h, --help          print this help
 
 Examples:
@@ -53,12 +55,13 @@ Examples:
   catchup claude --since-compact  tail after last compaction
   catchup fork                fork the latest session in this directory
   catchup fork codex          fork the latest Codex session in this directory
-  catchup fork codex --into claude  continue the Codex session in Claude
+  catchup fork codex into claude    continue the Codex session in Claude
+  catchup fork claude into codex --model gpt-5.6  ...on a specific model
   catchup install-skill       install catchup's SKILL.md for every detected agent
   catchup install-skill codex install catchup's SKILL.md for Codex only
 `
 
-type forkRunner func(context.Context, session.Source, io.Reader, io.Writer, io.Writer) error
+type forkRunner func(context.Context, session.Source, string, io.Reader, io.Writer, io.Writer) error
 
 var runFork forkRunner = execFork
 
@@ -88,7 +91,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		if cmd.Into != "" {
 			return forkInto(ctx, src, cmd, stdin, stdout, stderr)
 		}
-		return runFork(ctx, src, stdin, stdout, stderr)
+		return runFork(ctx, src, cmd.Model, stdin, stdout, stderr)
 	}
 
 	if cmd.Action == "install-skill" {
@@ -169,6 +172,9 @@ func selectProvider(name string) (session.Provider, error) {
 	default:
 		if name == "list" {
 			return nil, fmt.Errorf(`unknown agent "list"; did you mean catchup --list?`)
+		}
+		if name == "into" {
+			return nil, fmt.Errorf(`"into" belongs to fork; usage: catchup fork [agent] into <agent>`)
 		}
 		if name == "antigravity" {
 			return nil, fmt.Errorf(`unknown agent "antigravity"; Antigravity's agent name is agy`)
@@ -264,8 +270,8 @@ func newestInCwd(ctx context.Context, prov session.Provider, roots session.Roots
 	return src, nil
 }
 
-func execFork(ctx context.Context, src session.Source, stdin io.Reader, stdout, stderr io.Writer) error {
-	name, args, err := forkCommand(src)
+func execFork(ctx context.Context, src session.Source, model string, stdin io.Reader, stdout, stderr io.Writer) error {
+	name, args, err := forkCommand(src, model)
 	if err != nil {
 		return err
 	}
@@ -317,57 +323,88 @@ func forkInto(ctx context.Context, src session.Source, cmd Command, stdin io.Rea
 	if err := render.Thread(&buf, thread, session.FormatMarkdown); err != nil {
 		return err
 	}
+	warnLargeTranscript(stderr, buf.Len())
 	prompt := fmt.Sprintf("Continue the work from this prior %s session in this directory. Its transcript follows; pick up where it left off.\n\n%s",
 		src.Ref.Provider, buf.String())
-	name, args, err := intoCommand(cmd.Into, prompt)
+	name, args, err := intoCommand(cmd.Into, prompt, cmd.Model)
 	if err != nil {
 		return err
 	}
 	return runInto(ctx, name, args, stdin, stdout, stderr)
 }
 
+// warnTranscriptBytes is the transcript size above which forkInto warns:
+// ~32k tokens at the usual ~4 bytes per token, roughly where a seeded
+// transcript starts crowding a target agent's working context.
+const warnTranscriptBytes = 128 * 1024
+
+// warnLargeTranscript tells the user a seeded transcript is big and, per
+// the errors-as-navigation rule, what to do about it. It never blocks the
+// launch; the warning goes to stderr so the seeded prompt stays clean.
+func warnLargeTranscript(stderr io.Writer, n int) {
+	if n <= warnTranscriptBytes {
+		return
+	}
+	fmt.Fprintf(stderr, "catchup: transcript is large (~%dk tokens); consider --last 20 or --since-compact to trim what gets seeded\n", n/4/1000)
+}
+
 // intoCommand maps a target agent to its "start interactive with an opening
-// prompt" invocation, the seeding counterpart of forkCommand's native resumes.
-func intoCommand(target, prompt string) (string, []string, error) {
+// prompt" invocation, the seeding counterpart of forkCommand's native
+// resumes. A non-empty model becomes the agent's own model flag, placed
+// before the positional prompt where the agents that take one require it.
+func intoCommand(target, prompt, model string) (string, []string, error) {
 	switch target {
 	case session.ProviderCodex:
-		return "codex", []string{prompt}, nil
+		return "codex", append(modelArgs("-m", model), prompt), nil
 	case session.ProviderClaude:
-		return "claude", []string{prompt}, nil
+		return "claude", append(modelArgs("--model", model), prompt), nil
 	case session.ProviderAgy:
-		return "agy", []string{"-i", prompt}, nil
+		return "agy", append(modelArgs("--model", model), "-i", prompt), nil
 	case session.ProviderOpenCode:
-		return "opencode", []string{"--prompt", prompt}, nil
+		return "opencode", append(modelArgs("--model", model), "--prompt", prompt), nil
 	case session.ProviderPiAgent:
-		return "pi", []string{prompt}, nil
+		return "pi", append(modelArgs("--model", model), prompt), nil
 	default:
-		return "", nil, fmt.Errorf("--into: unsupported agent %q", target)
+		return "", nil, fmt.Errorf("into: unsupported agent %q", target)
 	}
 }
 
-func forkCommand(src session.Source) (string, []string, error) {
+// modelArgs renders a model selection as the target agent's flag pair, or
+// nothing when no model was requested. The value is passed verbatim: it
+// must be the launched agent's own model name.
+func modelArgs(flag, model string) []string {
+	if model == "" {
+		return nil
+	}
+	return []string{flag, model}
+}
+
+// forkCommand maps a source session to its agent's native resume/fork
+// invocation. A non-empty model is appended as the agent's own model flag
+// (every supported agent accepts it alongside its resume form).
+func forkCommand(src session.Source, model string) (string, []string, error) {
 	switch src.Ref.Provider {
 	case session.ProviderCodex:
 		if src.Ref.SessionID == "" {
 			return "", nil, fmt.Errorf("fork codex: missing session id")
 		}
-		return "codex", []string{"fork", src.Ref.SessionID}, nil
+		return "codex", append([]string{"fork", src.Ref.SessionID}, modelArgs("-m", model)...), nil
 	case session.ProviderClaude:
 		if src.Ref.SessionID == "" {
 			return "", nil, fmt.Errorf("fork claude: missing session id")
 		}
-		return "claude", []string{"--resume", src.Ref.SessionID, "--fork-session"}, nil
+		return "claude", append([]string{"--resume", src.Ref.SessionID, "--fork-session"}, modelArgs("--model", model)...), nil
 	case session.ProviderAgy:
 		if src.Ref.SessionID == "" {
 			return "", nil, fmt.Errorf("fork agy: missing session id")
 		}
 		// Antigravity has no fork; --conversation is its native resume.
-		return "agy", []string{"--conversation", src.Ref.SessionID}, nil
+		return "agy", append([]string{"--conversation", src.Ref.SessionID}, modelArgs("--model", model)...), nil
 	case session.ProviderOpenCode:
 		if src.Ref.SessionID == "" {
 			return "", nil, fmt.Errorf("fork opencode: missing session id")
 		}
-		return "opencode", []string{"--session", src.Ref.SessionID, "--fork"}, nil
+		return "opencode", append([]string{"--session", src.Ref.SessionID, "--fork"}, modelArgs("--model", model)...), nil
 	case session.ProviderPiAgent:
 		target := src.Ref.SessionID
 		if src.Path != "" {
@@ -376,7 +413,7 @@ func forkCommand(src session.Source) (string, []string, error) {
 		if target == "" {
 			return "", nil, fmt.Errorf("fork pi-agent: missing session id or path")
 		}
-		return "pi", []string{"--fork", target}, nil
+		return "pi", append([]string{"--fork", target}, modelArgs("--model", model)...), nil
 	default:
 		return "", nil, fmt.Errorf("fork: unsupported agent %q", src.Ref.Provider)
 	}
