@@ -4,15 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>catchup - pick up a coding agent session without starting over</title>
-<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Antigravity, OpenCode, or Pi Agent session and hands it to the next agent. Hit a usage limit? catchup fork --into and keep going.">
+<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Antigravity, OpenCode, or Pi Agent session and hands it to the next agent. When one agent hits its usage limit, catchup fork --into lets another continue the work.">
 <meta name="keywords" content="catchup, AI coding agent, Claude Code, Codex, Antigravity, agy, OpenCode, Pi Agent, usage limit, session handoff, context handoff, CLI, Go">
 <meta property="og:type" content="website">
-<meta property="og:title" content="catchup — pick up a coding agent session without starting over">
+<meta property="og:title" content="catchup - pick up a coding agent session without starting over">
 <meta property="og:description" content="Your agent hit its usage limit mid-task. One command hands the session to the next agent, already caught up.">
 <meta property="og:url" content="https://catchup.pages.dev/">
+<meta property="og:image" content="https://catchup.pages.dev/assets/social-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Two terminal panes: Claude Code hits its usage limit; catchup fork hands the session to Codex.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="catchup — pick up a coding agent session without starting over">
+<meta name="twitter:title" content="catchup - pick up a coding agent session without starting over">
 <meta name="twitter:description" content="Your agent hit its usage limit mid-task. One command hands the session to the next agent, already caught up.">
+<meta name="twitter:image" content="https://catchup.pages.dev/assets/social-card.png">
 <link rel="canonical" href="https://catchup.pages.dev/">
 <link rel="alternate" type="text/markdown" href="/index.md">
 <meta name="theme-color" content="#ffffff">
@@ -27,7 +32,7 @@
   "description": "CLI that reads Claude Code, Codex, Antigravity, OpenCode & Pi Agent session history and hands the conversation to the next agent as clean Markdown.",
   "url": "https://catchup.pages.dev/",
   "downloadUrl": "https://github.com/wilbeibi/catchup",
-  "softwareHelp": "https://pkg.go.dev/github.com/wilbeibi/catchup",
+  "softwareHelp": "https://github.com/wilbeibi/catchup#usage",
   "license": "https://opensource.org/licenses/MIT",
   "programmingLanguage": "Go",
   "author": { "@type": "Person", "name": "wilbeibi", "url": "https://github.com/wilbeibi" }
@@ -76,18 +81,24 @@
   }
   .cmd:hover { background: #33312b; }
   .cmd .p { color: #8fbf5f; flex-shrink: 0; }
-  .cmd .t { overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .cmd .t { overflow-x: auto; white-space: nowrap; scrollbar-width: none; user-select: text; -webkit-user-select: text; }
   .cmd .copy { color: #a49c8b; font-size: 11px; white-space: nowrap; flex-shrink: 0; border-left: 1px solid #4a4639; padding-left: 12px; }
 
   /* the white stage */
   figure { margin: 0; padding: clamp(36px, 6vh, 72px) 0 0; }
   figure .frame {
     border-radius: 10px; overflow-x: auto; background: #1e1e2e;
-    box-shadow: 0 30px 40px -32px rgba(20, 18, 12, 0.5);
+    box-shadow: 0 20px 28px -24px rgba(20, 18, 12, 0.45);
   }
   figure img { display: block; width: 100%; min-width: 720px; height: auto; }
   figcaption { font-size: 14px; color: #5a554c; margin-top: 14px; max-width: 68ch; }
   figcaption strong { color: #1b1a18; font-weight: 700; }
+  /* the demo is wider than a phone; say so instead of hoping the scroll is found */
+  .swipehint { display: none; }
+  @media (max-width: 760px) {
+    .swipehint { display: inline; color: #9c5310; font-weight: 700; }
+    figure .frame { -webkit-overflow-scrolling: touch; }
+  }
 
   /* Q&A */
   .qa { padding: clamp(56px, 9vh, 100px) 0 0; }
@@ -134,11 +145,12 @@
      timeline never fires (fullpage renders, older engines) */
   @keyframes lift { from { transform: translateY(16px); } to { transform: none; } }
   @media (prefers-reduced-motion: no-preference) {
-    .enter > * { animation: rise .7s cubic-bezier(0.16, 1, 0.3, 1) both; }
-    .enter > *:nth-child(2) { animation-delay: .12s; }
-    .enter > *:nth-child(3) { animation-delay: .24s; }
-    .enter > *:nth-child(4) { animation-delay: .36s; }
-    .enter > *:nth-child(5) { animation-delay: .48s; }
+    /* short stagger: the hero copy must not read as a blank region on slow renders */
+    .enter > * { animation: rise .45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .enter > *:nth-child(2) { animation-delay: .06s; }
+    .enter > *:nth-child(3) { animation-delay: .12s; }
+    .enter > *:nth-child(4) { animation-delay: .18s; }
+    .enter > *:nth-child(5) { animation-delay: .24s; }
     figure .frame { animation: lift both; animation-timeline: view(); animation-range: entry 5% cover 22%; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -155,7 +167,7 @@
 <nav>
   <a class="wordmark" href="https://catchup.pages.dev/"><span>catchup</span><span class="cursor">_</span></a>
   <div class="navlinks">
-    <a href="https://pkg.go.dev/github.com/wilbeibi/catchup">docs</a>
+    <a href="https://github.com/wilbeibi/catchup#usage">docs</a>
     <a href="https://github.com/wilbeibi/catchup">GitHub</a>
   </div>
 </nav>
@@ -176,7 +188,7 @@
       <span class="copy">click to copy</span>
     </button>
     <div class="monologue" style="margin-top: 22px;">
-      <p>Codex opens, already caught up on the conversation. It picks up the job. <span class="quiet">That's the whole product.</span></p>
+      <p>Codex opens, already caught up on the conversation, and picks up where Claude stopped.</p>
     </div>
   </div>
 </header>
@@ -186,14 +198,14 @@
     <div class="frame">
       <img src="assets/handoff.gif" alt="Claude Code hits its five-hour limit in the left terminal pane; in the right pane, catchup fork claude --into codex starts Codex seeded with the session and it continues the task." loading="eager">
     </div>
-    <figcaption><strong>Scripted demo.</strong> Claude Code hits its five-hour limit; one command hands the session to Codex.</figcaption>
+    <figcaption><span class="swipehint">← swipe the frame · </span><strong>Scripted demo.</strong> Claude Code hits its five-hour limit; one command hands the session to Codex.</figcaption>
   </figure>
 
   <figure>
     <div class="frame">
       <img src="assets/recall.gif" alt="An agent searches past sessions by keyword with catchup -q, then opens the matching session by id." loading="lazy">
     </div>
-    <figcaption><strong>Also works days later.</strong> Search old sessions by keyword, open the one you meant, keep going.</figcaption>
+    <figcaption><span class="swipehint">← swipe the frame · </span><strong>Also works days later.</strong> Search old sessions by keyword, open the one you meant, keep going.</figcaption>
   </figure>
 </div>
 
@@ -202,7 +214,7 @@
     <h2>Reasonable questions</h2>
     <dl>
       <dt>What actually gets handed over?</dt>
-      <dd>The conversation: what you asked, what was decided, what's left. Tool calls, command output, and reasoning traces are stripped, so the next agent reads a clean transcript instead of a log file.</dd>
+      <dd>The conversation itself: your messages and the agent's replies. Tool calls, command output, and reasoning traces are stripped, so the next agent reads a clean transcript instead of a log file.</dd>
 
       <dt>Same agent, new day?</dt>
       <dd><code>catchup fork</code> resumes through the agent's own native path, with real session state. Cross-agent, <code>catchup fork claude --into codex</code> seeds the new agent with the transcript.</dd>
@@ -214,7 +226,7 @@
       <dd>Yes. <code>catchup install-skill</code> teaches your agents the command; after that, "catch up on the last Codex session" just works.</dd>
 
       <dt>Does it merge histories across agents?</dt>
-      <dd>No. One agent at a time. It's a handoff, not a blender.</dd>
+      <dd>No. It reads one agent's session at a time and hands that single session to one other agent.</dd>
     </dl>
   </div>
 </section>
@@ -222,7 +234,7 @@
 <section class="install">
   <div class="col">
     <h2>Install it before you need it.</h2>
-    <p>One binary, no config, MIT-licensed. Works on macOS, Linux, and Windows.</p>
+    <p>One binary, no config, MIT-licensed. Works on macOS, Linux, and Windows. Everything runs locally: catchup reads agent history on your machine and makes no network or model calls.</p>
     <div class="cmds">
       <button class="cmd" onclick="copyCmd(this, 'brew install wilbeibi/tap/catchup')" aria-label="Copy the Homebrew install command">
         <span class="p">$</span>
@@ -235,8 +247,8 @@
         <span class="copy">click to copy</span>
       </button>
     </div>
-    <p class="alt">Then, optionally: <code>catchup install-skill</code> so your agents know it exists.</p>
-    <p class="agents">Works with <strong>Claude Code</strong>, <strong>Codex</strong>, <strong>Antigravity</strong> (<code>agy</code>), <strong>OpenCode</strong>, and <strong>Pi Agent</strong>. Any direction.</p>
+    <p class="alt">On Windows, grab the zip from <a href="https://github.com/wilbeibi/catchup/releases/latest" style="color: inherit;">the latest release</a>. Then, optionally: <code>catchup install-skill</code> so your agents know it exists.</p>
+    <p class="agents">Works with Claude Code, Codex, Antigravity (<code>agy</code>), OpenCode, and Pi Agent, in any direction.</p>
   </div>
 </section>
 
@@ -248,14 +260,14 @@
     </div>
     <div class="actions">
       <a class="primary" href="https://github.com/wilbeibi/catchup">Star on GitHub</a>
-      <a class="secondary" href="https://pkg.go.dev/github.com/wilbeibi/catchup">Read the reference</a>
+      <a class="secondary" href="https://github.com/wilbeibi/catchup#usage">Read the docs</a>
     </div>
   </div>
 </div>
 
 <footer>
   <div class="inner">
-    <p class="fine">Fine print: demos are vhs-scripted dramatizations of the real workflow, not screen recordings. catchup is read-only, except <span class="mono">fork</span>. Same-agent forks use the agent's native resume, so they keep real session state. Cross-agent handoffs carry the transcript, not native state. One agent at a time; histories are not merged. Free, open source, MIT. Side effects may include finishing what you started.</p>
+    <p class="fine">Fine print: demos are vhs-scripted dramatizations of the real workflow, not screen recordings. catchup is read-only, except <span class="mono">fork</span>. Same-agent forks use the agent's native resume, so they keep real session state. Cross-agent handoffs carry the transcript, not native state. One agent at a time; histories are not merged. Free, open source, MIT.</p>
     <div class="links">
       <a href="https://github.com/wilbeibi/catchup">GitHub</a>
       <a href="https://pkg.go.dev/github.com/wilbeibi/catchup">pkg.go.dev</a>
@@ -265,13 +277,36 @@
 </footer>
 
 <script>
+  // Success is only claimed after the clipboard promise resolves; on failure
+  // (permissions, insecure context) the command text is selected so a manual
+  // copy still works.
   function copyCmd(btn, cmd) {
-    try { navigator.clipboard.writeText(cmd); } catch (e) {}
-    var el = btn.querySelector('.copy');
-    if (!el) return;
-    el.textContent = 'copied ✓';
-    clearTimeout(btn.__t);
-    btn.__t = setTimeout(function () { el.textContent = 'click to copy'; }, 1600);
+    var flash = function (msg) {
+      var el = btn.querySelector('.copy');
+      if (!el) return;
+      el.textContent = msg;
+      clearTimeout(btn.__t);
+      btn.__t = setTimeout(function () { el.textContent = 'click to copy'; }, 1600);
+    };
+    var fallback = function () {
+      var t = btn.querySelector('.t');
+      if (t && window.getSelection) {
+        var r = document.createRange();
+        r.selectNodeContents(t);
+        var s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(r);
+      }
+      flash('select + copy');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(cmd).then(
+        function () { flash('copied ✓'); },
+        fallback
+      );
+    } else {
+      fallback();
+    }
   }
 </script>
 </body>
