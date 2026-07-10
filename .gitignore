@@ -11,3 +11,8 @@ go.work.sum
 
 # Design docs (local reference only)
 /docs
+
+# agent instruction files stay local
+CLAUDE.md
+AGENTS.md
+.claude/
