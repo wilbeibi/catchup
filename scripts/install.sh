@@ -20,7 +20,17 @@ case "$arch" in
   *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 
-base="https://github.com/$REPO/releases/latest/download"
+# Resolve the latest tag once, then download everything from it: two separate
+# fetches of releases/latest could straddle a release being published and fail
+# the checksum comparison with artifacts from different releases.
+tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest")
+tag=${tag##*/}
+case "$tag" in
+  v*) ;;
+  *) echo "could not resolve the latest release tag (got ${tag:-nothing})" >&2; exit 1 ;;
+esac
+
+base="https://github.com/$REPO/releases/download/$tag"
 archive="catchup_${os}_${arch}.tar.gz"
 tmp=$(mktemp -d)
 trap 'rm -f "$tmp/$archive" "$tmp/checksums.txt" "$tmp/catchup"; rmdir "$tmp"' EXIT
@@ -47,7 +57,7 @@ tar -xzf "$tmp/$archive" -C "$tmp" catchup
 
 mkdir -p "$DIR"
 install -m 0755 "$tmp/catchup" "$DIR/catchup"
-echo "installed $DIR/catchup (verify with: catchup --version)"
+echo "installed $DIR/catchup ($tag)"
 
 case ":$PATH:" in
   *":$DIR:"*) ;;
