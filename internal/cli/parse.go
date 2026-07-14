@@ -20,6 +20,7 @@ type Command struct {
 	Action       string // optional action subcommand; empty means render history
 	Into         string // --into <agent>: with fork, seed that agent with the transcript
 	Model        string // --model <name>: with fork, launch the agent with this model
+	From         string // --from <file|-|http(s) url>: with fork --into, seed from this artifact instead of a provider store
 	Dir          string // --dir <path>: select sessions from this directory instead of the cwd
 	Target       session.Target
 	Format       session.Format
@@ -125,6 +126,18 @@ func Parse(args []string) (Command, error) {
 				return cmd, err
 			}
 			cmd.Model = v
+		case "--from":
+			v, err := value()
+			if err != nil {
+				return cmd, err
+			}
+			// Rejected here, not in normalize: an empty From reads as
+			// "flag absent" there, and the invocation would silently
+			// degrade into a plain fork.
+			if v == "" {
+				return cmd, errors.New("--from needs a value: a file path, - (stdin), or an http(s) URL")
+			}
+			cmd.From = v
 		case "-n", "--limit":
 			v, err := value()
 			if err != nil {
@@ -267,6 +280,35 @@ func looksLikeRemoteDir(dir string) bool {
 	return true
 }
 
+// validateFromSpelling enforces D6's closed set of --from shapes: a file
+// path, - (stdin), or a plain http(s) URL. Every other shape is a transport,
+// and transports live in the shell — so each rejection names the pipe (or
+// presigned URL) that replaces it.
+func validateFromSpelling(from string) error {
+	if from == "-" || isHTTPURL(from) {
+		return nil
+	}
+	if scheme, _, ok := strings.Cut(from, "://"); ok {
+		if scheme == "s3" {
+			return errors.New("--from takes a file, - (stdin), or an http(s) URL; presign the object (aws s3 presign) or pipe it: aws s3 cp <s3-url> - | catchup fork --into <agent> --from -")
+		}
+		return fmt.Errorf("--from takes a file, - (stdin), or an http(s) URL, not %s://; pipe the fetch instead: <fetch it> | catchup fork --into <agent> --from -", scheme)
+	}
+	if looksLikeRemoteDir(from) {
+		return errors.New("--from is local; for another machine's file, pipe it: ssh <host> cat <path> | catchup fork --into <agent> --from -")
+	}
+	return nil
+}
+
+// isHTTPURL reports whether a --from value is the URL spelling. Only plain
+// http(s) counts: every other scheme is rejected by validateFromSpelling,
+// because the reach of "anything" comes from stdin and http, never from
+// per-service integrations.
+func isHTTPURL(s string) bool {
+	l := strings.ToLower(s)
+	return strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://")
+}
+
 // isProviderName reports whether s is a syntactically valid provider name. This
 // is what rejects URI debris (query strings, paths, schemes) at the grammar
 // layer; whether the name maps to a real provider is checked later by dispatch.
@@ -293,7 +335,7 @@ func normalize(cmd *Command) error {
 	}
 	if cmd.Action == "install-skill" {
 		if cmd.List || cmd.MetaOnly || cmd.Full || cmd.LastN > 0 || cmd.SinceCompact ||
-			cmd.Dir != "" || t.Query != "" || t.Rank > 0 || t.SessionID != "" {
+			cmd.Dir != "" || cmd.From != "" || t.Query != "" || t.Rank > 0 || t.SessionID != "" {
 			return errors.New("install-skill takes only an agent name")
 		}
 	}
@@ -314,6 +356,29 @@ func normalize(cmd *Command) error {
 			return errors.New("fork cannot be combined with --since-compact (with --into it bounds the seeded transcript)")
 		case cmd.Full && !intoFork:
 			return errors.New("fork cannot be combined with --full (with --into it seeds the unclamped transcript)")
+		}
+	}
+	// --from replaces the provider store as the session source (D6): the
+	// artifact is the selection, so the store selectors can never apply; and
+	// until catchup parses artifacts back into a Thread, neither can the
+	// trims — those errors navigate to trimming at render time instead.
+	if cmd.From != "" {
+		switch {
+		case cmd.Action != "fork":
+			return errors.New("--from only applies to fork --into; the artifact is already the rendered form — open it directly to read it")
+		case cmd.Into == "":
+			return errors.New("--from needs --into <agent>: an artifact carries no native state to resume")
+		case t.Provider != "" || t.Query != "" || t.Rank > 0 || t.SessionID != "":
+			return errors.New("--from is the session source; an agent name, -q, /rank, and --id select from a provider store and do not apply")
+		case cmd.Dir != "":
+			return errors.New("--from reads an artifact; --dir scopes provider stores and does not apply")
+		case cmd.LastN > 0 || cmd.SinceCompact:
+			return errors.New("--last/--since-compact do not apply to --from (the artifact is seeded verbatim); trim when rendering: catchup <agent> --last 20 > s.md")
+		case cmd.Full:
+			return errors.New("--full does not apply to --from; the artifact was clamped (or not) when it was rendered")
+		}
+		if err := validateFromSpelling(cmd.From); err != nil {
+			return err
 		}
 	}
 	switch {

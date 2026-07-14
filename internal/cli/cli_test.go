@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -783,6 +785,114 @@ func TestRunClampsOversizedEntries(t *testing.T) {
 	}
 	if strings.Contains(prompt, "elided") {
 		t.Error("--full seed was still clamped")
+	}
+}
+
+func withTTY(t *testing.T, open func() (io.ReadCloser, error)) {
+	t.Helper()
+	old := openTTY
+	openTTY = open
+	t.Cleanup(func() { openTTY = old })
+}
+
+// forkFromRun launches one fork --from invocation against a capturing into
+// runner, with no provider roots at all — proving the artifact path never
+// touches a session store.
+func forkFromRun(t *testing.T, stdin io.Reader, args ...string) (name string, prompt string, childStdin io.Reader, err error) {
+	t.Helper()
+	var gotArgs []string
+	withIntoRunner(t, func(ctx context.Context, n string, a []string, in io.Reader, stdout, stderr io.Writer) error {
+		name, gotArgs, childStdin = n, a, in
+		return nil
+	})
+	var out, errOut bytes.Buffer
+	err = Run(context.Background(), args, session.Roots{}, nil, nil, nil, "test", "", stdin, &out, &errOut)
+	if len(gotArgs) > 0 {
+		prompt = gotArgs[len(gotArgs)-1]
+	}
+	return name, prompt, childStdin, err
+}
+
+func TestRunForkFromFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "handoff.md")
+	if err := os.WriteFile(path, []byte("# prior session\ncarry on with the parser"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	name, prompt, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", path)
+	if err != nil {
+		t.Fatalf("fork --from file error: %v", err)
+	}
+	if name != "claude" {
+		t.Fatalf("launched %q, want claude", name)
+	}
+	for _, want := range []string{"carry on with the parser", "Source: " + path, "transcript or handoff notes"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("seed prompt missing %q:\n%.300s", want, prompt)
+		}
+	}
+}
+
+func TestRunForkFromStdin(t *testing.T) {
+	fakeTTY := io.NopCloser(strings.NewReader("user typing"))
+	withTTY(t, func() (io.ReadCloser, error) { return fakeTTY, nil })
+
+	pipe := strings.NewReader("piped transcript body")
+	_, prompt, childStdin, err := forkFromRun(t, pipe, "fork", "--into", "codex", "--from", "-")
+	if err != nil {
+		t.Fatalf("fork --from - error: %v", err)
+	}
+	if !strings.Contains(prompt, "piped transcript body") || !strings.Contains(prompt, "Source: stdin") {
+		t.Errorf("seed prompt wrong:\n%.300s", prompt)
+	}
+	if childStdin != io.Reader(fakeTTY) {
+		t.Error("launched agent must get the reopened terminal, not the exhausted pipe")
+	}
+}
+
+func TestRunForkFromStdinNoTTY(t *testing.T) {
+	withTTY(t, func() (io.ReadCloser, error) { return nil, fmt.Errorf("no controlling terminal") })
+	_, _, _, err := forkFromRun(t, strings.NewReader("body"), "fork", "--into", "codex", "--from", "-")
+	if err == nil || !strings.Contains(err.Error(), "--from <path>") {
+		t.Fatalf("want no-terminal error navigating to a file, got %v", err)
+	}
+}
+
+func TestRunForkFromURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "remote transcript body")
+	}))
+	defer srv.Close()
+
+	_, prompt, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", srv.URL)
+	if err != nil {
+		t.Fatalf("fork --from url error: %v", err)
+	}
+	if !strings.Contains(prompt, "remote transcript body") || !strings.Contains(prompt, "Source: "+srv.URL) {
+		t.Errorf("seed prompt wrong:\n%.300s", prompt)
+	}
+
+	bad := httptest.NewServer(http.NotFoundHandler())
+	defer bad.Close()
+	if _, _, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", bad.URL); err == nil || !strings.Contains(err.Error(), "404") {
+		t.Fatalf("want status error for non-200, got %v", err)
+	}
+}
+
+func TestRunForkFromEmptyArtifact(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty.md")
+	if err := os.WriteFile(path, []byte("  \n\t\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", path)
+	if err == nil || !strings.Contains(err.Error(), "nothing to seed") {
+		t.Fatalf("want empty-artifact error, got %v", err)
+	}
+}
+
+func TestRunForkFromUnknownAgent(t *testing.T) {
+	_, _, _, err := forkFromRun(t, nil, "fork", "--into", "bogus", "--from", "s.md")
+	if err == nil || !strings.Contains(err.Error(), "unknown agent") {
+		t.Fatalf("want unknown agent error before any read, got %v", err)
 	}
 }
 

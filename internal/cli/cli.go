@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 
 const helpText = `Usage: catchup [agent[/<rank>]] [flags]
        catchup fork [agent[/<rank>]] [--into <agent>] [--model <name>]
+       catchup fork --into <agent> --from <file | - | url>
        catchup install-skill [agent]
 
 Agents: codex, claude, agy (Antigravity), opencode, pi-agent
@@ -45,6 +47,8 @@ Flags:
   --md, --markdown    output Markdown (default)
   -n, --limit <N>     cap listing rows (default 20)
   --into <agent>      with fork: start a different agent, seeded with the transcript
+  --from <src>        with fork --into: seed from a transcript file, - (stdin),
+                      or http(s) URL instead of a local session store
   --model <name>      with fork: launch the agent with this model (use the
                       launched agent's own model name, e.g. gpt-5.6)
   --version           print the catchup version
@@ -65,6 +69,7 @@ Examples:
   catchup fork codex -q "auth"  fork the Codex session matching a keyword
   catchup fork codex --into claude  continue the Codex session in Claude
   catchup fork claude --into codex --model gpt-5.6  ...on a specific model
+  catchup fork --into claude --from handoff.md  continue from a saved transcript
   catchup install-skill       install catchup's SKILL.md for every detected agent
   catchup install-skill codex install catchup's SKILL.md for Codex only
 
@@ -74,6 +79,11 @@ Recipes — stdout is the wire format, so pipes and files are the transport:
   ssh box catchup codex --last 20       read a session from another machine
   catchup codex > handoff.md            a file travels by anything — scp,
                                         wormhole, S3, Dropbox, a paste
+  catchup fork --into claude --from handoff.md
+                                        ...and this is the receiving end: seed
+                                        any agent from a file, URL, or stdin
+  ssh box catchup codex | catchup fork --into claude --from -
+                                        another machine's session, no file
   git worktree add ../fix && cd ../fix && catchup fork claude --dir ~/src/proj
                                         continue a session without two agents
                                         editing one tree
@@ -123,6 +133,9 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 	}
 
 	if cmd.Action == "fork" {
+		if cmd.From != "" {
+			return forkFrom(ctx, cmd, stdin, stdout, stderr)
+		}
 		src, ok, err := locateForkSource(ctx, roots, cmd, cwd, stdout, stderr)
 		if err != nil {
 			return err
@@ -503,6 +516,100 @@ func forkInto(ctx context.Context, src session.Source, cmd Command, stdin io.Rea
 		return err
 	}
 	return runInto(ctx, name, args, stdin, stdout, stderr)
+}
+
+// openTTY reopens the controlling terminal. It becomes the launched agent's
+// stdin when --from - consumed the pipe; a var so tests can stand in a fake
+// terminal.
+var openTTY = func() (io.ReadCloser, error) { return os.Open("/dev/tty") }
+
+// forkFrom is the artifact half of fork (D6 level 1): it seeds the --into
+// agent from a document that did not come from a provider store — a file,
+// stdin, or a plain-GET URL. The artifact is seeded verbatim (any text
+// document works, not only catchup output), so no Thread is built and the
+// trims cannot apply; parse.go rejects those combinations. Same-agent --into
+// is allowed by construction: no native state stands behind an artifact, so
+// the seed is the best continuation there is.
+func forkFrom(ctx context.Context, cmd Command, stdin io.Reader, stdout, stderr io.Writer) error {
+	if _, err := selectProvider(cmd.Into); err != nil {
+		return err
+	}
+	body, err := readArtifact(ctx, cmd.From, stdin)
+	if err != nil {
+		return err
+	}
+	label := cmd.From
+	if cmd.From == "-" {
+		label = "stdin"
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return fmt.Errorf("--from %s: the artifact is empty; nothing to seed", label)
+	}
+	warnLargeTranscript(stderr, len(body))
+	prompt := fmt.Sprintf("Continue the work described in this document — a prior agent session's transcript or handoff notes. Pick up where it left off.\n\nSource: %s\n\n%s",
+		label, body)
+	name, args, err := intoCommand(cmd.Into, prompt, cmd.Model)
+	if err != nil {
+		return err
+	}
+	// --from - consumed the pipe, so the launched agent gets the controlling
+	// terminal instead of an exhausted reader (the fzf / git-am pattern).
+	if cmd.From == "-" {
+		tty, err := openTTY()
+		if err != nil {
+			return errors.New("--from -: stdin fed the artifact and no terminal is left for the agent; save it to a file and use --from <path>")
+		}
+		defer tty.Close()
+		stdin = tty
+	}
+	return runInto(ctx, name, args, stdin, stdout, stderr)
+}
+
+// readArtifact fetches the --from artifact's bytes. The spelling was
+// validated at parse time; the three shapes just dispatch here.
+func readArtifact(ctx context.Context, from string, stdin io.Reader) ([]byte, error) {
+	switch {
+	case from == "-":
+		if stdin == nil {
+			return nil, errors.New("--from -: stdin is not available")
+		}
+		b, err := io.ReadAll(stdin)
+		if err != nil {
+			return nil, fmt.Errorf("--from -: %w", err)
+		}
+		return b, nil
+	case isHTTPURL(from):
+		return fetchArtifact(ctx, from)
+	default:
+		b, err := os.ReadFile(expandTilde(from))
+		if err != nil {
+			return nil, fmt.Errorf("--from: %w", err)
+		}
+		return b, nil
+	}
+}
+
+// fetchArtifact GETs an http(s) artifact with the stdlib client: redirects
+// followed (presigned and share links use them), auth only ever inside the
+// URL, no size cap — warnLargeTranscript prices the seed instead.
+func fetchArtifact(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("--from %s: %w", url, err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("--from %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("--from %s: %s", url, resp.Status)
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("--from %s: %w", url, err)
+	}
+	return b, nil
 }
 
 // warnTranscriptBytes is the transcript size above which forkInto warns:

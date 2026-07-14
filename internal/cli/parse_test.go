@@ -168,6 +168,26 @@ func TestParse(t *testing.T) {
 			want: Command{Dir: "/home/u/proj", Target: session.Target{Provider: "claude"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
 		},
 		{
+			name: "fork into from a file artifact",
+			args: []string{"fork", "--into", "claude", "--from", "handoff.md"},
+			want: Command{Action: "fork", Into: "claude", From: "handoff.md", Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "fork from stdin with a model",
+			args: []string{"fork", "--into", "codex", "--from=-", "--model", "gpt-5.6"},
+			want: Command{Action: "fork", Into: "codex", From: "-", Model: "gpt-5.6", Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "fork from an https url",
+			args: []string{"fork", "--into", "claude", "--from", "https://box.ts.net/s.md"},
+			want: Command{Action: "fork", Into: "claude", From: "https://box.ts.net/s.md", Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "fork from allows same-agent into",
+			args: []string{"fork", "--into", "claude", "--from", "~/notes/handoff.md"},
+			want: Command{Action: "fork", Into: "claude", From: "~/notes/handoff.md", Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
 			name: "fork composes with --dir",
 			args: []string{"fork", "claude", "--dir", "../proj"},
 			want: Command{Action: "fork", Dir: "../proj", Target: session.Target{Provider: "claude"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
@@ -189,37 +209,52 @@ func TestParse(t *testing.T) {
 
 func TestParseRejects(t *testing.T) {
 	bad := [][]string{
-		{"--id", "x"},                                   // --id needs an explicit agent
-		{"agents://codex/latest"},                       // legacy scheme
-		{"codex/019f-abcdef"},                           // session id mistaken as a rank
-		{"codex/role/user"},                             // path/role form
-		{"codex?query=x"},                               // query-string form
-		{"codex/2", "--list"},                           // rank + list conflict
-		{"codex", "--id", "x", "--list"},                // id + list conflict
-		{"codex", "extra"},                              // two targets
-		{"codex", "--bogus"},                            // unknown flag
-		{"codex", "-n", "0"},                            // non-positive limit
-		{"codex", "-n", "5"},                            // -n without a listing
-		{"-n", "5"},                                     // -n without a listing, bare form
-		{"fork", "codex", "-n", "5"},                    // -n without a listing, action form
-		{"claude", "59d0fbfa-5187-421b"},                // session id pasted as a second target
-		{"fork", "codex", "--list"},                     // fork is not a render mode; -q covers listing needs
-		{"fork", "codex", "--last", "1"},                // fork is not a trim mode
-		{"fork", "--last", "1"},                         // same rejection without provider
-		{"fork", "codex", "--full"},                     // --full only shapes an --into seed
-		{"codex", "--into", "claude"},                   // --into only applies to fork
-		{"fork", "codex", "--into", "claude", "--list"}, // --into is not a render mode
-		{"install-skill", "codex", "--into", "claude"},  // --into only applies to fork
-		{"install-skill", "codex/2"},                    // install-skill does not take a rank
-		{"install-skill", "codex", "--list"},            // install-skill is not a render mode
-		{"install-skill", "codex", "-q", "x"},           // install-skill does not take selectors
-		{"claude", "--model", "gpt-5.6"},                // --model only applies to fork
-		{"claude", "--full", "--json"},                  // --json is never clamped
-		{"claude", "--full", "--list"},                  // listings show no bodies to clamp
-		{"claude", "--full", "-i"},                      // -i shows no bodies to clamp
-		{"install-skill", "codex", "--dir", "/x"},       // install-skill takes no scope
-		{"claude", "--id", "x", "--dir", "/y"},          // --id already names one session
-		{"claude", "--dir", "box:/home/u/proj"},         // scp syntax: --dir is local-only
+		{"--id", "x"},                                                     // --id needs an explicit agent
+		{"agents://codex/latest"},                                         // legacy scheme
+		{"codex/019f-abcdef"},                                             // session id mistaken as a rank
+		{"codex/role/user"},                                               // path/role form
+		{"codex?query=x"},                                                 // query-string form
+		{"codex/2", "--list"},                                             // rank + list conflict
+		{"codex", "--id", "x", "--list"},                                  // id + list conflict
+		{"codex", "extra"},                                                // two targets
+		{"codex", "--bogus"},                                              // unknown flag
+		{"codex", "-n", "0"},                                              // non-positive limit
+		{"codex", "-n", "5"},                                              // -n without a listing
+		{"-n", "5"},                                                       // -n without a listing, bare form
+		{"fork", "codex", "-n", "5"},                                      // -n without a listing, action form
+		{"claude", "59d0fbfa-5187-421b"},                                  // session id pasted as a second target
+		{"fork", "codex", "--list"},                                       // fork is not a render mode; -q covers listing needs
+		{"fork", "codex", "--last", "1"},                                  // fork is not a trim mode
+		{"fork", "--last", "1"},                                           // same rejection without provider
+		{"fork", "codex", "--full"},                                       // --full only shapes an --into seed
+		{"codex", "--into", "claude"},                                     // --into only applies to fork
+		{"fork", "codex", "--into", "claude", "--list"},                   // --into is not a render mode
+		{"install-skill", "codex", "--into", "claude"},                    // --into only applies to fork
+		{"install-skill", "codex/2"},                                      // install-skill does not take a rank
+		{"install-skill", "codex", "--list"},                              // install-skill is not a render mode
+		{"install-skill", "codex", "-q", "x"},                             // install-skill does not take selectors
+		{"claude", "--model", "gpt-5.6"},                                  // --model only applies to fork
+		{"claude", "--full", "--json"},                                    // --json is never clamped
+		{"claude", "--full", "--list"},                                    // listings show no bodies to clamp
+		{"claude", "--full", "-i"},                                        // -i shows no bodies to clamp
+		{"install-skill", "codex", "--dir", "/x"},                         // install-skill takes no scope
+		{"claude", "--id", "x", "--dir", "/y"},                            // --id already names one session
+		{"claude", "--dir", "box:/home/u/proj"},                           // scp syntax: --dir is local-only
+		{"claude", "--from", "s.md"},                                      // --from only applies to fork --into
+		{"fork", "--from", "s.md"},                                        // --from needs --into: nothing to resume
+		{"fork", "codex", "--into", "claude", "--from", "s.md"},           // an agent name selects a store
+		{"fork", "codex/2", "--into", "claude", "--from", "s.md"},         // a rank selects from a store
+		{"fork", "--into", "claude", "--from", "s.md", "-q", "auth"},      // -q selects from a store
+		{"fork", "--into", "claude", "--from", "s.md", "--id", "x"},       // --id selects from a store
+		{"fork", "--into", "claude", "--from", "s.md", "--dir", "/x"},     // --dir scopes stores, not artifacts
+		{"fork", "--into", "claude", "--from", "s.md", "--last", "5"},     // artifacts seed verbatim
+		{"fork", "--into", "claude", "--from", "s.md", "--since-compact"}, // artifacts seed verbatim
+		{"fork", "--into", "claude", "--from", "s.md", "--full"},          // artifacts are never re-clamped
+		{"fork", "--into", "claude", "--from", "s3://bucket/s.md"},        // per-service schemes are transports
+		{"fork", "--into", "claude", "--from", "file:///home/u/s.md"},     // use the plain path
+		{"fork", "--into", "claude", "--from", "box:s.md"},                // scp syntax: pipe over ssh instead
+		{"fork", "--into", "claude", "--from", ""},                        // empty value
+		{"install-skill", "codex", "--from", "s.md"},                      // install-skill takes nothing
 	}
 	for _, args := range bad {
 		if _, err := Parse(args); err == nil {
