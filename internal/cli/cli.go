@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/wilbeibi/catchup/internal/agy"
@@ -626,28 +627,18 @@ func fetchArtifact(ctx context.Context, rawURL string) ([]byte, error) {
 	return b, nil
 }
 
-// warnTranscriptBytes is the prompt size above which seedInto warns: ~16k
-// tokens at the usual ~4 bytes per token, where a seeded transcript starts
-// crowding the target agent's working context.
-const warnTranscriptBytes = 64 * 1024
-
-// maxPromptBytes is seedInto's hard ceiling. The whole prompt travels as a
-// single exec argument and Linux caps one argument at 128 KB
-// (MAX_ARG_STRLEN), so a bigger seed cannot launch there — and a launch
-// that works only on some platforms is worse than an error that names the
-// trim. Held just under the cap to leave room for exec overhead.
-const maxPromptBytes = 127 * 1024
+// warnTranscriptBytes is the prompt size above which seedInto warns:
+// ~32k tokens at the usual ~4 bytes per token, roughly where a seeded
+// transcript starts crowding a target agent's working context.
+const warnTranscriptBytes = 128 * 1024
 
 // seedInto starts the --into agent with a transcript as its opening prompt —
 // the launch half shared by forkInto and forkFrom. trimHint names the
 // oversize recovery in the caller's own grammar, because the two sources
 // trim differently: a store read re-runs with --last/--since-compact, an
-// artifact is re-rendered at its source. Both size gates carry the hint;
-// the warning goes to stderr so the seeded prompt stays clean.
+// artifact is re-rendered at its source. The warning goes to stderr so the
+// seeded prompt stays clean.
 func seedInto(ctx context.Context, into, model, prompt, trimHint string, stdin io.Reader, stdout, stderr io.Writer) error {
-	if len(prompt) > maxPromptBytes {
-		return fmt.Errorf("seed prompt is %d KB and a single exec argument caps at %d KB; %s", len(prompt)/1024, maxPromptBytes/1024, trimHint)
-	}
 	if len(prompt) > warnTranscriptBytes {
 		fmt.Fprintf(stderr, "catchup: transcript is large (~%dk tokens); %s\n", len(prompt)/4/1000, trimHint)
 	}
@@ -655,7 +646,15 @@ func seedInto(ctx context.Context, into, model, prompt, trimHint string, stdin i
 	if err != nil {
 		return err
 	}
-	return runInto(ctx, name, args, stdin, stdout, stderr)
+	err = runInto(ctx, name, args, stdin, stdout, stderr)
+	// The OS, not catchup, owns the argv ceiling (Linux caps one exec
+	// argument at 128 KB; other platforms are roomier), so no size is
+	// pre-rejected here — but exec's own refusal is terse, so translate
+	// it into the trim navigation.
+	if errors.Is(err, syscall.E2BIG) {
+		return fmt.Errorf("cannot launch %s: the %d KB seed prompt exceeds this OS's argument limit; %s", into, len(prompt)/1024, trimHint)
+	}
+	return err
 }
 
 // intoCommand maps a target agent to its "start interactive with an opening

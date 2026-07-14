@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -904,13 +905,12 @@ func TestRunForkFromUnknownAgent(t *testing.T) {
 
 func TestSeedIntoSizeGates(t *testing.T) {
 	ctx := context.Background()
-	launched := 0
+	var runErr error
 	withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-		launched++
-		return nil
+		return runErr
 	})
 
-	// At the warning threshold: silent, launches.
+	// At the warning threshold: silent.
 	var quiet bytes.Buffer
 	if err := seedInto(ctx, "claude", "", strings.Repeat("a", warnTranscriptBytes), "HINT", nil, nil, &quiet); err != nil {
 		t.Fatal(err)
@@ -927,30 +927,34 @@ func TestSeedIntoSizeGates(t *testing.T) {
 	if !strings.Contains(warned.String(), "HINT") {
 		t.Errorf("warning must carry the caller's trim hint, got %q", warned.String())
 	}
-	if launched != 2 {
-		t.Fatalf("launched %d times, want 2", launched)
+
+	// No size is pre-rejected — the OS owns the argv ceiling — but exec's
+	// terse E2BIG refusal is translated into the same trim navigation.
+	runErr = fmt.Errorf("fork/exec /usr/bin/claude: %w", syscall.E2BIG)
+	err := seedInto(ctx, "claude", "", "small prompt", "HINT", nil, nil, &quiet)
+	if err == nil || !strings.Contains(err.Error(), "argument limit") || !strings.Contains(err.Error(), "HINT") {
+		t.Fatalf("want E2BIG translated with the trim hint, got %v", err)
 	}
 
-	// Above the exec argv ceiling: errors with the hint, never launches —
-	// exec would fail anyway (Linux MAX_ARG_STRLEN) with a worse message.
-	var errOut bytes.Buffer
-	err := seedInto(ctx, "claude", "", strings.Repeat("a", maxPromptBytes+1), "HINT", nil, nil, &errOut)
-	if err == nil || !strings.Contains(err.Error(), "HINT") {
-		t.Fatalf("want oversize error carrying the trim hint, got %v", err)
-	}
-	if launched != 2 {
-		t.Error("oversized seed must not launch")
+	// Every other launch failure passes through untouched.
+	runErr = fmt.Errorf("exec: %q: executable file not found", "claude")
+	if err := seedInto(ctx, "claude", "", "small prompt", "HINT", nil, nil, &quiet); err == nil || strings.Contains(err.Error(), "HINT") {
+		t.Fatalf("non-E2BIG failure must pass through untranslated, got %v", err)
 	}
 }
 
-// The oversize error under --from must name the artifact-side trim, never
-// the --last/--since-compact flags that --from itself rejects.
+// When the OS refuses an oversized --from seed, the navigation must name the
+// artifact-side trim, never the --last/--since-compact flags --from rejects.
 func TestRunForkFromOversizedArtifact(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "big.md")
-	if err := os.WriteFile(path, bytes.Repeat([]byte("x"), maxPromptBytes+1), 0o644); err != nil {
+	if err := os.WriteFile(path, bytes.Repeat([]byte("x"), 200*1024), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, _, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", path)
+	withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		return fmt.Errorf("fork/exec /usr/bin/claude: %w", syscall.E2BIG)
+	})
+	var out, errOut bytes.Buffer
+	err := Run(context.Background(), []string{"fork", "--into", "claude", "--from", path}, session.Roots{}, nil, nil, nil, "test", "", nil, &out, &errOut)
 	if err == nil || !strings.Contains(err.Error(), "catchup <agent> --last 20 > s.md") {
 		t.Fatalf("want artifact-side trim navigation, got %v", err)
 	}
