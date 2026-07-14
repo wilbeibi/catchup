@@ -20,9 +20,11 @@ type Command struct {
 	Action       string // optional action subcommand; empty means render history
 	Into         string // --into <agent>: with fork, seed that agent with the transcript
 	Model        string // --model <name>: with fork, launch the agent with this model
+	Dir          string // --dir <path>: select sessions from this directory instead of the cwd
 	Target       session.Target
 	Format       session.Format
 	MetaOnly     bool // -i: render metadata/frontmatter only
+	Full         bool // --full: render oversized entries whole instead of clamped
 	LastN        int  // --last N: keep only the last N exchanges/turns (0 = all)
 	SinceCompact bool // --since-compact: keep only the final compaction segment
 	List         bool // --list: print the ranked listing and exit
@@ -145,6 +147,14 @@ func Parse(args []string) (Command, error) {
 			cmd.LastN = n
 		case "--since-compact":
 			cmd.SinceCompact = true
+		case "--full":
+			cmd.Full = true
+		case "--dir":
+			v, err := value()
+			if err != nil {
+				return cmd, err
+			}
+			cmd.Dir = v
 		case "-h", "--help":
 			cmd.Help = true
 		case "--version":
@@ -240,6 +250,23 @@ func applyTarget(cmd *Command, spec string) error {
 	return nil
 }
 
+// looksLikeRemoteDir reports whether a --dir value reads as scp syntax
+// (host:path). A colon before any path anchor is far more likely a
+// transcription of ssh habits than a real directory name; anchor the path
+// (/, ./, ~/) to use a local directory that genuinely contains ':'. WHERE
+// and SCOPE are separate axes — a directory flag never names a machine.
+func looksLikeRemoteDir(dir string) bool {
+	i := strings.IndexByte(dir, ':')
+	if i <= 0 {
+		return false
+	}
+	switch dir[0] {
+	case '/', '.', '~':
+		return false
+	}
+	return true
+}
+
 // isProviderName reports whether s is a syntactically valid provider name. This
 // is what rejects URI debris (query strings, paths, schemes) at the grammar
 // layer; whether the name maps to a real provider is checked later by dispatch.
@@ -264,28 +291,29 @@ func normalize(cmd *Command) error {
 	if cmd.Model != "" && cmd.Action != "fork" {
 		return errors.New("--model only applies to fork; it names the launched agent's model")
 	}
-	if cmd.Action != "" {
-		// Both action subcommands (fork, install-skill) take only an optional
-		// bare provider — no render-mode selectors apply to either. The trims
-		// are the one exception: fork --into seeds another agent with a
-		// rendered transcript, so --last / --since-compact meaningfully bound
-		// what gets seeded.
+	if cmd.Action == "install-skill" {
+		if cmd.List || cmd.MetaOnly || cmd.Full || cmd.LastN > 0 || cmd.SinceCompact ||
+			cmd.Dir != "" || t.Query != "" || t.Rank > 0 || t.SessionID != "" {
+			return errors.New("install-skill takes only an agent name")
+		}
+	}
+	if cmd.Action == "fork" {
+		// fork launches an agent, so the render views make no sense on it.
+		// The selectors (-q, /rank, --id) pick the fork source exactly as
+		// they pick a read; the trims and --full apply only with --into,
+		// where they shape the seeded transcript.
 		intoFork := cmd.Into != ""
 		switch {
 		case cmd.List:
-			return fmt.Errorf("%s cannot be combined with --list", cmd.Action)
+			return errors.New("fork cannot be combined with --list; fork -q lists the matches when several fit")
 		case cmd.MetaOnly:
-			return fmt.Errorf("%s cannot be combined with -i", cmd.Action)
+			return errors.New("fork cannot be combined with -i")
 		case cmd.LastN > 0 && !intoFork:
-			return fmt.Errorf("%s cannot be combined with --last", cmd.Action)
+			return errors.New("fork cannot be combined with --last (with --into it bounds the seeded transcript)")
 		case cmd.SinceCompact && !intoFork:
-			return fmt.Errorf("%s cannot be combined with --since-compact", cmd.Action)
-		case t.Query != "":
-			return fmt.Errorf("%s cannot be combined with -q", cmd.Action)
-		case t.Rank > 0:
-			return fmt.Errorf("%s cannot be combined with a /rank selector", cmd.Action)
-		case t.SessionID != "":
-			return fmt.Errorf("%s cannot be combined with --id", cmd.Action)
+			return errors.New("fork cannot be combined with --since-compact (with --into it bounds the seeded transcript)")
+		case cmd.Full && !intoFork:
+			return errors.New("fork cannot be combined with --full (with --into it seeds the unclamped transcript)")
 		}
 	}
 	switch {
@@ -297,22 +325,34 @@ func normalize(cmd *Command) error {
 		return errors.New("--id cannot be combined with --list")
 	case t.SessionID != "" && t.Query != "":
 		return errors.New("--id cannot be combined with -q")
+	case t.SessionID != "" && cmd.Dir != "":
+		return errors.New("--id selects one exact session; --dir does not apply")
+	case looksLikeRemoteDir(cmd.Dir):
+		return errors.New("--dir is a local directory; to read another machine's sessions run catchup there: ssh box catchup <agent> --dir <path>")
 	case t.Rank > 0 && cmd.List:
 		return errors.New("a /rank selector cannot be combined with --list")
 	case cmd.MetaOnly && cmd.List:
 		return errors.New("-i cannot be combined with --list")
 	case cmd.LastN > 0 && cmd.SinceCompact:
 		return errors.New("--last cannot be combined with --since-compact; they are alternative trims")
+	case cmd.Full && cmd.Format == session.FormatJSON:
+		return errors.New("--json is never clamped; --full only applies to --md/--html")
+	case cmd.Full && cmd.MetaOnly:
+		return errors.New("--full cannot be combined with -i; -i shows no message bodies")
 	}
 
-	// -q implies list mode unless a concrete row was selected by rank or id.
-	if t.Query != "" && t.Rank == 0 && t.SessionID == "" {
+	// -q implies list mode unless a concrete row was selected by rank or id —
+	// or the action is fork, where a bare query picks the fork source instead.
+	if cmd.Action == "" && t.Query != "" && t.Rank == 0 && t.SessionID == "" {
 		cmd.List = true
 	}
 	// Checked after the implicit rule so -q listings are covered too. There
 	// is no HTML listing view; ignoring the flag would be a silent no-op.
 	if cmd.List && cmd.Format == session.FormatHTML {
 		return errors.New("--html does not apply to listings; use --json or the default table")
+	}
+	if cmd.List && cmd.Full {
+		return errors.New("--full does not apply to listings; message bodies are not shown")
 	}
 	return nil
 }

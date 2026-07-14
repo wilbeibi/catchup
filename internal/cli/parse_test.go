@@ -137,6 +137,41 @@ func TestParse(t *testing.T) {
 			args: []string{"codex", "--info"},
 			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, MetaOnly: true, Limit: DefaultLimit},
 		},
+		{
+			name: "--full disables clamping",
+			args: []string{"codex", "--full"},
+			want: Command{Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Full: true, Limit: DefaultLimit},
+		},
+		{
+			name: "fork selects by rank",
+			args: []string{"fork", "codex/3"},
+			want: Command{Action: "fork", Target: session.Target{Provider: "codex", Rank: 3}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "fork selects by id",
+			args: []string{"fork", "codex", "--id", "019f-abc"},
+			want: Command{Action: "fork", Target: session.Target{Provider: "codex", SessionID: "019f-abc"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "fork query does not imply list mode",
+			args: []string{"fork", "codex", "-q", "auth"},
+			want: Command{Action: "fork", Target: session.Target{Provider: "codex", Query: "auth"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "fork into allows --full on the seed",
+			args: []string{"fork", "codex", "--into", "claude", "--full"},
+			want: Command{Action: "fork", Into: "claude", Full: true, Target: session.Target{Provider: "codex"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "--dir substitutes the selection directory",
+			args: []string{"claude", "--dir", "/home/u/proj"},
+			want: Command{Dir: "/home/u/proj", Target: session.Target{Provider: "claude"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
+		{
+			name: "fork composes with --dir",
+			args: []string{"fork", "claude", "--dir", "../proj"},
+			want: Command{Action: "fork", Dir: "../proj", Target: session.Target{Provider: "claude"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
+		},
 	}
 
 	for _, tt := range tests {
@@ -168,17 +203,23 @@ func TestParseRejects(t *testing.T) {
 		{"-n", "5"},                                     // -n without a listing, bare form
 		{"fork", "codex", "-n", "5"},                    // -n without a listing, action form
 		{"claude", "59d0fbfa-5187-421b"},                // session id pasted as a second target
-		{"fork", "codex/2"},                             // fork always selects latest
-		{"fork", "codex", "--id", "x"},                  // fork does not take selectors
-		{"fork", "codex", "--list"},                     // fork is not a render mode
+		{"fork", "codex", "--list"},                     // fork is not a render mode; -q covers listing needs
 		{"fork", "codex", "--last", "1"},                // fork is not a trim mode
 		{"fork", "--last", "1"},                         // same rejection without provider
+		{"fork", "codex", "--full"},                     // --full only shapes an --into seed
 		{"codex", "--into", "claude"},                   // --into only applies to fork
 		{"fork", "codex", "--into", "claude", "--list"}, // --into is not a render mode
 		{"install-skill", "codex", "--into", "claude"},  // --into only applies to fork
 		{"install-skill", "codex/2"},                    // install-skill does not take a rank
 		{"install-skill", "codex", "--list"},            // install-skill is not a render mode
+		{"install-skill", "codex", "-q", "x"},           // install-skill does not take selectors
 		{"claude", "--model", "gpt-5.6"},                // --model only applies to fork
+		{"claude", "--full", "--json"},                  // --json is never clamped
+		{"claude", "--full", "--list"},                  // listings show no bodies to clamp
+		{"claude", "--full", "-i"},                      // -i shows no bodies to clamp
+		{"install-skill", "codex", "--dir", "/x"},       // install-skill takes no scope
+		{"claude", "--id", "x", "--dir", "/y"},          // --id already names one session
+		{"claude", "--dir", "box:/home/u/proj"},         // scp syntax: --dir is local-only
 	}
 	for _, args := range bad {
 		if _, err := Parse(args); err == nil {

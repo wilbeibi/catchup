@@ -25,7 +25,7 @@ import (
 )
 
 const helpText = `Usage: catchup [agent[/<rank>]] [flags]
-       catchup fork [agent] [--into <agent>] [--model <name>]
+       catchup fork [agent[/<rank>]] [--into <agent>] [--model <name>]
        catchup install-skill [agent]
 
 Agents: codex, claude, agy (Antigravity), opencode, pi-agent
@@ -38,7 +38,9 @@ Flags:
   -i, --info          print metadata only, no messages
   --last <N>          show last N exchanges only
   --since-compact     show only the final compaction segment
-  --json              output JSON
+  --dir <path>        select sessions from this directory instead of the cwd
+  --full              show oversized messages whole instead of clamped
+  --json              output JSON (never clamped)
   --html              output HTML
   --md, --markdown    output Markdown (default)
   -n, --limit <N>     cap listing rows (default 20)
@@ -56,12 +58,25 @@ Examples:
   catchup codex/3             3rd most recent Codex session
   catchup claude --last 5     last 5 exchanges
   catchup claude --since-compact  tail after last compaction
+  catchup claude --dir ~/src/proj  latest session from another directory
   catchup fork                fork the latest session in this directory
   catchup fork codex          fork the latest Codex session in this directory
+  catchup fork codex/3        fork the 3rd most recent Codex session
+  catchup fork codex -q "auth"  fork the Codex session matching a keyword
   catchup fork codex --into claude  continue the Codex session in Claude
   catchup fork claude --into codex --model gpt-5.6  ...on a specific model
   catchup install-skill       install catchup's SKILL.md for every detected agent
   catchup install-skill codex install catchup's SKILL.md for Codex only
+
+Recipes — stdout is the wire format, so pipes and files are the transport:
+  catchup claude | rg -C3 "deploy"      search inside a session
+  catchup claude --html > session.html  share a session as a page
+  ssh box catchup codex --last 20       read a session from another machine
+  catchup codex > handoff.md            a file travels by anything — scp,
+                                        wormhole, S3, Dropbox, a paste
+  git worktree add ../fix && cd ../fix && catchup fork claude --dir ~/src/proj
+                                        continue a session without two agents
+                                        editing one tree
 `
 
 type forkRunner func(context.Context, session.Source, string, io.Reader, io.Writer, io.Writer) error
@@ -73,8 +88,9 @@ var runFork forkRunner = execFork
 // session.ResolveCurrent); it lets the default selection target the live
 // session exactly rather than guessing by recency. skillDirs maps a provider
 // name to its global Agent Skills directory (see session.ResolveSkillDirs)
-// and skillMD is the SKILL.md content to install there; both are only used by
-// the install-skill action. version is the stamped build version --version
+// and skillMD is the SKILL.md content to install there; install-skill writes
+// them, every other action reads skillDirs to warn when an installed copy
+// drifts from this build. version is the stamped build version --version
 // reports.
 func Run(ctx context.Context, args []string, roots session.Roots, current map[string]string, skillDirs map[string]string, skillMD []byte, version, cwd string, stdin io.Reader, stdout, stderr io.Writer) error {
 	cmd, err := Parse(args)
@@ -91,10 +107,28 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		return nil
 	}
 
+	// Installed skill copies ship separately from the binary; surface version
+	// drift before doing anything else. install-skill itself is the fix.
+	if cmd.Action != "install-skill" {
+		warnSkillDrift(skillDirs, version, stderr)
+	}
+
+	// --dir overrides the directory that scopes every selection below —
+	// reads, listings, and fork sources alike. It also outranks an injected
+	// current-session id: pointing at another directory means pointing away
+	// from the session this process is sitting in.
+	if cmd.Dir != "" {
+		cwd = expandTilde(cmd.Dir)
+		current = nil
+	}
+
 	if cmd.Action == "fork" {
-		src, err := locateForkSource(ctx, roots, cmd, cwd)
+		src, ok, err := locateForkSource(ctx, roots, cmd, cwd, stdout, stderr)
 		if err != nil {
 			return err
+		}
+		if !ok {
+			return nil // several query matches: the listing printed is the answer
 		}
 		if cmd.Into != "" {
 			return forkInto(ctx, src, cmd, stdin, stdout, stderr)
@@ -103,7 +137,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 	}
 
 	if cmd.Action == "install-skill" {
-		return installSkill(cmd.Target.Provider, skillDirs, skillMD, stdout)
+		return installSkill(cmd.Target.Provider, skillDirs, skillMD, version, stdout)
 	}
 
 	// With no agent named, the agent owning the newest session in cwd is the
@@ -150,7 +184,24 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 	if cmd.LastN > 0 {
 		thread = lastTurns(thread, cmd.LastN)
 	}
+	if !cmd.Full && cmd.Format != session.FormatJSON {
+		thread = clampEntries(thread)
+	}
 	return render.Thread(stdout, thread, cmd.Format)
+}
+
+// expandTilde resolves a leading ~ against this process's home. The shell
+// normally does this, but --dir=~/x (the inline = form) and values quoted in
+// scripts arrive with the tilde intact.
+func expandTilde(dir string) string {
+	if dir != "~" && !strings.HasPrefix(dir, "~/") {
+		return dir
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return dir
+	}
+	return filepath.Join(home, strings.TrimPrefix(dir, "~"))
 }
 
 func providerNames() []string {
@@ -191,19 +242,71 @@ func selectProvider(name string) (session.Provider, error) {
 	}
 }
 
-func locateForkSource(ctx context.Context, roots session.Roots, cmd Command, cwd string) (session.Source, error) {
-	if cmd.Target.Provider != "" {
-		prov, err := selectProvider(cmd.Target.Provider)
+// locateForkSource picks the session a fork continues. Selectors compose
+// exactly as they do for a read — --id resolves the exact session, /rank
+// indexes the (optionally query-filtered) cwd listing, and the default is
+// the newest session in cwd — with one fork-specific rule: a bare query
+// forks only on a unique hit. On several hits it prints the listing and
+// returns ok=false without an error; the listing plus a rerun hint is the
+// answer, matching how -q behaves on a read.
+func locateForkSource(ctx context.Context, roots session.Roots, cmd Command, cwd string, stdout, stderr io.Writer) (session.Source, bool, error) {
+	if cmd.Target.Provider == "" {
+		src, err := newestAcross(ctx, roots, cwd)
 		if err != nil {
-			return session.Source{}, err
+			return session.Source{}, false, fmt.Errorf("fork: %w", err)
 		}
-		return newestInCwd(ctx, prov, roots, cmd.Target.Provider, cwd)
+		t := cmd.Target
+		if t.Query == "" && t.Rank == 0 && t.SessionID == "" {
+			return src, true, nil
+		}
+		// A selector re-selects within the detected agent, same as a read.
+		cmd.Target.Provider = src.Ref.Provider
 	}
-	src, err := newestAcross(ctx, roots, cwd)
+	prov, err := selectProvider(cmd.Target.Provider)
 	if err != nil {
-		return session.Source{}, fmt.Errorf("fork: %w", err)
+		return session.Source{}, false, err
 	}
-	return src, nil
+
+	t := cmd.Target
+	if t.Query != "" && t.Rank == 0 && t.SessionID == "" {
+		sums, err := prov.List(ctx, roots, session.ListOptions{Query: t.Query, Cwd: cwd, Limit: cmd.Limit})
+		if err != nil {
+			return session.Source{}, false, err
+		}
+		switch len(sums) {
+		case 0:
+			return session.Source{}, false, fmt.Errorf("fork %s: no sessions matching %q in %s", t.Provider, t.Query, cwd)
+		case 1:
+			src, err := prov.Resolve(ctx, roots, sums[0].Ref.SessionID)
+			if err != nil {
+				return session.Source{}, false, err
+			}
+			return stampProvider(src, t.Provider), true, nil
+		default:
+			if err := render.List(stdout, t.Provider, sums, cmd.Format); err != nil {
+				return session.Source{}, false, err
+			}
+			fmt.Fprintf(stderr, "catchup: %d sessions match %q; rerun as catchup fork %s/<rank> -q %q\n",
+				len(sums), t.Query, t.Provider, t.Query)
+			return session.Source{}, false, nil
+		}
+	}
+
+	src, err := locate(ctx, prov, roots, cmd, cwd, nil)
+	if err != nil {
+		return session.Source{}, false, err
+	}
+	return stampProvider(src, t.Provider), true, nil
+}
+
+// stampProvider fills a Source's provider name when the provider's Resolve
+// left it empty, so downstream dispatch (forkCommand, seed prompts) always
+// knows which agent the session belongs to.
+func stampProvider(src session.Source, name string) session.Source {
+	if src.Ref.Provider == "" {
+		src.Ref.Provider = name
+	}
+	return src
 }
 
 // newestAcross finds the single newest session in cwd across every provider.
@@ -248,8 +351,9 @@ func newestAcross(ctx context.Context, roots session.Roots, cwd string) (session
 // installSkill writes skillMD to "<dir>/catchup/SKILL.md" for one provider, or
 // for every provider in providerNames() when provider is "". Providers with no
 // entry in skillDirs are skipped rather than erroring, so the closed provider
-// set and the skill-directory set can evolve independently.
-func installSkill(provider string, skillDirs map[string]string, skillMD []byte, stdout io.Writer) error {
+// set and the skill-directory set can evolve independently. Each copy is
+// stamped with the build version so later runs can detect drift.
+func installSkill(provider string, skillDirs map[string]string, skillMD []byte, version string, stdout io.Writer) error {
 	names := providerNames()
 	if provider != "" {
 		if _, err := selectProvider(provider); err != nil {
@@ -267,7 +371,7 @@ func installSkill(provider string, skillDirs map[string]string, skillMD []byte, 
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return fmt.Errorf("install-skill %s: %w", name, err)
 		}
-		if err := os.WriteFile(path, skillMD, 0o644); err != nil {
+		if err := os.WriteFile(path, stampSkillVersion(skillMD, version), 0o644); err != nil {
 			return fmt.Errorf("install-skill %s: %w", name, err)
 		}
 		fmt.Fprintf(stdout, "installed %s\n", path)
@@ -383,6 +487,9 @@ func forkInto(ctx context.Context, src session.Source, cmd Command, stdin io.Rea
 	}
 	if cmd.LastN > 0 {
 		thread = lastTurns(thread, cmd.LastN)
+	}
+	if !cmd.Full {
+		thread = clampEntries(thread)
 	}
 	var buf bytes.Buffer
 	if err := render.Thread(&buf, thread, session.FormatMarkdown); err != nil {

@@ -27,7 +27,9 @@ Agents: `codex`, `claude`, `agy` (Antigravity), `opencode`, `pi-agent`.
 - Unclear which session? Run `catchup <agent> --list` first — don't guess.
 - Unclear which flag fits the request (full session, `--last N`, a specific rank/id)? Ask the user instead of guessing.
 - `-q "topic"` implies `--list` — returns a listing, not a session read.
+- Sessions are keyed to the directory where they ran. In a fresh git worktree, a moved repo, or a re-clone, add `--dir <original path>` to select them — e.g. continue work in an isolated tree with `git worktree add ../fix && cd ../fix && catchup fork claude --dir <original dir>`. `--dir` is local-only; for another machine, run catchup there over ssh.
 - To *continue* the same agent's session with full state, suggest the user run `catchup fork` in their terminal — don't transcript-brief when a native fork fits better. To continue in a *different* agent from the terminal, `catchup fork <agent> --into <other-agent>` starts the other agent seeded with the transcript. Add `--model <name>` (the launched agent's own model name) when the user wants a specific model.
 - Output: Markdown, conversation only, tool calls/reasoning already stripped; `-i` for metadata only.
+- Moving a session somewhere else? stdout is the wire format: pipe it (`catchup claude | rg -C3 "topic"`), save it (`catchup codex > handoff.md`) and send the file by any means, or read another machine directly (`ssh box catchup codex --last 20`). No flag needed — the pipe is the transport.
 
 Run `catchup --help` for the full flag list.

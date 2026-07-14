@@ -212,6 +212,46 @@ func TestRunCwdFiltering(t *testing.T) {
 	if strings.Contains(out, "sess-other") {
 		t.Errorf("unexpected sess-other in cwd-filtered listing, got:\n%s", out)
 	}
+
+	// --dir substitutes another directory for the cwd.
+	out = runWithCwd(t, roots, "/somewhere/else", "codex", "--list", "--dir", "/home/u/src/other")
+	if !strings.Contains(out, "sess-other") || strings.Contains(out, "sess-catchup") {
+		t.Errorf("--dir should select exactly the named directory, got:\n%s", out)
+	}
+}
+
+// The worktree recipe: from a fresh directory, --dir points the fork source
+// back at the directory where the sessions actually live.
+func TestRunForkFromAnotherDir(t *testing.T) {
+	roots := codexPairRoot(t) // sessions live in /home/u/src/proj
+	var got session.Source
+	withForkRunner(t, func(ctx context.Context, src session.Source, model string, stdin io.Reader, stdout, stderr io.Writer) error {
+		got = src
+		return nil
+	})
+	var out, errOut bytes.Buffer
+	args := []string{"fork", "codex", "--dir", "/home/u/src/proj"}
+	if err := Run(context.Background(), args, roots, nil, nil, nil, "test", "/somewhere/worktree", nil, &out, &errOut); err != nil {
+		t.Fatalf("Run(%v) error: %v (stderr: %s)", args, err, errOut.String())
+	}
+	if got.Ref.SessionID != "sess-parser" {
+		t.Fatalf("fork --dir dispatched %+v, want newest in named dir (sess-parser)", got.Ref)
+	}
+}
+
+func TestExpandTilde(t *testing.T) {
+	t.Setenv("HOME", "/home/test")
+	tests := []struct{ in, want string }{
+		{"~", "/home/test"},
+		{"~/proj", "/home/test/proj"},
+		{"/abs/path", "/abs/path"},
+		{"~user/x", "~user/x"}, // other users' homes are not resolved
+	}
+	for _, tt := range tests {
+		if got := expandTilde(tt.in); got != tt.want {
+			t.Errorf("expandTilde(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
 }
 
 func TestRunRendersLatestMarkdown(t *testing.T) {
@@ -318,6 +358,16 @@ func TestCurrentSessionBeatsNewest(t *testing.T) {
 	}
 	if strings.Contains(got.String(), "sess-new") {
 		t.Errorf("newest session leaked despite injected current id:\n%s", got.String())
+	}
+
+	// An explicit --dir outranks the injected current id: pointing at a
+	// directory means pointing away from the session this process sits in.
+	var dirOut bytes.Buffer
+	if err := Run(context.Background(), []string{"claude", "--dir", "/home/u/proj"}, roots, current, nil, nil, "test", cwd, nil, &dirOut, &errOut); err != nil {
+		t.Fatalf("Run --dir error: %v (stderr: %s)", err, errOut.String())
+	}
+	if !strings.Contains(dirOut.String(), "session: sess-new") {
+		t.Errorf("--dir should fall back to newest-in-dir, not the injected current id, got:\n%s", dirOut.String())
 	}
 }
 
@@ -564,6 +614,175 @@ func TestIntoCommandModelPlacement(t *testing.T) {
 				t.Fatalf("args %q, want %q (model flag must precede the prompt)", got, tt.want)
 			}
 		})
+	}
+}
+
+// codexPairRoot writes two codex sessions sharing one working directory —
+// sess-parser is newer, so it is rank 1 — letting the fork selector tests
+// prove which session a rank, query, or id picks.
+func codexPairRoot(t *testing.T) session.Roots {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions", "2026", "06", "26")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	write := func(id, text string, mod time.Time) {
+		body := fmt.Sprintf(`{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta","payload":{"id":%q,"cwd":"/home/u/src/proj","cli_version":"0.1"}}
+{"timestamp":"2026-06-26T21:31:55.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":%q}]}}
+`, id, text)
+		p := filepath.Join(dir, "rollout-"+id+".jsonl")
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("sess-auth", "fix the auth flow", now.Add(-time.Hour))
+	write("sess-parser", "refactor the parser pipeline", now)
+	return session.Roots{Codex: root}
+}
+
+func TestRunForkSelectors(t *testing.T) {
+	roots := codexPairRoot(t)
+	cwd := "/home/u/src/proj"
+
+	// fork runs one invocation against a capturing fork runner and reports
+	// what (if anything) was dispatched alongside both output streams.
+	fork := func(args ...string) (src session.Source, forked bool, out, errOut string, err error) {
+		withForkRunner(t, func(ctx context.Context, s session.Source, model string, stdin io.Reader, stdout, stderr io.Writer) error {
+			src, forked = s, true
+			return nil
+		})
+		var o, e bytes.Buffer
+		err = Run(context.Background(), args, roots, nil, nil, nil, "test", cwd, nil, &o, &e)
+		return src, forked, o.String(), e.String(), err
+	}
+
+	// A rank indexes the cwd listing, same as a read.
+	src, forked, _, _, err := fork("fork", "codex/2")
+	if err != nil || !forked || src.Ref.SessionID != "sess-auth" {
+		t.Errorf("fork codex/2 = %v %v %v, want sess-auth", src.Ref, forked, err)
+	}
+
+	// A unique query hit forks immediately.
+	src, forked, _, _, err = fork("fork", "codex", "-q", "auth")
+	if err != nil || !forked || src.Ref.SessionID != "sess-auth" {
+		t.Errorf("fork codex -q auth = %v %v %v, want sess-auth", src.Ref, forked, err)
+	}
+
+	// The query works without an agent name: detection picks the provider,
+	// the query picks the session within it.
+	src, forked, _, _, err = fork("fork", "-q", "auth")
+	if err != nil || !forked || src.Ref.SessionID != "sess-auth" {
+		t.Errorf("fork -q auth = %v %v %v, want sess-auth", src.Ref, forked, err)
+	}
+
+	// --id resolves the exact session.
+	src, forked, _, _, err = fork("fork", "codex", "--id", "sess-parser")
+	if err != nil || !forked || src.Ref.SessionID != "sess-parser" {
+		t.Errorf("fork codex --id sess-parser = %v %v %v, want sess-parser", src.Ref, forked, err)
+	}
+
+	// Several query hits fork nothing: the listing plus a rerun hint is the
+	// answer, and the exit is clean.
+	_, forked, out, errOut, err := fork("fork", "codex", "-q", "the")
+	if err != nil {
+		t.Fatalf("ambiguous fork query errored: %v", err)
+	}
+	if forked {
+		t.Error("ambiguous fork query must not fork")
+	}
+	for _, want := range []string{"sess-auth", "sess-parser"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("ambiguous fork listing missing %s:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(errOut, "rerun as catchup fork codex/<rank>") {
+		t.Errorf("ambiguous fork hint missing:\n%s", errOut)
+	}
+
+	// A query matching nothing is an error, not a silent no-op.
+	if _, _, _, _, err := fork("fork", "codex", "-q", "nonexistent-topic"); err == nil {
+		t.Error("fork with a no-hit query should error")
+	}
+}
+
+// codexBigRoot writes one codex session whose user message is an oversized
+// paste: prose at both edges, a repetitive log blob in the middle.
+func codexBigRoot(t *testing.T) session.Roots {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions", "2026", "06", "26")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	big := "INTRO before the blob\n" +
+		strings.Repeat("2026-06-26T21:00:00 GET /health 200 17ms\n", 200) +
+		"OUTRO after the blob"
+	text, err := json.Marshal(big)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta","payload":{"id":"sess-big","cwd":"/home/u/src/proj","cli_version":"0.1"}}
+{"timestamp":"2026-06-26T21:31:55.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":%s}]}}
+`, text)
+	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-big.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return session.Roots{Codex: root}
+}
+
+func TestRunClampsOversizedEntries(t *testing.T) {
+	roots := codexBigRoot(t)
+	cwd := "/home/u/src/proj"
+
+	// Default render: edges survive, the blob is elided behind a marker.
+	out := runWithCwd(t, roots, cwd, "codex")
+	for _, want := range []string{"INTRO before the blob", "OUTRO after the blob", "elided; rerun with --full"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("clamped render missing %q:\n%.400s", want, out)
+		}
+	}
+	if n := strings.Count(out, "GET /health"); n >= 200 {
+		t.Errorf("clamped render kept all %d blob lines", n)
+	}
+
+	// --full restores the whole entry.
+	full := runWithCwd(t, roots, cwd, "codex", "--full")
+	if strings.Contains(full, "elided") {
+		t.Error("--full still clamped")
+	}
+	if n := strings.Count(full, "GET /health"); n != 200 {
+		t.Errorf("--full kept %d blob lines, want 200", n)
+	}
+
+	// --json stays faithful without any flag.
+	js := runWithCwd(t, roots, cwd, "codex", "--json")
+	if strings.Contains(js, "elided") {
+		t.Error("--json output was clamped")
+	}
+
+	// fork --into seeds the clamped transcript; --full seeds it whole.
+	var prompt string
+	withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		prompt = args[len(args)-1]
+		return nil
+	})
+	var o, e bytes.Buffer
+	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude"}, roots, nil, nil, nil, "test", cwd, nil, &o, &e); err != nil {
+		t.Fatalf("fork --into error: %v (stderr: %s)", err, e.String())
+	}
+	if !strings.Contains(prompt, "elided; rerun with --full") {
+		t.Error("seeded transcript was not clamped")
+	}
+	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude", "--full"}, roots, nil, nil, nil, "test", cwd, nil, &o, &e); err != nil {
+		t.Fatalf("fork --into --full error: %v (stderr: %s)", err, e.String())
+	}
+	if strings.Contains(prompt, "elided") {
+		t.Error("--full seed was still clamped")
 	}
 }
 
