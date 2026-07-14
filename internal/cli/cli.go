@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/wilbeibi/catchup/internal/agy"
 	"github.com/wilbeibi/catchup/internal/claude"
@@ -508,14 +510,10 @@ func forkInto(ctx context.Context, src session.Source, cmd Command, stdin io.Rea
 	if err := render.Thread(&buf, thread, session.FormatMarkdown); err != nil {
 		return err
 	}
-	warnLargeTranscript(stderr, buf.Len())
 	prompt := fmt.Sprintf("Continue the work from this prior %s session in this directory. Its transcript follows; pick up where it left off.\n\n%s",
 		src.Ref.Provider, buf.String())
-	name, args, err := intoCommand(cmd.Into, prompt, cmd.Model)
-	if err != nil {
-		return err
-	}
-	return runInto(ctx, name, args, stdin, stdout, stderr)
+	return seedInto(ctx, cmd.Into, cmd.Model, prompt,
+		"rerun with --last 20 or --since-compact to trim what gets seeded", stdin, stdout, stderr)
 }
 
 // openTTY reopens the controlling terminal. It becomes the launched agent's
@@ -534,24 +532,16 @@ func forkFrom(ctx context.Context, cmd Command, stdin io.Reader, stdout, stderr 
 	if _, err := selectProvider(cmd.Into); err != nil {
 		return err
 	}
+	label := fromLabel(cmd.From)
 	body, err := readArtifact(ctx, cmd.From, stdin)
 	if err != nil {
 		return err
 	}
-	label := cmd.From
-	if cmd.From == "-" {
-		label = "stdin"
-	}
 	if len(bytes.TrimSpace(body)) == 0 {
 		return fmt.Errorf("--from %s: the artifact is empty; nothing to seed", label)
 	}
-	warnLargeTranscript(stderr, len(body))
 	prompt := fmt.Sprintf("Continue the work described in this document — a prior agent session's transcript or handoff notes. Pick up where it left off.\n\nSource: %s\n\n%s",
 		label, body)
-	name, args, err := intoCommand(cmd.Into, prompt, cmd.Model)
-	if err != nil {
-		return err
-	}
 	// --from - consumed the pipe, so the launched agent gets the controlling
 	// terminal instead of an exhausted reader (the fzf / git-am pattern).
 	if cmd.From == "-" {
@@ -562,7 +552,24 @@ func forkFrom(ctx context.Context, cmd Command, stdin io.Reader, stdout, stderr 
 		defer tty.Close()
 		stdin = tty
 	}
-	return runInto(ctx, name, args, stdin, stdout, stderr)
+	return seedInto(ctx, cmd.Into, cmd.Model, prompt,
+		"trim when rendering the artifact: catchup <agent> --last 20 > s.md", stdin, stdout, stderr)
+}
+
+// fromLabel renders a --from value for prompts and error text: stdin gets a
+// name, and a URL drops its query string — presigned links carry their auth
+// there, and the label persists in the seeded agent's own session store.
+func fromLabel(from string) string {
+	switch {
+	case from == "-":
+		return "stdin"
+	case isHTTPURL(from):
+		if u, err := url.Parse(from); err == nil && u.RawQuery != "" {
+			u.RawQuery = ""
+			return u.String()
+		}
+	}
+	return from
 }
 
 // readArtifact fetches the --from artifact's bytes. The spelling was
@@ -589,42 +596,66 @@ func readArtifact(ctx context.Context, from string, stdin io.Reader) ([]byte, er
 	}
 }
 
-// fetchArtifact GETs an http(s) artifact with the stdlib client: redirects
-// followed (presigned and share links use them), auth only ever inside the
-// URL, no size cap — warnLargeTranscript prices the seed instead.
-func fetchArtifact(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// artifactClient fetches --from URLs: one minute end-to-end, because a
+// stalled GET in a scripted invocation would otherwise hang forever —
+// ctrl-C is not standing by everywhere the socket is used.
+var artifactClient = &http.Client{Timeout: time.Minute}
+
+// fetchArtifact GETs an http(s) artifact: redirects followed (presigned and
+// share links use them), auth only ever inside the URL, no size cap — the
+// seedInto gates price the seed instead. Errors carry the query-stripped
+// label, so presigned auth never lands in error text.
+func fetchArtifact(ctx context.Context, rawURL string) ([]byte, error) {
+	label := fromLabel(rawURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("--from %s: %w", url, err)
+		return nil, fmt.Errorf("--from %s: %w", label, err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := artifactClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("--from %s: %w", url, err)
+		return nil, fmt.Errorf("--from %s: %w", label, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("--from %s: %s", url, resp.Status)
+		return nil, fmt.Errorf("--from %s: %s", label, resp.Status)
 	}
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("--from %s: %w", url, err)
+		return nil, fmt.Errorf("--from %s: %w", label, err)
 	}
 	return b, nil
 }
 
-// warnTranscriptBytes is the transcript size above which forkInto warns:
-// ~32k tokens at the usual ~4 bytes per token, roughly where a seeded
-// transcript starts crowding a target agent's working context.
-const warnTranscriptBytes = 128 * 1024
+// warnTranscriptBytes is the prompt size above which seedInto warns: ~16k
+// tokens at the usual ~4 bytes per token, where a seeded transcript starts
+// crowding the target agent's working context.
+const warnTranscriptBytes = 64 * 1024
 
-// warnLargeTranscript tells the user a seeded transcript is big and, per
-// the errors-as-navigation rule, what to do about it. It never blocks the
-// launch; the warning goes to stderr so the seeded prompt stays clean.
-func warnLargeTranscript(stderr io.Writer, n int) {
-	if n <= warnTranscriptBytes {
-		return
+// maxPromptBytes is seedInto's hard ceiling. The whole prompt travels as a
+// single exec argument and Linux caps one argument at 128 KB
+// (MAX_ARG_STRLEN), so a bigger seed cannot launch there — and a launch
+// that works only on some platforms is worse than an error that names the
+// trim. Held just under the cap to leave room for exec overhead.
+const maxPromptBytes = 127 * 1024
+
+// seedInto starts the --into agent with a transcript as its opening prompt —
+// the launch half shared by forkInto and forkFrom. trimHint names the
+// oversize recovery in the caller's own grammar, because the two sources
+// trim differently: a store read re-runs with --last/--since-compact, an
+// artifact is re-rendered at its source. Both size gates carry the hint;
+// the warning goes to stderr so the seeded prompt stays clean.
+func seedInto(ctx context.Context, into, model, prompt, trimHint string, stdin io.Reader, stdout, stderr io.Writer) error {
+	if len(prompt) > maxPromptBytes {
+		return fmt.Errorf("seed prompt is %d KB and a single exec argument caps at %d KB; %s", len(prompt)/1024, maxPromptBytes/1024, trimHint)
 	}
-	fmt.Fprintf(stderr, "catchup: transcript is large (~%dk tokens); consider --last 20 or --since-compact to trim what gets seeded\n", n/4/1000)
+	if len(prompt) > warnTranscriptBytes {
+		fmt.Fprintf(stderr, "catchup: transcript is large (~%dk tokens); %s\n", len(prompt)/4/1000, trimHint)
+	}
+	name, args, err := intoCommand(into, prompt, model)
+	if err != nil {
+		return err
+	}
+	return runInto(ctx, name, args, stdin, stdout, stderr)
 }
 
 // intoCommand maps a target agent to its "start interactive with an opening

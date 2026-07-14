@@ -27,7 +27,12 @@ func splitFrontmatter(md []byte) (body, rest []byte, ok bool) {
 		return nil, nil, false
 	}
 	after := md[len(fmDelim):]
-	end := bytes.Index(after, []byte("\n---"))
+	// The closing delimiter is a whole "---" line: matching a bare "\n---"
+	// would also hit a body line that merely starts with dashes.
+	end := bytes.Index(after, []byte("\n---\n"))
+	if end < 0 && bytes.HasSuffix(after, []byte("\n---")) {
+		end = len(after) - len("\n---")
+	}
 	if end < 0 {
 		return nil, nil, false
 	}

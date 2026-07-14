@@ -863,12 +863,18 @@ func TestRunForkFromURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, prompt, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", srv.URL)
+	// The query string stands in for presigned auth: it must reach the
+	// server but never the seeded prompt, which persists in the receiving
+	// agent's own session store.
+	_, prompt, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", srv.URL+"/s.md?X-Sig=secret")
 	if err != nil {
 		t.Fatalf("fork --from url error: %v", err)
 	}
-	if !strings.Contains(prompt, "remote transcript body") || !strings.Contains(prompt, "Source: "+srv.URL) {
+	if !strings.Contains(prompt, "remote transcript body") || !strings.Contains(prompt, "Source: "+srv.URL+"/s.md") {
 		t.Errorf("seed prompt wrong:\n%.300s", prompt)
+	}
+	if strings.Contains(prompt, "secret") {
+		t.Error("presigned query leaked into the seeded prompt")
 	}
 
 	bad := httptest.NewServer(http.NotFoundHandler())
@@ -896,15 +902,59 @@ func TestRunForkFromUnknownAgent(t *testing.T) {
 	}
 }
 
-func TestWarnLargeTranscript(t *testing.T) {
-	var small, big bytes.Buffer
-	warnLargeTranscript(&small, warnTranscriptBytes)
-	if small.Len() != 0 {
-		t.Errorf("warned at threshold: %q", small.String())
+func TestSeedIntoSizeGates(t *testing.T) {
+	ctx := context.Background()
+	launched := 0
+	withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		launched++
+		return nil
+	})
+
+	// At the warning threshold: silent, launches.
+	var quiet bytes.Buffer
+	if err := seedInto(ctx, "claude", "", strings.Repeat("a", warnTranscriptBytes), "HINT", nil, nil, &quiet); err != nil {
+		t.Fatal(err)
 	}
-	warnLargeTranscript(&big, warnTranscriptBytes*3)
-	msg := big.String()
-	if !strings.Contains(msg, "--last") || !strings.Contains(msg, "--since-compact") {
-		t.Errorf("warning must say what to do next, got %q", msg)
+	if quiet.Len() != 0 {
+		t.Errorf("warned at threshold: %q", quiet.String())
+	}
+
+	// Above it: warns with the caller's own trim hint, still launches.
+	var warned bytes.Buffer
+	if err := seedInto(ctx, "claude", "", strings.Repeat("a", warnTranscriptBytes+1), "HINT", nil, nil, &warned); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(warned.String(), "HINT") {
+		t.Errorf("warning must carry the caller's trim hint, got %q", warned.String())
+	}
+	if launched != 2 {
+		t.Fatalf("launched %d times, want 2", launched)
+	}
+
+	// Above the exec argv ceiling: errors with the hint, never launches —
+	// exec would fail anyway (Linux MAX_ARG_STRLEN) with a worse message.
+	var errOut bytes.Buffer
+	err := seedInto(ctx, "claude", "", strings.Repeat("a", maxPromptBytes+1), "HINT", nil, nil, &errOut)
+	if err == nil || !strings.Contains(err.Error(), "HINT") {
+		t.Fatalf("want oversize error carrying the trim hint, got %v", err)
+	}
+	if launched != 2 {
+		t.Error("oversized seed must not launch")
+	}
+}
+
+// The oversize error under --from must name the artifact-side trim, never
+// the --last/--since-compact flags that --from itself rejects.
+func TestRunForkFromOversizedArtifact(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "big.md")
+	if err := os.WriteFile(path, bytes.Repeat([]byte("x"), maxPromptBytes+1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", path)
+	if err == nil || !strings.Contains(err.Error(), "catchup <agent> --last 20 > s.md") {
+		t.Fatalf("want artifact-side trim navigation, got %v", err)
+	}
+	if strings.Contains(err.Error(), "rerun with --last") {
+		t.Errorf("hint names flags --from rejects: %v", err)
 	}
 }
