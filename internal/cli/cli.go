@@ -28,53 +28,53 @@ import (
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
-const helpText = `Usage: catchup [agent[/<rank>]] [flags]
-       catchup fork [agent[/<rank>]] [--into <agent>] [--model <name>]
+const helpText = `Usage: catchup [agent[/<rank>]] [flags]        read a past session
+       catchup fork [agent] [--into <agent>]   continue one
        catchup fork --into <agent> --from <file | - | url>
        catchup install-skill [agent]
 
 Agents: codex, claude, agy (Antigravity), opencode, pi-agent
-Omit the agent to use whichever one has the newest session in this directory.
+Omit the agent to use whichever has the newest session here. Bare ` + "`catchup`" + `
+prints that session in full, as Markdown. The flags refine three things:
+which session, how much of it, and as what.
 
-Flags:
+RECAP — how much of the session (default: all of it)
+  --since-compact     just the tail after the last compaction
+  --last <N>          just the last N exchanges
+  --full              oversized messages whole, not clamped
+  -i, --info          metadata only, no messages
+
+FIND — which session (default: newest here)
   --list              list recent sessions
-  -q, --query <text>  filter by keyword (implies --list)
-  --id <id>           select by exact session id
-  -i, --info          print metadata only, no messages
-  --last <N>          show last N exchanges only
-  --since-compact     show only the final compaction segment
-  --dir <path>        select sessions from this directory instead of the cwd
-  --full              show oversized messages whole instead of clamped
-  --json              output JSON (never clamped)
-  --html              output HTML
-  --md, --markdown    output Markdown (default)
-  -n, --limit <N>     cap listing rows (default 20)
-  --into <agent>      with fork: start a different agent, seeded with the transcript
-  --from <src>        with fork --into: seed from a transcript file, - (stdin),
-                      or http(s) URL instead of a local session store
-  --model <name>      with fork: launch the agent with this model (use the
-                      launched agent's own model name, e.g. gpt-5.6)
-  --version           print the catchup version
-  -h, --help          print this help
+  -q, --query <text>  search by keyword (implies --list)
+  <agent>/<rank>      the Nth newest, e.g. codex/3
+  --id <id>           an exact session id
+  --dir <path>        sessions from another directory, not the cwd
+  -n, --limit <N>     cap the listing (default 20)
+
+HAND OFF — continue the work
+  fork [agent]        native resume, full state
+  --into <agent>      seed a different agent with the transcript
+  --from <src>        with --into: seed from a file, - (stdin), or http(s) URL
+  --model <name>      launch it on a specific model, e.g. a cheaper one
+                      (the target agent's own model name, e.g. gpt-5.6)
+
+OUTPUT — as what (default: Markdown)
+  --md, --markdown    Markdown (the default)
+  --json              JSON, for scripting (never clamped)
+  --html              a self-contained page, for sharing
+
+Meta: --version (print version) · -h, --help (this text)
 
 Examples:
-  catchup                     latest session from any agent → Markdown
-  catchup claude              latest Claude session → Markdown
-  catchup claude --list       list recent Claude sessions
-  catchup codex -q "deploy"   search Codex sessions by keyword
-  catchup codex/3             3rd most recent Codex session
-  catchup claude --last 5     last 5 exchanges
-  catchup claude --since-compact  tail after last compaction
-  catchup claude --dir ~/src/proj  latest session from another directory
-  catchup fork                fork the latest session in this directory
-  catchup fork codex          fork the latest Codex session in this directory
-  catchup fork codex/3        fork the 3rd most recent Codex session
-  catchup fork codex -q "auth"  fork the Codex session matching a keyword
-  catchup fork codex --into claude  continue the Codex session in Claude
-  catchup fork claude --into codex --model gpt-5.6  ...on a specific model
-  catchup fork --into claude --from handoff.md  continue from a saved transcript
-  catchup install-skill       install catchup's SKILL.md for every detected agent
-  catchup install-skill codex install catchup's SKILL.md for Codex only
+  catchup claude --since-compact       recover a Claude session after compaction
+  catchup codex -q "deploy"            find the Codex session about deploys
+  catchup codex/3                      read the 3rd most recent Codex session
+  catchup claude --dir ~/src/proj      latest session from another directory
+  catchup fork --into codex            hand the newest session here to Codex
+  catchup fork claude --into codex --model gpt-5.6   ...on a specific model
+  catchup fork --into claude --from handoff.md       ...from a saved transcript
+  catchup install-skill                install the SKILL.md for every agent
 
 Recipes — stdout is the wire format, so pipes and files are the transport:
   catchup claude | rg -C3 "deploy"      search inside a session

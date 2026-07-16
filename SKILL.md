@@ -5,17 +5,23 @@ description: Recovers prior coding-agent session context by running `catchup <ag
 
 # catchup
 
-Pull a clean summary of a previous agent session into context.
-
-You are running inside a live session, so bare `catchup` resolves to the newest session in this directory — usually *this one*. Pick the command by what the user wants:
+You are running inside a live session, so bare `catchup` resolves to the newest session in this directory — usually *this one*. Every command is one of three jobs — recap a session, find the right one, or hand it off:
 
 ```bash
-catchup <agent> --since-compact  # another agent's latest session here
-catchup --since-compact          # recover THIS session after a compaction
-catchup <agent> --list           # list recent sessions
-catchup <agent> -q "topic"       # search sessions
-catchup <agent>/3                # read 3rd newest session
-catchup <agent> --id <id>        # read exact session
+# RECAP — pull a session into context (how much; default is the whole thing)
+catchup <agent> --since-compact   # another agent's latest, tail after its last compaction
+catchup --since-compact           # recover THIS session after a compaction
+catchup <agent> --last 20         # just the last 20 exchanges
+
+# FIND — locate the right session first (which one; default is newest here)
+catchup <agent> --list            # recent sessions here
+catchup <agent> -q "topic"        # search by keyword
+catchup <agent>/3                 # the 3rd newest
+catchup <agent> --id <id>         # an exact session id
+
+# HAND OFF — continue the work (suggest the user run these in a terminal)
+catchup fork <agent>                    # native resume, full state
+catchup fork <agent> --into <other>     # seed a different agent with the transcript
 ```
 
 Agents: `codex`, `claude`, `agy` (Antigravity), `opencode`, `pi-agent`.
