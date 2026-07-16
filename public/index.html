@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>catchup - pick up a coding agent session without starting over</title>
-<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Antigravity, OpenCode, or Pi Agent session and hands it to the next agent. Hit a usage limit? catchup fork --into and keep going.">
+<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Antigravity, OpenCode, or Pi Agent session and hands it to the next agent. When an agent stops mid-task, catchup fork --into keeps the work moving.">
 <meta name="keywords" content="catchup, AI coding agent, Claude Code, Codex, Antigravity, agy, OpenCode, Pi Agent, usage limit, session handoff, context handoff, CLI, Go">
 <meta property="og:type" content="website">
 <meta property="og:title" content="catchup - pick up a coding agent session without starting over">
-<meta property="og:description" content="Your agent hit its usage limit mid-task. One command hands the session to the next agent, already caught up.">
+<meta property="og:description" content="Your agent stopped mid-task. One command hands the session to the next agent, already caught up.">
 <meta property="og:url" content="https://catchup.pages.dev/">
 <meta property="og:image" content="https://catchup.pages.dev/assets/social-card.png">
 <meta property="og:image:width" content="1200">
@@ -16,7 +16,7 @@
 <meta property="og:image:alt" content="Two terminal panes: Claude Code hits its usage limit; catchup fork hands the session to Codex.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="catchup - pick up a coding agent session without starting over">
-<meta name="twitter:description" content="Your agent hit its usage limit mid-task. One command hands the session to the next agent, already caught up.">
+<meta name="twitter:description" content="Your agent stopped mid-task. One command hands the session to the next agent, already caught up.">
 <meta name="twitter:image" content="https://catchup.pages.dev/assets/social-card.png">
 <link rel="canonical" href="https://catchup.pages.dev/">
 <link rel="alternate" type="text/markdown" href="/index.md">
@@ -68,6 +68,9 @@
   h1 { margin: 0 0 30px; font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
   h1 .hi { display: block; font-size: clamp(56px, 9vw, 96px); line-height: 1; }
   h1 .line { display: block; font-size: clamp(26px, 4.2vw, 40px); line-height: 1.15; margin-top: 22px; max-width: 18ch; }
+  h1 .failure { display: grid; height: 1.15em; overflow: hidden; }
+  h1 .failure > span { grid-area: 1 / 1; }
+  h1 .failure .outage { color: #d97757; opacity: 0; }
   .monologue p { margin: 0 0 18px; max-width: 58ch; font-size: clamp(17px, 1.9vw, 19px); text-wrap: pretty; }
   .monologue .mono { font-size: 0.82em; background: #f0ede6; padding: 1px 6px; border-radius: 4px; }
 
@@ -148,6 +151,16 @@
 
   @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
   @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  @keyframes quota {
+    0%, 18% { opacity: 1; transform: none; }
+    22%, 60% { opacity: 0; transform: translateY(-0.35em); }
+    65%, 100% { opacity: 1; transform: none; }
+  }
+  @keyframes outage {
+    0%, 18% { opacity: 0; transform: translateY(0.35em); }
+    22%, 60% { opacity: 1; transform: none; }
+    65%, 100% { opacity: 0; transform: translateY(-0.35em); }
+  }
   /* lift is transform-only: the frame must stay visible when the scroll
      timeline never fires (fullpage renders, older engines) */
   @keyframes lift { from { transform: translateY(16px); } to { transform: none; } }
@@ -158,10 +171,13 @@
     .enter > *:nth-child(3) { animation-delay: .12s; }
     .enter > *:nth-child(4) { animation-delay: .18s; }
     .enter > *:nth-child(5) { animation-delay: .24s; }
+    h1 .failure .quota { animation: quota 8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+    h1 .failure .outage { animation: outage 8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
     figure .frame { animation: lift both; animation-timeline: view(); animation-range: entry 5% cover 22%; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; }
+    h1 .failure .outage { display: none; }
   }
   @media (max-width: 560px) {
     .cmd { width: 100%; }
@@ -183,10 +199,16 @@
   <div class="col enter">
     <h1>
       <span class="hi">Hi.</span>
-      <span class="line">Your coding agent just hit its usage limit.</span>
+      <span class="line" aria-label="Your coding agent just hit its usage limit or went down.">
+        <span aria-hidden="true">Your coding agent just</span>
+        <span class="failure" aria-hidden="true">
+          <span class="quota">hit its usage limit.</span>
+          <span class="outage">went down.</span>
+        </span>
+      </span>
     </h1>
     <div class="monologue">
-      <p>It's 4:50 on a Friday. The fix is half done. Claude Code stops: <span class="mono">5-hour limit reached &#8729; resets 10pm</span>.</p>
+      <p>It's 4:50 on a Friday. The fix is half done. Claude Code stops. Maybe it says <span class="mono">5-hour limit reached &#8729; resets 10pm</span>.</p>
       <p>You could open another agent and retype everything the two of you figured out. Or you could type this:</p>
     </div>
     <button class="cmd" onclick="copyCmd(this, 'catchup fork claude --into codex')" aria-label="Copy the command: catchup fork claude --into codex">
