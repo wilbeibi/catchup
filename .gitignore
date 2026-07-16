@@ -9,8 +9,9 @@
 go.work
 go.work.sum
 
-# Design docs (local reference only)
-/docs
+# Design docs (local reference only), except shipped release notes
+/docs/*
+!/docs/releases/
 
 # agent instruction files stay local
 CLAUDE.md
