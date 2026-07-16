@@ -124,7 +124,7 @@
   .install .cmds { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
   .install .alt { font-size: 14px; color: #5a554c; margin-top: 18px; }
   .install .alt code { background: #f0ede6; padding: 1px 6px; border-radius: 4px; font-size: 13px; color: #1b1a18; }
-  .agents { margin-top: 34px; font-size: 15.5px; color: #3c3831; max-width: 62ch; }
+  .agents { margin-top: 30px; font-size: 15.5px; color: #3c3831; max-width: 58ch; text-wrap: balance; }
 
   /* end card */
   .endcard { margin-top: clamp(64px, 10vh, 120px); background: #1e1d1a; color: #f5f3ee; }
@@ -197,6 +197,7 @@
     <div class="monologue" style="margin-top: 22px;">
       <p>Codex opens, already caught up on the conversation, and picks up where Claude stopped. That's the handoff, one of three.</p>
     </div>
+    <p class="agents">Claude Code, Codex, Antigravity (<code>agy</code>), OpenCode, Pi Agent. Any of them, either end.</p>
   </div>
 </header>
 
@@ -292,7 +293,6 @@
       </button>
     </div>
     <p class="alt">On Windows, grab the zip from <a href="https://github.com/wilbeibi/catchup/releases/latest" style="color: inherit;">the latest release</a>. Then, optionally: <code>catchup install-skill</code> so your agents know it exists.</p>
-    <p class="agents">Works with Claude Code, Codex, Antigravity (<code>agy</code>), OpenCode, and Pi Agent, in any direction.</p>
   </div>
 </section>
 
