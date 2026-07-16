@@ -13,6 +13,13 @@ Brand / marketing. Design IS the product here; the page has one job: a
 developer who just hit an agent usage limit lands, gets it in ten seconds,
 copies the install command.
 
+The spine follows the product's mental model, three jobs with a session:
+**recap** (pull it back into context), **find** (list or search for the
+right one), **hand off** (continue the work). The usage-limit scene is the
+cold open, not the whole claim; the three jobs are three narrative beats,
+not a feature-card grid. Keep it that way. This mirrors the `--help` /
+SKILL.md RECAP / FIND / HAND OFF buckets; update the site when they change.
+
 ## Audience
 
 Terminal-native developers who run two or more coding agents. They are

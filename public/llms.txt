@@ -4,6 +4,8 @@
 
 catchup solves a concrete problem: developers jump between coding agents, and each stores its history in a different place and format. When one agent hits a usage limit or you want a second opinion, the next agent has no context. catchup gives the agent a simple command it can run itself to recover prior work without you re-explaining the project state.
 
+Every catchup command is one of three jobs with a session: **recap** it (pull it back into context), **find** the right one (list or search), or **hand it off** (continue the work in the same or a different agent).
+
 ## Canonical entity
 - Name: catchup
 - Category: developer tool; AI coding agent handoff CLI; local session-history reader

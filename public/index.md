@@ -8,10 +8,13 @@ Open-source CLI · Go · MIT · https://catchup.pages.dev/
 
 catchup reads the local session history of an AI coding agent and prints a clean Markdown transcript of only the user/assistant conversation. Tool calls, reasoning traces, and token noise are removed, so the next agent can recover what happened without you re-explaining the project state.
 
-- **Built for agent handoff.** Your next agent runs `catchup <agent>` for `codex`, `claude`, `agy`, `opencode`, or `pi-agent` to recover the relevant conversation. Add `--since-compact` to pick up from the last compaction.
-- **Just the conversation.** User and assistant messages only; tool calls, reasoning, and token accounting are stripped.
-- **Still readable by humans.** Browsing manually? Start with `catchup codex --list` — or bare `catchup`, which reads the newest session in the directory, whichever agent wrote it.
-- **Fork back in.** `catchup fork` hands off to the agent's own native fork command, so the next session picks up real state instead of a rendered transcript. Crossing agents? `catchup fork codex --into claude` starts Claude seeded with the Codex transcript.
+Every command is one of three jobs with a session:
+
+- **Recap.** Pull a past session back into context. `catchup <agent> --since-compact` for `codex`, `claude`, `agy`, `opencode`, or `pi-agent` reads the tail after the last compaction; drop the flag for the whole thing.
+- **Find.** Locate the right session first. `catchup <agent> --list` lists what ran here, `-q "keyword"` searches by keyword, and `catchup <agent>/N` or `--id <id>` opens an exact one.
+- **Hand off.** Continue the work. `catchup fork <agent>` resumes through the agent's own native fork command with real state; crossing agents, `catchup fork codex --into claude` starts Claude seeded with the Codex transcript.
+
+The output is just the conversation: user and assistant messages only, with tool calls, reasoning, and token accounting stripped. Browsing manually? Bare `catchup` reads the newest session in the directory, whichever agent wrote it.
 
 ## Install
 

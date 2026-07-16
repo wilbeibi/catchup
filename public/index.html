@@ -29,7 +29,7 @@
   "name": "catchup",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS, Linux, Windows",
-  "description": "CLI that reads Claude Code, Codex, Antigravity, OpenCode & Pi Agent session history and hands the conversation to the next agent as clean Markdown.",
+  "description": "CLI that reads Claude Code, Codex, Antigravity, OpenCode & Pi Agent session history so you can recap a session, find the right one, and hand it to the next agent as clean Markdown.",
   "url": "https://catchup.pages.dev/",
   "downloadUrl": "https://github.com/wilbeibi/catchup",
   "softwareHelp": "https://github.com/wilbeibi/catchup#usage",
@@ -99,6 +99,14 @@
     .swipehint { display: inline; color: #9c5310; font-weight: 700; }
     figure .frame { -webkit-overflow-scrolling: touch; }
   }
+
+  /* the three moves: recap / find / hand off */
+  .acts { padding: clamp(56px, 9vh, 100px) 0 0; }
+  .acts h2 { font-size: clamp(24px, 3.2vw, 32px); letter-spacing: -0.015em; margin: 0 0 8px; }
+  .acts .sub { margin: 0 0 8px; color: #3c3831; max-width: 54ch; }
+  .act { padding: 30px 0; border-top: 1px solid #e8e3d9; }
+  .act h3 { margin: 0 0 6px; font-size: 20px; font-weight: 700; }
+  .act p { margin: 0 0 16px; color: #3c3831; max-width: 56ch; }
 
   /* Q&A */
   .qa { padding: clamp(56px, 9vh, 100px) 0 0; }
@@ -187,7 +195,7 @@
       <span class="copy">click to copy</span>
     </button>
     <div class="monologue" style="margin-top: 22px;">
-      <p>Codex opens, already caught up on the conversation, and picks up where Claude stopped.</p>
+      <p>Codex opens, already caught up on the conversation, and picks up where Claude stopped. That's the handoff, one of three.</p>
     </div>
   </div>
 </header>
@@ -197,32 +205,69 @@
     <div class="frame">
       <img src="assets/handoff.gif" alt="Claude Code hits its five-hour limit in the left terminal pane; in the right pane, catchup fork claude --into codex starts Codex seeded with the session and it continues the task." loading="eager">
     </div>
-    <figcaption><span class="swipehint">← swipe the frame · </span><strong>Scripted demo.</strong> Claude Code hits its five-hour limit; one command hands the session to Codex.</figcaption>
+    <figcaption><span class="swipehint">← swipe the frame · </span><strong>The handoff.</strong> Claude Code hits its five-hour limit, and one command moves the session to Codex.</figcaption>
   </figure>
 
   <figure>
     <div class="frame">
       <img src="assets/recall.gif" alt="An agent searches past sessions by keyword with catchup -q, then opens the matching session by id." loading="lazy">
     </div>
-    <figcaption><span class="swipehint">← swipe the frame · </span><strong>Also works days later.</strong> Search old sessions by keyword, open the one you meant, keep going.</figcaption>
+    <figcaption><span class="swipehint">← swipe the frame · </span><strong>Find and recap.</strong> Days later: search old sessions by keyword, open the one you meant, and pick up where it left off.</figcaption>
   </figure>
 </div>
 
+<section class="acts">
+  <div class="col">
+    <h2>Three ways back into a session.</h2>
+    <p class="sub">Whatever state you're in, one command gets you back.</p>
+
+    <div class="act">
+      <h3>Recap</h3>
+      <p>Bring a whole session back, as it was. The full thing, or the tail after the last compaction.</p>
+      <button class="cmd" onclick="copyCmd(this, 'catchup claude --since-compact')" aria-label="Copy the command: catchup claude --since-compact">
+        <span class="p">$</span>
+        <span class="t">catchup claude --since-compact</span>
+        <span class="copy">click to copy</span>
+      </button>
+    </div>
+
+    <div class="act">
+      <h3>Find</h3>
+      <p>You know the one. List what ran here, or search by keyword; the session you meant opens.</p>
+      <button class="cmd" onclick="copyCmd(this, 'catchup claude -q &quot;rate limit&quot;')" aria-label="Copy the command: catchup claude -q rate limit">
+        <span class="p">$</span>
+        <span class="t">catchup claude -q "rate limit"</span>
+        <span class="copy">click to copy</span>
+      </button>
+    </div>
+
+    <div class="act">
+      <h3>Hand off</h3>
+      <p>Nobody starts over. Same agent with real state, or seed a fresh one with the transcript.</p>
+      <button class="cmd" onclick="copyCmd(this, 'catchup fork claude --into codex')" aria-label="Copy the command: catchup fork claude --into codex">
+        <span class="p">$</span>
+        <span class="t">catchup fork claude --into codex</span>
+        <span class="copy">click to copy</span>
+      </button>
+    </div>
+  </div>
+</section>
+
 <section class="qa">
   <div class="col">
-    <h2>Reasonable questions</h2>
+    <h2>Fair questions.</h2>
     <dl>
       <dt>What actually gets handed over?</dt>
-      <dd>The conversation itself: your messages and the agent's replies. Tool calls, command output, and reasoning traces are stripped, so the next agent reads a clean transcript instead of a log file.</dd>
+      <dd>The conversation, and only that: your messages and the agent's replies. Tool calls, command output, and reasoning traces get stripped, so the next agent reads what happened, not a log of it.</dd>
 
-      <dt>Same agent, new day?</dt>
-      <dd><code>catchup fork</code> resumes through the agent's own native path, with real session state. Cross-agent, <code>catchup fork claude --into codex</code> seeds the new agent with the transcript.</dd>
+      <dt>Do I have to switch agents?</dt>
+      <dd>No. The same agent picks up right where it left off: <code>catchup fork</code> resumes through its own native path, real session state and all. Crossing to another agent is there when you want it, <code>catchup fork claude --into codex</code> seeds it with the transcript.</dd>
 
       <dt>What about that session last week about rate limits?</dt>
-      <dd><code>catchup claude -q "rate limit"</code>. Search by keyword, list recent sessions, open an exact one by id.</dd>
+      <dd>It's still on disk. <code>catchup claude -q "rate limit"</code> searches by keyword, lists what matches, and opens the exact one you meant.</dd>
 
-      <dt>Can my agent run it by itself?</dt>
-      <dd>Yes. <code>catchup install-skill</code> teaches your agents the command; after that, "catch up on the last Codex session" just works.</dd>
+      <dt>I don't want to memorize all these flags.</dt>
+      <dd>You don't have to. <code>catchup install-skill</code> teaches your agent the command once, and after that you just say "catch up on the last Codex session" in plain words.</dd>
 
       <dt>Does it merge histories across agents?</dt>
       <dd>No. One agent at a time. It's a handoff, not a blender.</dd>
@@ -255,7 +300,7 @@
   <div class="inner">
     <div>
       <div class="mark">catchup<span class="cursor">_</span></div>
-      <p class="tag">Pick up a coding agent session without starting over.</p>
+      <p class="tag">Recap it. Find it. Hand it off.</p>
     </div>
     <div class="actions">
       <a class="primary" href="https://github.com/wilbeibi/catchup">Star on GitHub</a>
