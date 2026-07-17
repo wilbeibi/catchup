@@ -4,7 +4,8 @@
 //
 // This package performs no I/O and knows nothing about the CLI or about output
 // formats. The provider packages (internal/codex, internal/claude, internal/agy,
-// internal/opencode, internal/piagent) implement Provider against real history
+// internal/opencode, internal/piagent, internal/kimi) implement Provider
+// against real history
 // on disk; the cli layer turns user input into a request and hands the result to
 // the renderer (internal/render). Keeping the nouns here, with only pure
 // projections over them, is what lets the other layers stay independent of one
@@ -25,6 +26,7 @@ const (
 	ProviderAgy      = "agy" // Antigravity CLI
 	ProviderOpenCode = "opencode"
 	ProviderPiAgent  = "pi-agent"
+	ProviderKimi     = "kimi" // Kimi Code CLI
 )
 
 // Entry kinds and message roles. Providers normalize their own wire formats
@@ -70,6 +72,7 @@ type Roots struct {
 	Agy      string
 	OpenCode string
 	PiAgent  string
+	Kimi     string
 }
 
 // Source is a located session: enough to read it and to describe it in a

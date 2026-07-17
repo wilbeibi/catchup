@@ -11,6 +11,7 @@ import "path/filepath"
 //	Agy      : <home>/.gemini/antigravity-cli (Antigravity documents no override)
 //	OpenCode : $XDG_DATA_HOME/opencode else <home>/.local/share/opencode
 //	PiAgent  : $PI_CODING_AGENT_DIR else <home>/.pi/agent
+//	Kimi     : $KIMI_CODE_HOME      else <home>/.kimi-code
 //
 // getenv and home are passed in rather than read from the os package so that
 // root resolution is a pure function and can be tested without touching the
@@ -40,7 +41,12 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		piAgent = filepath.Join(home, ".pi", "agent")
 	}
 
-	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent}
+	kimi := getenv("KIMI_CODE_HOME")
+	if kimi == "" {
+		kimi = filepath.Join(home, ".kimi-code")
+	}
+
+	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi}
 }
 
 // ResolveSkillDirs returns each provider's global Agent Skills directory,
@@ -56,6 +62,10 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 //	           flavor-specific)
 //	OpenCode : <home>/.config/opencode/skills  (fixed; not $XDG_DATA_HOME)
 //	PiAgent  : roots.PiAgent/skills            (respects $PI_CODING_AGENT_DIR)
+//	Kimi     : roots.Kimi/skills               (respects $KIMI_CODE_HOME; kimi
+//	           also discovers ~/.agents/skills, but that path is Codex's entry
+//	           — one dir per provider keeps installs and drift checks from
+//	           stamping the same file twice)
 func ResolveSkillDirs(roots Roots, home string) map[string]string {
 	return map[string]string{
 		ProviderCodex:    filepath.Join(home, ".agents", "skills"),
@@ -63,6 +73,7 @@ func ResolveSkillDirs(roots Roots, home string) map[string]string {
 		ProviderAgy:      filepath.Join(home, ".gemini", "config", "skills"),
 		ProviderOpenCode: filepath.Join(home, ".config", "opencode", "skills"),
 		ProviderPiAgent:  filepath.Join(roots.PiAgent, "skills"),
+		ProviderKimi:     filepath.Join(roots.Kimi, "skills"),
 	}
 }
 

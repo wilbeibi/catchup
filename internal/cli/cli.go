@@ -22,6 +22,7 @@ import (
 	"github.com/wilbeibi/catchup/internal/agy"
 	"github.com/wilbeibi/catchup/internal/claude"
 	"github.com/wilbeibi/catchup/internal/codex"
+	"github.com/wilbeibi/catchup/internal/kimi"
 	"github.com/wilbeibi/catchup/internal/opencode"
 	"github.com/wilbeibi/catchup/internal/piagent"
 	"github.com/wilbeibi/catchup/internal/render"
@@ -33,7 +34,7 @@ const helpText = `Usage: catchup [agent[/<rank>]] [flags]        read a past ses
        catchup fork --into <agent> --from <file | - | url>
        catchup install-skill [agent]
 
-Agents: codex, claude, agy (Antigravity), opencode, pi-agent
+Agents: codex, claude, agy (Antigravity), kimi, opencode, pi-agent
 Omit the agent to use whichever has the newest session here. Bare ` + "`catchup`" + `
 prints that session in full, as Markdown. The flags refine three things:
 which session, how much of it, and as what.
@@ -225,6 +226,7 @@ func providerNames() []string {
 		session.ProviderCodex,
 		session.ProviderClaude,
 		session.ProviderAgy,
+		session.ProviderKimi,
 		session.ProviderOpenCode,
 		session.ProviderPiAgent,
 	}
@@ -240,6 +242,8 @@ func selectProvider(name string) (session.Provider, error) {
 		return claude.New(), nil
 	case session.ProviderAgy:
 		return agy.New(), nil
+	case session.ProviderKimi:
+		return kimi.New(), nil
 	case session.ProviderOpenCode:
 		return opencode.New(), nil
 	case session.ProviderPiAgent:
@@ -254,7 +258,7 @@ func selectProvider(name string) (session.Provider, error) {
 		if name == "antigravity" {
 			return nil, fmt.Errorf(`unknown agent "antigravity"; Antigravity's agent name is agy`)
 		}
-		return nil, fmt.Errorf("unknown agent %q (want codex, claude, agy, opencode, or pi-agent); run catchup --help", name)
+		return nil, fmt.Errorf("unknown agent %q (want codex, claude, agy, kimi, opencode, or pi-agent); run catchup --help", name)
 	}
 }
 
@@ -673,6 +677,13 @@ func intoCommand(target, prompt, model string) (string, []string, error) {
 		return "opencode", append(modelArgs("--model", model), "--prompt", prompt), nil
 	case session.ProviderPiAgent:
 		return "pi", append(modelArgs("--model", model), prompt), nil
+	case session.ProviderKimi:
+		// Kimi rejects positional arguments and its -p flag is
+		// non-interactive print mode, so there is no way to start an
+		// interactive session with a seed prompt (checked against
+		// kimi-code v0.26.0). Refusing beats launching a headless run
+		// that answers once and exits.
+		return "", nil, fmt.Errorf("--into kimi: kimi cannot start interactive with a seed prompt; fork kimi resumes a kimi session natively")
 	default:
 		return "", nil, fmt.Errorf("--into: unsupported agent %q", target)
 	}
@@ -683,9 +694,10 @@ func intoCommand(target, prompt, model string) (string, []string, error) {
 // must be the launched agent's own model name.
 //
 // The flag spellings forkCommand and intoCommand emit are foreign CLIs'
-// surface and can drift; all five were last checked against the installed
-// CLIs' --help on 2026-07-10 (codex takes -m; agy, claude, opencode, and pi
-// take --model).
+// surface and can drift; all six were last checked against the installed
+// CLIs' --help on 2026-07-17 (codex takes -m; agy, claude, opencode, pi, and
+// kimi take --model). Kimi's short flags churn across releases (-C became -c
+// in 0.26; -r is a hidden alias of -S), so its case emits long forms only.
 func modelArgs(flag, model string) []string {
 	if model == "" {
 		return nil
@@ -728,6 +740,12 @@ func forkCommand(src session.Source, model string) (string, []string, error) {
 			return "", nil, fmt.Errorf("fork pi-agent: missing session id or path")
 		}
 		return "pi", append([]string{"--fork", target}, modelArgs("--model", model)...), nil
+	case session.ProviderKimi:
+		if src.Ref.SessionID == "" {
+			return "", nil, fmt.Errorf("fork kimi: missing session id")
+		}
+		// Kimi has no fork; --session is its native resume.
+		return "kimi", append([]string{"--session", src.Ref.SessionID}, modelArgs("--model", model)...), nil
 	default:
 		return "", nil, fmt.Errorf("fork: unsupported agent %q", src.Ref.Provider)
 	}
