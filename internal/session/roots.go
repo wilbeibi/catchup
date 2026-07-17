@@ -13,6 +13,7 @@ import "path/filepath"
 //	PiAgent  : $PI_CODING_AGENT_DIR else <home>/.pi/agent
 //	Kimi     : $KIMI_CODE_HOME      else <home>/.kimi-code
 //	Cline    : $CLINE_DIR           else <home>/.cline
+//	Cursor   : $CURSOR_CONFIG_DIR   else $XDG_CONFIG_HOME/cursor else <home>/.cursor
 //
 // getenv and home are passed in rather than read from the os package so that
 // root resolution is a pure function and can be tested without touching the
@@ -52,7 +53,16 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		cline = filepath.Join(home, ".cline")
 	}
 
-	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline}
+	cursor := getenv("CURSOR_CONFIG_DIR")
+	if cursor == "" {
+		if xdg := getenv("XDG_CONFIG_HOME"); xdg != "" {
+			cursor = filepath.Join(xdg, "cursor")
+		} else {
+			cursor = filepath.Join(home, ".cursor")
+		}
+	}
+
+	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor}
 }
 
 // ResolveSkillDirs returns each provider's global Agent Skills directory,
@@ -74,6 +84,7 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 //	           stamping the same file twice)
 //	Cline    : roots.Cline/skills            (respects $CLINE_DIR; cline also
 //	           discovers ~/.agents/skills — Codex's entry, same reasoning)
+//	Cursor   : roots.Cursor/skills           (respects $CURSOR_CONFIG_DIR)
 func ResolveSkillDirs(roots Roots, home string) map[string]string {
 	return map[string]string{
 		ProviderCodex:    filepath.Join(home, ".agents", "skills"),
@@ -83,6 +94,7 @@ func ResolveSkillDirs(roots Roots, home string) map[string]string {
 		ProviderPiAgent:  filepath.Join(roots.PiAgent, "skills"),
 		ProviderKimi:     filepath.Join(roots.Kimi, "skills"),
 		ProviderCline:    filepath.Join(roots.Cline, "skills"),
+		ProviderCursor:   filepath.Join(roots.Cursor, "skills"),
 	}
 }
 
