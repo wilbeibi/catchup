@@ -82,14 +82,6 @@ catchup <agent> --json           # render JSON; also --html
 
 Use `fork` to continue with the same agent and keep native session state. Use `fork --into` to start another agent with the transcript. Use read commands when you want old work in a clean context.
 
-## Use it inside herdr
-
-Running agents in [herdr](https://herdr.dev)? The [herdr-catchup](https://github.com/wilbeibi/herdr-catchup) plugin puts all of this one keystroke away — summary, fork, and cross-agent handoff, each opening in a pane next to the agent it came from:
-
-```bash
-herdr plugin install wilbeibi/herdr-catchup
-```
-
 ## Boundaries
 
 - One agent at a time. It does not merge histories.
