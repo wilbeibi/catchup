@@ -1,8 +1,10 @@
+<h1 align="center">catchup</h1>
+
 <div align="center">
 
-# catchup
-
 ### Pick up a coding agent session without starting over
+
+<img src="assets/passing-coding-banner.png" alt="Coding agents pass a session transcript through a handoff machine" width="800">
 
 </div>
 
