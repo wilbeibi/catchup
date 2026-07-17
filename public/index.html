@@ -73,6 +73,10 @@
   h1 .failure .outage { color: #d97757; opacity: 0; }
   .monologue p { margin: 0 0 18px; max-width: 58ch; font-size: clamp(17px, 1.9vw, 19px); text-wrap: pretty; }
   .monologue .mono { font-size: 0.82em; background: #f0ede6; padding: 1px 6px; border-radius: 4px; }
+  .agents-block { margin-top: 30px; }
+  .agents { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; max-width: 60ch; }
+  .agents li { background: #f0ede6; border-radius: 6px; padding: 5px 12px; font-size: 14.5px; color: #1b1a18; }
+  .agents-tag { margin: 10px 0 0; font-size: 14px; color: #5a554c; }
 
   /* command blocks */
   .cmd {
@@ -127,7 +131,6 @@
   .install .cmds { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
   .install .alt { font-size: 14px; color: #5a554c; margin-top: 18px; }
   .install .alt code { background: #f0ede6; padding: 1px 6px; border-radius: 4px; font-size: 13px; color: #1b1a18; }
-  .agents { margin-top: 30px; font-size: 15.5px; color: #3c3831; max-width: 58ch; text-wrap: balance; }
 
   /* end card */
   .endcard { margin-top: clamp(64px, 10vh, 120px); background: #1e1d1a; color: #f5f3ee; }
@@ -219,7 +222,19 @@
     <div class="monologue" style="margin-top: 22px;">
       <p>Codex opens, already caught up on the conversation, and picks up where Claude stopped. That's the handoff, one of three.</p>
     </div>
-    <p class="agents">Claude Code, Codex, Cursor, Cline, Kimi, Antigravity (<code>agy</code>), OpenCode, Pi Agent. Any of them, either end.</p>
+    <div class="agents-block">
+      <ul class="agents" aria-label="Supported agents">
+        <li>Claude Code</li>
+        <li>Codex</li>
+        <li>Cursor</li>
+        <li>Cline</li>
+        <li>Kimi</li>
+        <li>Antigravity</li>
+        <li>OpenCode</li>
+        <li>Pi Agent</li>
+      </ul>
+      <p class="agents-tag">Any of them, either end.</p>
+    </div>
   </div>
 </header>
 
