@@ -529,6 +529,7 @@ func TestRunInstallSkillAllProviders(t *testing.T) {
 	skillDirs := map[string]string{
 		session.ProviderCodex:    t.TempDir(),
 		session.ProviderClaude:   t.TempDir(),
+		session.ProviderAgy:      t.TempDir(),
 		session.ProviderOpenCode: t.TempDir(),
 		session.ProviderPiAgent:  t.TempDir(),
 	}

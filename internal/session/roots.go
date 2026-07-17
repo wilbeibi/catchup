@@ -50,16 +50,17 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 //
 //	Codex    : <home>/.agents/skills          (fixed; ignores $CODEX_HOME)
 //	Claude   : roots.Claude/skills             (respects $CLAUDE_CONFIG_DIR)
+//	Agy      : <home>/.gemini/config/skills    (the one dir all three
+//	           Antigravity flavors — AGY, CLI, IDE — discover; paths like
+//	           ~/.gemini/skills or ~/.gemini/antigravity-cli/skills are
+//	           flavor-specific)
 //	OpenCode : <home>/.config/opencode/skills  (fixed; not $XDG_DATA_HOME)
 //	PiAgent  : roots.PiAgent/skills            (respects $PI_CODING_AGENT_DIR)
-//
-// Agy is deliberately absent: Antigravity ships builtin skills but documents
-// no user skills directory, and installSkill skips providers without an
-// entry rather than writing to a guessed path.
 func ResolveSkillDirs(roots Roots, home string) map[string]string {
 	return map[string]string{
 		ProviderCodex:    filepath.Join(home, ".agents", "skills"),
 		ProviderClaude:   filepath.Join(roots.Claude, "skills"),
+		ProviderAgy:      filepath.Join(home, ".gemini", "config", "skills"),
 		ProviderOpenCode: filepath.Join(home, ".config", "opencode", "skills"),
 		ProviderPiAgent:  filepath.Join(roots.PiAgent, "skills"),
 	}
