@@ -12,6 +12,7 @@ import "path/filepath"
 //	OpenCode : $XDG_DATA_HOME/opencode else <home>/.local/share/opencode
 //	PiAgent  : $PI_CODING_AGENT_DIR else <home>/.pi/agent
 //	Kimi     : $KIMI_CODE_HOME      else <home>/.kimi-code
+//	Cline    : $CLINE_DIR           else <home>/.cline
 //
 // getenv and home are passed in rather than read from the os package so that
 // root resolution is a pure function and can be tested without touching the
@@ -46,7 +47,12 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		kimi = filepath.Join(home, ".kimi-code")
 	}
 
-	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi}
+	cline := getenv("CLINE_DIR")
+	if cline == "" {
+		cline = filepath.Join(home, ".cline")
+	}
+
+	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline}
 }
 
 // ResolveSkillDirs returns each provider's global Agent Skills directory,
@@ -66,6 +72,8 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 //	           also discovers ~/.agents/skills, but that path is Codex's entry
 //	           — one dir per provider keeps installs and drift checks from
 //	           stamping the same file twice)
+//	Cline    : roots.Cline/skills            (respects $CLINE_DIR; cline also
+//	           discovers ~/.agents/skills — Codex's entry, same reasoning)
 func ResolveSkillDirs(roots Roots, home string) map[string]string {
 	return map[string]string{
 		ProviderCodex:    filepath.Join(home, ".agents", "skills"),
@@ -74,6 +82,7 @@ func ResolveSkillDirs(roots Roots, home string) map[string]string {
 		ProviderOpenCode: filepath.Join(home, ".config", "opencode", "skills"),
 		ProviderPiAgent:  filepath.Join(roots.PiAgent, "skills"),
 		ProviderKimi:     filepath.Join(roots.Kimi, "skills"),
+		ProviderCline:    filepath.Join(roots.Cline, "skills"),
 	}
 }
 
