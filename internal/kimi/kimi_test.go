@@ -52,9 +52,13 @@ func writeSession(t *testing.T, root, wd, id, state, wire string) string {
 
 func TestReadKimiSession(t *testing.T) {
 	root := t.TempDir()
-	writeSession(t, root, "wd_catchup_abc", "session_new",
-		`{"createdAt":"2026-07-17T12:45:34.477Z","updatedAt":"2026-07-17T12:45:52.628Z","title":"Kimi support","workDir":"/home/u/src/catchup"}`,
+	dir := writeSession(t, root, "wd_catchup_abc", "session_new",
+		`{"createdAt":"2026-07-17T12:45:34.477Z","updatedAt":"2026-07-17T12:45:34.628Z","title":"Kimi support","workDir":"/home/u/src/catchup"}`,
 		wire14)
+	wireMod := time.Date(2026, 7, 17, 12, 45, 52, 628e6, time.UTC)
+	if err := os.Chtimes(filepath.Join(dir, "agents", "main", "wire.jsonl"), wireMod, wireMod); err != nil {
+		t.Fatal(err)
+	}
 
 	p := New()
 	src, err := p.Resolve(context.Background(), session.Roots{Kimi: root}, "session_new")
@@ -155,18 +159,49 @@ func TestListKimiSessions(t *testing.T) {
 	}
 }
 
-func TestResolveNewestUsesStateOnly(t *testing.T) {
+// TestWorkDirFallsBackToIndex covers sessions written before kimi-code 0.26,
+// whose state.json has no workDir: the append-only session_index.jsonl is the
+// only record of their working directory, and its last row for an id wins.
+func TestWorkDirFallsBackToIndex(t *testing.T) {
 	root := t.TempDir()
-	writeSession(t, root, "wd_a", "ses_older",
-		`{"updatedAt":"2026-07-01T00:00:00.000Z","title":"older","workDir":"/w"}`, wire14)
-	writeSession(t, root, "wd_b", "ses_newer",
-		`{"updatedAt":"2026-07-16T00:00:00.000Z","title":"newer","workDir":"/w"}`, wire14)
+	writeSession(t, root, "wd_home_abc", "ses_old",
+		`{"createdAt":"2026-02-03T04:02:46.601Z","updatedAt":"2026-02-03T04:03:00.000Z","title":"old","workDir":""}`,
+		wire10)
+	index := `{"sessionId":"ses_old","sessionDir":"x","workDir":"/stale"}
+{"sessionId":"ses_old","sessionDir":"x","workDir":"/home/u"}
+`
+	if err := os.WriteFile(filepath.Join(root, "session_index.jsonl"), []byte(index), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sums, err := New().List(context.Background(), session.Roots{Kimi: root}, session.ListOptions{Cwd: "/home/u"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sums) != 1 || sums[0].Ref.SessionID != "ses_old" || sums[0].Cwd != "/home/u" {
+		t.Fatalf("summaries = %+v", sums)
+	}
+}
+
+func TestResolveNewestByWireMtime(t *testing.T) {
+	root := t.TempDir()
+	// The session that is "newer by state.json" has the staler wire log; the
+	// wire must win, because updatedAt is only rewritten around turn
+	// boundaries while the log advances with every record.
+	writeSession(t, root, "wd_a", "ses_active",
+		`{"updatedAt":"2026-07-01T00:00:00.000Z","title":"active","workDir":"/w"}`, wire14)
+	dir := writeSession(t, root, "wd_b", "ses_stale",
+		`{"updatedAt":"2026-07-16T00:00:00.000Z","title":"stale","workDir":"/w"}`, wire14)
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(filepath.Join(dir, "agents", "main", "wire.jsonl"), old, old); err != nil {
+		t.Fatal(err)
+	}
 
 	src, err := New().Resolve(context.Background(), session.Roots{Kimi: root}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if src.Ref.SessionID != "ses_newer" {
+	if src.Ref.SessionID != "ses_active" {
 		t.Fatalf("newest = %+v", src.Ref)
 	}
 }

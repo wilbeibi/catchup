@@ -25,6 +25,7 @@ package cursor
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -210,8 +211,7 @@ type block struct {
 }
 
 func readThread(src session.Source) (session.Thread, error) {
-	path := filepath.Join(src.Path, "store.db")
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
+	db, err := openRO(filepath.Join(src.Path, "store.db"))
 	if err != nil {
 		return session.Thread{}, err
 	}
@@ -219,7 +219,7 @@ func readThread(src session.Source) (session.Thread, error) {
 
 	meta, err := readStoreMeta(db)
 	if err != nil {
-		return session.Thread{}, fmt.Errorf("cursor: %s: %w", path, err)
+		return session.Thread{}, fmt.Errorf("cursor: %s: %w", src.Path, err)
 	}
 	if title := strings.TrimSpace(meta.Name); title != "" && title != "New Agent" {
 		src.Metadata["title"] = title
@@ -252,6 +252,32 @@ func readThread(src session.Source) (session.Thread, error) {
 	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
 }
 
+// openRO opens the SQLite file for reading. Plain mode=ro comes first because
+// store.db runs in WAL mode and a reader must consult the -wal file to see a
+// live session's newest rows — an immutable open would silently serve the
+// last checkpoint instead. immutable=1 remains as the fallback for the one
+// state mode=ro cannot open (a crashed writer's orphaned -wal with no -shm,
+// whose recovery needs write access); there the checkpointed prefix is the
+// best available answer.
+func openRO(path string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err == nil {
+		if err = db.Ping(); err == nil {
+			return db, nil
+		}
+		db.Close()
+	}
+	fallback, ferr := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
+	if ferr != nil {
+		return nil, err
+	}
+	if ferr = fallback.Ping(); ferr != nil {
+		fallback.Close()
+		return nil, err // the mode=ro error names the real obstacle
+	}
+	return fallback, nil
+}
+
 func readStoreMeta(db *sql.DB) (storeMeta, error) {
 	var hexValue string
 	if err := db.QueryRow(`SELECT value FROM meta WHERE key = '0'`).Scan(&hexValue); err != nil {
@@ -275,39 +301,41 @@ func readBlob(db *sql.DB, id string) ([]byte, error) {
 }
 
 // rootBlobIDs extracts the ordered conversation blob ids from the root blob:
-// every length-delimited protobuf field 1 holding exactly 32 bytes. Other
-// fields (token budgets, context bookkeeping) are skipped by wire type; a
-// malformed tail just ends the scan, keeping whatever ids preceded it.
+// every length-delimited protobuf field 1 holding exactly 32 bytes. Tags and
+// lengths are decoded as full varints, so fields numbered 16 and above — which
+// this unversioned format could grow at any time — are skipped correctly
+// rather than misread. Other fields (token budgets, context bookkeeping) are
+// skipped by wire type; a malformed tail just ends the scan, keeping whatever
+// ids preceded it.
 func rootBlobIDs(root []byte) []string {
 	var ids []string
 	i := 0
 	for i < len(root) {
-		field, wire := int(root[i]>>3), int(root[i]&7)
-		i++
+		tag, n := binary.Uvarint(root[i:])
+		if n <= 0 {
+			return ids
+		}
+		i += n
+		field, wire := int(tag>>3), int(tag&7)
 		switch wire {
 		case 0: // varint
-			for i < len(root) && root[i]&0x80 != 0 {
-				i++
+			_, n := binary.Uvarint(root[i:])
+			if n <= 0 {
+				return ids
 			}
-			i++
+			i += n
 		case 1: // 64-bit
 			i += 8
 		case 5: // 32-bit
 			i += 4
 		case 2: // length-delimited
-			length := 0
-			shift := 0
-			for i < len(root) && root[i]&0x80 != 0 {
-				length |= int(root[i]&0x7f) << shift
-				shift += 7
-				i++
-			}
-			if i >= len(root) {
+			length64, n := binary.Uvarint(root[i:])
+			if n <= 0 {
 				return ids
 			}
-			length |= int(root[i]) << shift
-			i++
-			if i+length > len(root) {
+			i += n
+			length := int(length64)
+			if length < 0 || i+length > len(root) {
 				return ids
 			}
 			if field == 1 && length == 32 {

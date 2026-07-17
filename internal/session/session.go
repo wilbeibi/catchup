@@ -194,7 +194,10 @@ type Provider interface {
 	// exactly that id otherwise.
 	Resolve(ctx context.Context, roots Roots, id string) (Source, error)
 
-	// Read parses a located Source into its visible timeline.
+	// Read parses a located Source into its visible timeline. Read may
+	// enrich src.Metadata in place with facts found only in the transcript
+	// (model, title); callers must not hand it a Source whose Metadata they
+	// share elsewhere.
 	Read(ctx context.Context, src Source) (Thread, error)
 
 	// List enumerates sessions newest-first, filtered and capped by opts.

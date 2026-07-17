@@ -24,6 +24,13 @@ func buildStore(t *testing.T, dir, name string, messages []string) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	buildStoreOn(t, db, name, messages)
+}
+
+// buildStoreOn fills an already-open database, letting the WAL test keep its
+// writer connection open while the provider reads.
+func buildStoreOn(t *testing.T, db *sql.DB, name string, messages []string) {
+	t.Helper()
 	for _, stmt := range []string{
 		`CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB)`,
 		`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)`,
@@ -162,6 +169,78 @@ func TestDefaultTitleIsIgnored(t *testing.T) {
 	// The listing hook falls back to the first user query.
 	if thread.Preview() != "support cursor" {
 		t.Fatalf("preview = %q", thread.Preview())
+	}
+}
+
+// TestRootBlobIDsHighFieldTags proves that a field numbered 16 or above —
+// whose protobuf tag takes two bytes — is skipped rather than misread, and
+// that message ids after it still parse. A single-byte tag reader silently
+// truncates the conversation here.
+func TestRootBlobIDsHighFieldTags(t *testing.T) {
+	id1 := make([]byte, 32)
+	id1[0] = 1
+	id2 := make([]byte, 32)
+	id2[0] = 2
+
+	var root []byte
+	root = append(root, 0x0a, 32)
+	root = append(root, id1...)
+	// Field 16, wire type 2: tag = 16<<3|2 = 130, varint-encoded 0x82 0x01.
+	root = append(root, 0x82, 0x01, 0x03, 'x', 'y', 'z')
+	// Field 17, wire type 0: tag = 17<<3 = 136, varint-encoded 0x88 0x01.
+	root = append(root, 0x88, 0x01, 0x2a)
+	root = append(root, 0x0a, 32)
+	root = append(root, id2...)
+
+	got := rootBlobIDs(root)
+	want := []string{hex.EncodeToString(id1), hex.EncodeToString(id2)}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("ids = %v, want %v", got, want)
+	}
+}
+
+// TestReadsLiveWALDatabase reads a chat whose newest rows still sit in the
+// -wal file of an open writer, as they do while cursor-agent is running. An
+// immutable=1 open never consults the WAL and would miss the conversation.
+func TestReadsLiveWALDatabase(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "chats", "ws1", "chat-live")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	meta := []byte(`{"schemaVersion":1,"createdAtMs":1,"updatedAtMs":2,"hasConversation":true,"cwd":"/w"}`)
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), meta, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	writer, err := sql.Open("sqlite", filepath.Join(dir, "store.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Close()
+	for _, stmt := range []string{
+		`PRAGMA journal_mode=WAL`,
+		`PRAGMA wal_autocheckpoint=0`,
+	} {
+		if _, err := writer.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	buildStoreOn(t, writer, "Live chat", chatMessages)
+	if info, err := os.Stat(filepath.Join(dir, "store.db-wal")); err != nil || info.Size() == 0 {
+		t.Fatalf("fixture rows are not in the WAL (err=%v); the test would prove nothing", err)
+	}
+
+	src, err := New().Resolve(context.Background(), session.Roots{Cursor: root}, "chat-live")
+	if err != nil {
+		t.Fatal(err)
+	}
+	thread, err := New().Read(context.Background(), src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(thread.Entries) != 4 || thread.Entries[3].Text != "done" {
+		t.Fatalf("live WAL rows missing from timeline: %+v", thread.Entries)
 	}
 }
 

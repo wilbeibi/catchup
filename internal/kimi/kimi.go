@@ -15,10 +15,15 @@
 // the legacy kimi-cli — both shapes are always accepted, no version branching.
 // context.apply_compaction carries the compaction summary; config.update
 // carries modelAlias. Session id, title, cwd, and timestamps come from
-// state.json, so Resolve never opens the wire log.
+// state.json, so Resolve never opens the wire log; sessions written before
+// kimi-code 0.26 lack workDir there, and session_index.jsonl fills that one
+// gap (see sessionDirs).
 //
 // Ignored by default: turn.prompt (duplicates append_message), think parts,
 // tool.call/tool.result events, usage, permission, and llm.* bookkeeping.
+// context.undo and context.clear are also ignored, deliberately: the timeline
+// shows what was said, not what remains in the agent's live context, so
+// undone or cleared turns still render.
 package kimi
 
 import (
@@ -119,10 +124,18 @@ type stateJSON struct {
 }
 
 // sessionDirs returns every session directory under <root>/sessions, newest
-// first. The layout is sessions/wd_<slug>/<sessionId>/state.json; kimi also
-// keeps a session_index.jsonl at the root, but it is an append-only
-// accelerator with stale rows, so the directory tree stays the single source
-// of truth here.
+// first. The layout is sessions/wd_<slug>/<sessionId>/state.json; the
+// directory tree is the source of truth for which sessions exist. Recency
+// comes from the wire log's mtime — it advances with every record, where
+// state.json's updatedAt is only rewritten around turn boundaries — falling
+// back to updatedAt for log-less dirs.
+//
+// state.json only started carrying workDir in kimi-code 0.26; for the many
+// sessions written before that (including everything migrated from the
+// legacy kimi-cli), the append-only session_index.jsonl at the root is the
+// one record of the working directory, so it fills the gap — index only,
+// never the session list itself, since it also holds rows for deleted
+// sessions.
 func sessionDirs(root string) ([]sessionDir, error) {
 	base := filepath.Join(root, "sessions")
 	wds, err := os.ReadDir(base)
@@ -132,6 +145,7 @@ func sessionDirs(root string) ([]sessionDir, error) {
 	if err != nil {
 		return nil, err
 	}
+	var workDirs map[string]string // lazily loaded on the first gap
 	var dirs []sessionDir
 	for _, wd := range wds {
 		if !wd.IsDir() {
@@ -150,11 +164,43 @@ func sessionDirs(root string) ([]sessionDir, error) {
 			if !ok {
 				continue
 			}
+			if d.meta.WorkDir == "" {
+				if workDirs == nil {
+					workDirs = indexWorkDirs(root)
+				}
+				d.meta.WorkDir = workDirs[ent.Name()]
+			}
 			dirs = append(dirs, d)
 		}
 	}
 	sort.Slice(dirs, func(i, j int) bool { return dirs[i].mod.After(dirs[j].mod) })
 	return dirs, nil
+}
+
+// indexWorkDirs maps sessionId to workDir from session_index.jsonl. The file
+// is append-only, so the last row for an id wins; a malformed row ends the
+// scan, keeping whatever preceded it.
+func indexWorkDirs(root string) map[string]string {
+	out := map[string]string{}
+	f, err := os.Open(filepath.Join(root, "session_index.jsonl"))
+	if err != nil {
+		return out
+	}
+	defer f.Close()
+	dec := json.NewDecoder(f)
+	for {
+		var row struct {
+			SessionID string `json:"sessionId"`
+			WorkDir   string `json:"workDir"`
+		}
+		if dec.Decode(&row) != nil {
+			break
+		}
+		if row.SessionID != "" && row.WorkDir != "" {
+			out[row.SessionID] = row.WorkDir
+		}
+	}
+	return out
 }
 
 func readState(dir string) (sessionDir, bool) {
@@ -167,7 +213,13 @@ func readState(dir string) (sessionDir, bool) {
 	if json.Unmarshal(raw, &meta) != nil {
 		return sessionDir{}, false
 	}
-	mod := parseTime(meta.UpdatedAt)
+	mod := time.Time{}
+	if info, err := os.Stat(filepath.Join(dir, "agents", "main", "wire.jsonl")); err == nil {
+		mod = info.ModTime()
+	}
+	if mod.IsZero() {
+		mod = parseTime(meta.UpdatedAt)
+	}
 	if mod.IsZero() {
 		if info, err := os.Stat(path); err == nil {
 			mod = info.ModTime()

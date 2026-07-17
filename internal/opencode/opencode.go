@@ -95,14 +95,30 @@ func open(root string) (*sql.DB, string, error) {
 	return db, path, err
 }
 
+// openPath opens the database for reading. Plain mode=ro comes first because
+// opencode.db runs in WAL mode and a reader must consult the -wal file to see
+// a live session's newest rows — an immutable open would silently serve the
+// last checkpoint instead. immutable=1 remains as the fallback for the one
+// state mode=ro cannot open (a crashed writer's orphaned -wal with no -shm,
+// whose recovery needs write access); there the checkpointed prefix is the
+// best available answer.
 func openPath(path string) (*sql.DB, error) {
-	// Read-only, immutable: we never write, and treating the file as immutable
-	// lets us open it without disturbing a live OpenCode process.
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
-	if err != nil {
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err == nil {
+		if err = db.Ping(); err == nil {
+			return db, nil
+		}
+		db.Close()
+	}
+	fallback, ferr := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
+	if ferr != nil {
 		return nil, fmt.Errorf("opencode: open %s: %w", path, err)
 	}
-	return db, nil
+	if ferr = fallback.Ping(); ferr != nil {
+		fallback.Close()
+		return nil, fmt.Errorf("opencode: open %s: %w", path, err)
+	}
+	return fallback, nil
 }
 
 const sessionColumns = `id, title, directory, COALESCE(agent,''), COALESCE(model,''), COALESCE(parent_id,''), time_created, time_updated`
