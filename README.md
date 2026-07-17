@@ -52,7 +52,7 @@ herdr plugin install wilbeibi/herdr-catchup
 
 ## Usage
 
-Use `<agent>` as `codex`, `claude`, `agy` (Antigravity), `cline`, `cursor`, `kimi`, `opencode`, or `pi-agent`. Omit it and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
+Use `<agent>` as `claude`, `codex`, `cursor`, `cline`, `kimi`, `agy` (Antigravity), `opencode`, or `pi-agent`. Omit it and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
 
 **For you:** run in your terminal to re-enter a session:
 
