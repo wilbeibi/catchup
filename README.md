@@ -12,6 +12,8 @@
 
 Use it when you switch tools, pick up older work, or want a clean record of what happened.
 
+Works with **Claude Code**, **Codex**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, and **Pi Agent**.
+
 <div align="center">
 
 **Claude Code hits its usage limit. One command hands the session to Codex.**
@@ -52,7 +54,9 @@ herdr plugin install wilbeibi/herdr-catchup
 
 ## Usage
 
-Use `<agent>` as `claude`, `codex`, `cursor`, `cline`, `kimi`, `agy` (Antigravity), `opencode`, or `pi-agent`. Omit it and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
+Agents: `claude` · `codex` · `cursor` · `cline` · `kimi` · `agy` (Antigravity) · `opencode` · `pi-agent`
+
+Omit `<agent>` and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
 
 **For you:** run in your terminal to re-enter a session:
 
