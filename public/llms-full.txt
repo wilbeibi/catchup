@@ -1,6 +1,6 @@
 # catchup — full reference
 
-> catchup is an open-source command-line tool, written in Go and MIT-licensed, that lets your next coding agent catch itself up. It reads local Claude Code, Codex, Antigravity (agy), OpenCode, and Pi Agent session history and prints clean, handoff-ready Markdown containing only the user/assistant conversation, with tool calls, reasoning traces, and token noise removed.
+> catchup is an open-source command-line tool, written in Go and MIT-licensed, that lets your next coding agent catch itself up. It reads local Claude Code, Codex, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, and Pi Agent session history and prints clean, handoff-ready Markdown containing only the user/assistant conversation, with tool calls, reasoning traces, and token noise removed.
 
 This is the complete reference. For the short summary, see [llms.txt](https://catchup.pages.dev/llms.txt). Source and README live at [github.com/wilbeibi/catchup](https://github.com/wilbeibi/catchup).
 
@@ -14,18 +14,18 @@ This is the complete reference. For the short summary, see [llms.txt](https://ca
 - Install command: `go install github.com/wilbeibi/catchup@latest`
 - License: MIT
 - Author: wilbeibi (https://github.com/wilbeibi)
-- Supported agents: Claude Code (`claude`), Codex (`codex`), OpenCode (`opencode`), Pi Agent (`pi-agent`)
+- Supported agents: Claude Code (`claude`), Codex (`codex`), Cursor (`cursor`), Cline (`cline`), Kimi (`kimi`), Antigravity (`agy`), OpenCode (`opencode`), Pi Agent (`pi-agent`)
 
 ## The problem catchup solves
 
-Developers increasingly use more than one AI coding agent. Each agent stores its conversation history in a different location and a different format — Claude Code, Codex, Antigravity (agy), OpenCode, and Pi Agent all differ. When one agent hits a usage limit, when you want a second opinion from another agent, or when you return to a project days later, the next agent starts with zero context. The usual workaround is to copy-paste or re-summarize what already happened, which is slow and lossy.
+Developers increasingly use more than one AI coding agent. Each agent stores its conversation history in a different location and a different format — Claude Code, Codex, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, and Pi Agent all differ. When one agent hits a usage limit, when you want a second opinion from another agent, or when you return to a project days later, the next agent starts with zero context. The usual workaround is to copy-paste or re-summarize what already happened, which is slow and lossy.
 
 catchup gives the next agent a simple command it can run itself to recover prior work. It reads any supported agent's raw history and emits one consistent, clean Markdown transcript. The output is small enough to paste directly into another agent's context window, and readable enough to skim yourself.
 
 ## Concrete scenarios
 
 - Hitting a limit mid-task: Claude Code reaches its 5-hour usage limit during a refactor. In the same directory the next agent runs `catchup claude --since-compact`, reads the recap, and continues without being re-briefed.
-- Forking back into the same agent: the current agent wants to preserve native session state instead of pasting a transcript. It runs `catchup fork codex`, `catchup fork claude`, `catchup fork opencode`, or `catchup fork pi-agent` and catchup delegates to that agent's own fork mechanism.
+- Forking back into the same agent: the current agent wants to preserve native session state instead of pasting a transcript. It runs `catchup fork` with any supported agent id (`catchup fork claude`, `catchup fork codex`, and so on) and catchup delegates to that agent's own fork or resume mechanism.
 - Forking into a different agent: Claude Code reaches a limit, but the developer wants Codex to continue. The next command is `catchup fork claude --into codex`; catchup renders the Claude transcript and starts Codex with that transcript as the opening prompt.
 - Recalling earlier work: weeks later you ask a fresh agent about a past change. It runs `catchup codex -q "auth"` to locate the old session by keyword, then pulls it back into context by id.
 - Reviewing your own history: you read `catchup claude --last 4` to remind yourself what the last few exchanges actually decided, without scrolling through tool-call logs.
@@ -51,7 +51,7 @@ The skill source is at https://raw.githubusercontent.com/wilbeibi/catchup/main/S
 
 Agent handoff:
 
-- `catchup <agent>` — latest session for that agent in the current directory (`claude`, `codex`, `opencode`, `pi-agent`).
+- `catchup <agent>` — latest session for that agent in the current directory (`claude`, `codex`, `cursor`, `cline`, `kimi`, `agy`, `opencode`, `pi-agent`).
 - `catchup` — the agent is optional: bare catchup reads the newest session in the current directory, whichever agent wrote it. Inside a live session the newest is usually your own, which pairs with `--since-compact` to recover context after a compaction.
 
 Human browsing:
@@ -89,7 +89,7 @@ Native fork resumes with the agent's real session state; `--into` crosses agents
 
 Common fork commands for AI agents:
 
-- Same-agent native resume: `catchup fork codex`, `catchup fork claude`, `catchup fork opencode`, `catchup fork pi-agent`.
+- Same-agent native resume: `catchup fork <agent>` for any supported agent id, e.g. `catchup fork codex`, `catchup fork claude`, `catchup fork cursor`.
 - Cross-agent handoff: `catchup fork claude --into codex`, `catchup fork codex --into claude`, `catchup fork opencode --into codex`, `catchup fork pi-agent --into codex`.
 - Smaller cross-agent prompt: add `--since-compact` or `--last <N>` so only the recent transcript is seeded into the target agent.
 
@@ -123,6 +123,10 @@ catchup is not a hosted cloud service and does not merge all agents into a singl
 
 - Claude Code (`claude`)
 - Codex (`codex`)
+- Cursor (`cursor`)
+- Cline (`cline`)
+- Kimi (`kimi`)
+- Antigravity (`agy`)
 - OpenCode (`opencode`)
 - Pi Agent (`pi-agent`)
 
