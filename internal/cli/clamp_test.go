@@ -9,12 +9,12 @@ import (
 )
 
 func TestClampText(t *testing.T) {
-	if _, ok := clampText(strings.Repeat("a", clampMaxBytes)); ok {
+	if _, ok := clampText(strings.Repeat("a", clampPastedMaxBytes), clampPastedMaxBytes); ok {
 		t.Fatal("text at the threshold must not clamp")
 	}
 
 	text := "HEAD first line\n" + strings.Repeat("middle filler line\n", 400) + "TAIL last line"
-	got, ok := clampText(text)
+	got, ok := clampText(text, clampPastedMaxBytes)
 	if !ok {
 		t.Fatalf("%d-byte text should clamp", len(text))
 	}
@@ -34,7 +34,7 @@ func TestClampText(t *testing.T) {
 	// A single giant line (a blob with no newlines) still clamps, and the
 	// cuts never split a multi-byte rune.
 	blob := strings.Repeat("é", 4000) // 8000 bytes, zero newlines
-	got, ok = clampText(blob)
+	got, ok = clampText(blob, clampPastedMaxBytes)
 	if !ok {
 		t.Fatal("newline-free blob should clamp")
 	}
@@ -43,21 +43,49 @@ func TestClampText(t *testing.T) {
 	}
 }
 
+func TestClampMax(t *testing.T) {
+	assistant := session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant}
+	user := session.Entry{Kind: session.KindMessage, Role: session.RoleUser}
+	compact := session.Entry{Kind: session.KindCompact}
+
+	if got := clampMax(user); got != clampPastedMaxBytes {
+		t.Errorf("user message: got ceiling %d, want %d", got, clampPastedMaxBytes)
+	}
+	// Assistant turns and compaction summaries are generated prose: the high
+	// ceiling, so a mid-sized analysis with tables in its middle renders whole.
+	if got := clampMax(assistant); got != clampGeneratedMaxBytes {
+		t.Errorf("assistant message: got ceiling %d, want %d", got, clampGeneratedMaxBytes)
+	}
+	if got := clampMax(compact); got != clampGeneratedMaxBytes {
+		t.Errorf("compaction summary: got ceiling %d, want %d", got, clampGeneratedMaxBytes)
+	}
+}
+
 func TestClampEntries(t *testing.T) {
-	big := strings.Repeat("x\n", 3000) // 6000 bytes
+	bigUser := strings.Repeat("x\n", 3000)     // 6000 bytes, over the pasted ceiling
+	proseAsst := strings.Repeat("word ", 1400) // 7000 bytes: over 4KB, under 32KB
+	blobAsst := strings.Repeat("y\n", 20000)   // 40000 bytes, over the generated ceiling
 	thread := session.Thread{Entries: []session.Entry{
-		{Kind: session.KindMessage, Role: session.RoleUser, Text: big},
-		{Kind: session.KindMessage, Role: session.RoleAssistant, Text: "small reply"},
+		{Kind: session.KindMessage, Role: session.RoleUser, Text: bigUser},
+		{Kind: session.KindMessage, Role: session.RoleAssistant, Text: proseAsst},
+		{Kind: session.KindMessage, Role: session.RoleAssistant, Text: blobAsst},
 	}}
 
 	got := clampEntries(thread)
-	if got.Entries[0].Text == big || !strings.Contains(got.Entries[0].Text, "elided") {
-		t.Error("oversized entry was not clamped")
+	if got.Entries[0].Text == bigUser || !strings.Contains(got.Entries[0].Text, "elided") {
+		t.Error("oversized user entry was not clamped")
 	}
-	if got.Entries[1].Text != "small reply" {
-		t.Errorf("small entry changed: %q", got.Entries[1].Text)
+	// The whole point of the role split: a mid-sized assistant analysis, whose
+	// tables and conclusions sit in the middle, now renders whole instead of
+	// losing its center to a head+tail cut.
+	if got.Entries[1].Text != proseAsst {
+		t.Error("mid-sized assistant entry was clamped; it should render whole")
 	}
-	if thread.Entries[0].Text != big {
+	// A pathological assistant blob past the high ceiling still clamps.
+	if got.Entries[2].Text == blobAsst || !strings.Contains(got.Entries[2].Text, "elided") {
+		t.Error("oversized assistant blob was not clamped")
+	}
+	if thread.Entries[0].Text != bigUser {
 		t.Error("clampEntries mutated the caller's thread")
 	}
 }
