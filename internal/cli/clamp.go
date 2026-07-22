@@ -8,18 +8,38 @@ import (
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
-// Entry clamping: a single oversized entry — almost always a pasted log,
-// stack trace, or blob — keeps its head and tail with one marker line
-// between them. The thresholds are fixed on purpose: no tunables and no
-// content classification. Position beats statistics (people put their own
-// words at the edges of a paste and the blob in the middle), and a clamp is
-// recoverable where a deletion is not — the marker says exactly how to get
-// the full text back.
+// Entry clamping: a single oversized entry keeps its head and tail with one
+// marker line between them, and the clamp is recoverable where a deletion is
+// not — the marker says exactly how to get the full text back.
+//
+// The threshold splits by who wrote the entry, because "position beats
+// statistics" holds for one author and not the other. A user message is
+// usually a pasted log, stack trace, or blob: the person's own words sit at
+// the edges and the blob in the middle, so head+tail is the right cut, and a
+// small ceiling is right. An assistant message (and a compaction summary) is
+// generated prose whose tables, numbers, and conclusions sit in the *middle* —
+// head+tail is exactly wrong there — so it renders whole up to a far higher
+// ceiling that still catches a pathological inline blob (an echoed file, a
+// dumped payload). That ceiling (32 KiB) is an intentionally chosen policy
+// threshold, not a derived one: above it, an entry is assumed a dumped payload
+// rather than prose. No tunables, no content sniffing: the only signal is role.
 const (
-	clampMaxBytes  = 4096 // entries at or under this render whole
-	clampHeadBytes = 2048
-	clampTailBytes = 1024
+	clampPastedMaxBytes    = 4096  // user messages: pasted content, head+tail is right
+	clampGeneratedMaxBytes = 32768 // assistant + compaction: prose kept whole; chosen policy ceiling, not derived
+	clampHeadBytes         = 2048
+	clampTailBytes         = 1024
 )
+
+// clampMax is the byte ceiling above which an entry is clamped, chosen by
+// author: only a user message carries the pasted blobs the head+tail cut was
+// designed for. Everything else — assistant turns, compaction summaries — is
+// generated prose and gets the high ceiling.
+func clampMax(e session.Entry) int {
+	if e.Kind == session.KindMessage && e.Role == session.RoleUser {
+		return clampPastedMaxBytes
+	}
+	return clampGeneratedMaxBytes
+}
 
 // clampEntries returns t with every oversized entry reduced to head + marker
 // + tail. Entries are copied on first change, so the caller's thread is
@@ -28,7 +48,7 @@ const (
 func clampEntries(t session.Thread) session.Thread {
 	var out []session.Entry
 	for i, e := range t.Entries {
-		clamped, ok := clampText(e.Text)
+		clamped, ok := clampText(e.Text, clampMax(e))
 		if !ok {
 			if out != nil {
 				out = append(out, e)
@@ -49,10 +69,10 @@ func clampEntries(t session.Thread) session.Thread {
 
 // clampText reduces text to its first clampHeadBytes and last clampTailBytes
 // around a marker naming what was elided; ok is false when text is already
-// within clampMaxBytes. Cuts land on line boundaries when the window has
-// any, and never split a UTF-8 rune.
-func clampText(text string) (string, bool) {
-	if len(text) <= clampMaxBytes {
+// within maxBytes. Cuts land on line boundaries when the window has any, and
+// never split a UTF-8 rune.
+func clampText(text string, maxBytes int) (string, bool) {
+	if len(text) <= maxBytes {
 		return "", false
 	}
 
