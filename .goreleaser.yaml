@@ -36,5 +36,5 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://catchup.pages.dev
-    description: Pick up a coding agent session without starting over
+    description: Hand off coding-agent context across Claude Code, Codex, and more
     license: MIT
