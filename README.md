@@ -1,16 +1,16 @@
-<h1 align="center">catchup</h1>
+<h1 align="center">CatchUp — coding-agent context handoff</h1>
 
 <div align="center">
 
-### Pick up a coding agent session without starting over
+### Context handoff for AI coding agents — resume a session in another agent
 
 <img src="assets/passing-coding-banner.png" alt="Coding agents pass a session transcript through a handoff machine" width="800">
 
 </div>
 
-`catchup` is for the moment an agent hits a limit and you don't want to explain the whole job again. It pulls the useful part of the local session into clean Markdown. `catchup fork` picks the work back up in the same agent or a different one.
+`catchup` is a local-first CLI that hands off session context between AI coding agents. When one hits a usage limit — or you switch tools mid-task — it reads the local session into clean Markdown, and `catchup fork` resumes the work in the same agent or a different one: hand a Claude Code session to Codex, a Cursor session to OpenCode, and so on.
 
-Use it when you switch tools, pick up older work, or want a clean record of what happened.
+Use it whenever you don't want to explain the whole job again — you hit an agent's usage limit, switch tools mid-task, pick up older work, or want a clean record of what happened.
 
 Works with **Claude Code**, **Codex**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, and **Pi Agent**.
 
