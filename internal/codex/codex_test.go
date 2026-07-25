@@ -114,3 +114,33 @@ func TestListRecencyAndResolveByID(t *testing.T) {
 		t.Errorf("resolved wrong session: %v", src.Metadata)
 	}
 }
+
+// A user turn can arrive as several stacked envelopes — a plugin catalog, then
+// the project-doc preamble — with nothing a person typed anywhere in it. Those
+// are context, not conversation, and they seed forks as well as fill listings.
+func TestIsInjectedUserText(t *testing.T) {
+	injected := []string{
+		"<recommended_plugins>\nplugin list\n</recommended_plugins>\n# AGENTS.md instructions\n\n<INSTRUCTIONS>\nbe nice\n</INSTRUCTIONS>",
+		"# AGENTS.md instructions for /home/u/src/proj\n\n<INSTRUCTIONS>\nbe nice\n</INSTRUCTIONS>",
+		"<system-reminder>context</system-reminder>",
+		"<environment_context>cwd</environment_context>\n<skill>a skill</skill>",
+	}
+	for _, s := range injected {
+		if !isInjectedUserText(s) {
+			t.Errorf("expected injected: %q", s)
+		}
+	}
+
+	// Anything the person actually wrote keeps the whole turn, envelope and all.
+	kept := []string{
+		"fix the auth flow",
+		"<system-reminder>context</system-reminder>\n\nfix the auth flow",
+		"# AGENTS.md instructions\n\nwrite them for me",
+		"",
+	}
+	for _, s := range kept {
+		if isInjectedUserText(s) {
+			t.Errorf("expected kept: %q", s)
+		}
+	}
+}
