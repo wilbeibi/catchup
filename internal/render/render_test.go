@@ -90,34 +90,83 @@ func TestHTMLEscapes(t *testing.T) {
 func TestList(t *testing.T) {
 	var b bytes.Buffer
 	sums := []session.Summary{
-		{Ref: session.Ref{Provider: "codex", SessionID: "019f05d8"}, Rank: 1,
+		{Ref: session.Ref{Provider: "codex", SessionID: "deadbeef-cafe-babe-0123-456789abcdef"}, Rank: 3,
 			UpdatedAt: time.Now(), Title: "skeleton", Cwd: "/src/catchup", Preview: "let's\nimplement"},
 	}
 	if err := List(&b, "codex", sums, session.FormatMarkdown); err != nil {
 		t.Fatal(err)
 	}
 	out := b.String()
-	if !strings.Contains(out, "#") || !strings.Contains(out, "019f05d8") {
-		t.Errorf("list missing header or row:\n%s", out)
+	// The row's handle is the command that re-selects it.
+	if !strings.Contains(out, "SESSION") || !strings.Contains(out, "codex/3") {
+		t.Errorf("list missing header or handle:\n%s", out)
+	}
+	// The id is --json's business; in the table it only steals title width.
+	if strings.Contains(out, "deadbeef") {
+		t.Errorf("session id should not appear in the human table:\n%s", out)
 	}
 	if strings.Contains(out, "let's") {
 		t.Errorf("preview should not appear in list:\n%s", out)
 	}
-	// Full session IDs are preserved so --id can restore them.
-	sums[0].Ref.SessionID = "deadbeef-cafe-babe-0123-456789abcdef"
-	b.Reset()
-	if err := List(&b, "codex", sums, session.FormatMarkdown); err != nil {
+}
+
+// TestListCrossAgent covers the bare `catchup --list` table: no listing-wide
+// provider, so every row must label itself.
+func TestListCrossAgent(t *testing.T) {
+	sums := []session.Summary{
+		{Ref: session.Ref{Provider: "claude", SessionID: "a"}, Rank: 1, UpdatedAt: time.Now(), Title: "one"},
+		{Ref: session.Ref{Provider: "codex", SessionID: "b"}, Rank: 2, UpdatedAt: time.Now(), Title: "two"},
+	}
+	var b bytes.Buffer
+	if err := List(&b, "", sums, session.FormatMarkdown); err != nil {
 		t.Fatal(err)
 	}
-	out = b.String()
-	if !strings.Contains(out, "deadbeef-cafe-babe-0123-456789abcdef") {
-		t.Errorf("full session id should appear:\n%s", out)
+	out := b.String()
+	for _, want := range []string{"claude/1", "codex/2"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("cross-agent listing missing %q:\n%s", want, out)
+		}
+	}
+
+	b.Reset()
+	if err := List(&b, "", nil, session.FormatMarkdown); err != nil {
+		t.Fatal(err)
+	}
+	if got := b.String(); got != "no sessions found\n" {
+		t.Errorf("empty cross-agent listing = %q", got)
 	}
 }
 
-// TestListCJKAlignment locks in the display-width-aware padding: a CJK title
-// (2 columns per rune) must not shift the SESSION column relative to the
-// header or to an ASCII-only row. Regression for the tabwriter replacement.
+func TestAge(t *testing.T) {
+	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
+	timeNow = func() time.Time { return now }
+	t.Cleanup(func() { timeNow = time.Now })
+
+	cases := []struct {
+		ago  time.Duration
+		want string
+	}{
+		{30 * time.Second, "just now"},
+		{14 * time.Minute, "14m ago"},
+		{3 * time.Hour, "3h ago"},
+		{50 * time.Hour, "2d ago"},
+		{6 * 24 * time.Hour, "6d ago"},
+		// Past a week, "how long ago" stops being the question.
+		{9 * 24 * time.Hour, now.Add(-9 * 24 * time.Hour).Local().Format(dateHuman)},
+	}
+	for _, c := range cases {
+		if got := Age(now.Add(-c.ago)); got != c.want {
+			t.Errorf("Age(-%s) = %q, want %q", c.ago, got, c.want)
+		}
+	}
+	if got := Age(time.Time{}); got != "" {
+		t.Errorf("Age(zero) = %q, want empty", got)
+	}
+}
+
+// TestListCJKAlignment locks in the display-width-aware layout: a CJK title
+// (2 columns per rune) must not shift the TITLE column relative to the header
+// or to an ASCII-only row, and must not overflow the terminal width.
 func TestListCJKAlignment(t *testing.T) {
 	// termWidth falls back to $COLUMNS when w is not a *os.File.
 	t.Setenv("COLUMNS", "80")
@@ -127,7 +176,7 @@ func TestListCJKAlignment(t *testing.T) {
 		title string
 	}{
 		{"ascii", "Engineering basics"},
-		{"cjk", "Engineering博文三结论开头写法"},
+		{"cjk", "Engineering博文三结论开头写法博文三结论开头写法博文三结论开头写法博文三结论开头写法"},
 	}
 	sums := make([]session.Summary, 0, len(cases))
 	for i, c := range cases {
@@ -148,23 +197,21 @@ func TestListCJKAlignment(t *testing.T) {
 		t.Fatalf("expected %d lines, got %d:\n%s", len(cases)+1, len(lines), b.String())
 	}
 
-	// The SESSION column must start at the same *display column* in every
-	// line. CJK runes are 3 bytes but 2 columns, so byte offset is not
-	// enough — measure the display width of the prefix before SESSION.
-	marker := "0123456789abcdef"
-	want := runewidth.StringWidth(lines[0][:strings.Index(lines[0], "SESSION")])
-	if want < 0 {
-		t.Fatalf("header missing SESSION:\n%s", lines[0])
-	}
+	// The TITLE column must start at the same *display column* in every line.
+	// CJK runes are 3 bytes but 2 columns, so byte offset is not enough —
+	// measure the display width of the prefix before the title.
+	want := runewidth.StringWidth(lines[0][:strings.Index(lines[0], "TITLE")])
 	for i, ln := range lines[1:] {
-		idx := strings.Index(ln, marker)
+		idx := strings.Index(ln, "Engineering")
 		if idx < 0 {
-			t.Fatalf("line %d missing session id:\n%s", i+1, ln)
+			t.Fatalf("line %d missing title:\n%s", i+1, ln)
 		}
-		got := runewidth.StringWidth(ln[:idx])
-		if got != want {
-			t.Errorf("line %d (%s): SESSION at display col %d, want %d (header)\n%s",
+		if got := runewidth.StringWidth(ln[:idx]); got != want {
+			t.Errorf("line %d (%s): TITLE at display col %d, want %d (header)\n%s",
 				i+1, cases[i].name, got, want, ln)
+		}
+		if got := runewidth.StringWidth(ln); got > 80 {
+			t.Errorf("line %d (%s): %d display columns, want <= 80\n%s", i+1, cases[i].name, got, ln)
 		}
 	}
 }
