@@ -5,6 +5,7 @@ on:
     branches: [site]
     paths:
       - "public/**"
+      - "scripts/**"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
@@ -17,9 +18,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # gen-sitemap.sh reads each file's last commit date. A shallow clone
+          # has no history for most files, so every lastmod would collapse to
+          # today — which is the same lie as the hardcoded date it replaces.
+          fetch-depth: 0
+
+      - name: Regenerate sitemap with real lastmod dates
+        run: ./scripts/gen-sitemap.sh
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy public --project-name=catchup --branch=site
+
+      # Tell the IndexNow network (Bing, Yandex, Seznam) these URLs changed
+      # rather than waiting to be recrawled. The key file already lives at
+      # public/f41bccb8fa584f9f98509bdb70a01bb8.txt. Best-effort: a failed ping
+      # must not fail an otherwise-good deploy.
+      - name: Ping IndexNow
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          KEY=f41bccb8fa584f9f98509bdb70a01bb8
+          python3 - "$KEY" <<'PY' > /tmp/indexnow.json
+          import json, re, sys
+          key = sys.argv[1]
+          urls = re.findall(r"<loc>([^<]+)</loc>", open("public/sitemap.xml").read())
+          print(json.dumps({
+              "host": "catchup.pages.dev",
+              "key": key,
+              "keyLocation": f"https://catchup.pages.dev/{key}.txt",
+              "urlList": urls,
+          }))
+          PY
+          cat /tmp/indexnow.json
+          curl -sS -X POST https://api.indexnow.org/indexnow \
+            -H 'Content-Type: application/json; charset=utf-8' \
+            --data @/tmp/indexnow.json \
+            -w '\nindexnow: HTTP %{http_code}\n'

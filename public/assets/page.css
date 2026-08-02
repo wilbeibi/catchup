@@ -1,0 +1,85 @@
+/* Shared styles for catchup answer pages (/handoff/*, /usage-limit/,
+   /find-session/, /compare/).
+
+   Same visual system as the spot at `/` — system stack, white stage,
+   terminal-green $, one ochre accent, no webfonts, no build step — but a
+   reference register: no monologue, no narrative beats, no end-card sell.
+   See PRODUCT.md § Answer pages. */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+html, body { margin: 0; background: #ffffff; }
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: #1b1a18;
+  font-size: 17px;
+  line-height: 1.55;
+}
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+::selection { background: #c2792e33; }
+a:focus-visible, button:focus-visible { outline: 2px solid #9c5310; outline-offset: 3px; border-radius: 4px; }
+
+.col { max-width: 680px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+
+/* nav — identical to the spot so the two registers still read as one site */
+nav { display: flex; align-items: center; justify-content: space-between; max-width: 980px; margin: 0 auto; padding: 24px; }
+.wordmark { display: flex; align-items: baseline; text-decoration: none; color: #1b1a18; font-weight: 700; font-size: 18px; }
+.wordmark .cursor { color: #9c5310; }
+.navlinks { display: flex; gap: 22px; font-size: 14px; }
+.navlinks a { color: #5a554c; text-decoration: none; }
+.navlinks a:hover { color: #1b1a18; text-decoration: underline; }
+
+/* breadcrumb */
+.crumb { font-size: 14px; color: #5a554c; padding-top: 8px; }
+.crumb a { color: #5a554c; }
+.crumb a:hover { color: #1b1a18; }
+
+/* the question, and the answer to it */
+header.q { padding: 26px 0 0; }
+h1 { margin: 0 0 18px; font-weight: 700; letter-spacing: -0.02em; text-wrap: balance;
+     font-size: clamp(30px, 4.6vw, 44px); line-height: 1.1; }
+.lead { margin: 0 0 22px; font-size: clamp(18px, 2.1vw, 20px); color: #1b1a18; max-width: 60ch; text-wrap: pretty; }
+.lead code { background: #f0ede6; padding: 1px 6px; border-radius: 4px; font-size: 0.86em; }
+
+main { padding-bottom: clamp(56px, 9vh, 96px); }
+main h2 { font-size: clamp(21px, 2.6vw, 26px); letter-spacing: -0.015em; margin: 44px 0 10px; }
+main h3 { font-size: 18px; margin: 26px 0 6px; }
+main p { margin: 0 0 16px; color: #3c3831; max-width: 62ch; }
+main p code, main li code { background: #f0ede6; padding: 1px 6px; border-radius: 4px; font-size: 14px; color: #1b1a18; }
+main ul { margin: 0 0 16px; padding-left: 22px; max-width: 62ch; color: #3c3831; }
+main li { margin-bottom: 7px; }
+main a { color: #9c5310; }
+
+/* command block — static (no clipboard JS on these pages; select and copy) */
+.cmd {
+  display: flex; align-items: baseline; gap: 12px; width: fit-content; max-width: 100%;
+  background: #1e1d1a; color: #f5f3ee; border-radius: 8px;
+  padding: 13px 16px; font-size: 14.5px; margin: 0 0 20px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+.cmd .p { color: #8fbf5f; flex-shrink: 0; }
+.cmd .t { overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+
+/* honest-limits callout — the thing that does NOT work */
+.limit { border-left: 3px solid #c2792e; background: #faf7f1; padding: 14px 18px; margin: 0 0 20px; max-width: 62ch; }
+.limit p { margin: 0; color: #3c3831; }
+.limit strong { color: #1b1a18; }
+
+table { border-collapse: collapse; width: 100%; margin: 0 0 20px; font-size: 15.5px; display: block; overflow-x: auto; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid #e8e3d9; vertical-align: top; }
+th { font-weight: 700; white-space: nowrap; }
+td { color: #3c3831; }
+
+/* next steps */
+.related { margin-top: 48px; padding-top: 22px; border-top: 1px solid #e8e3d9; }
+.related h2 { font-size: 17px; margin: 0 0 10px; }
+.related ul { list-style: none; padding: 0; margin: 0; }
+.related li { margin-bottom: 7px; }
+
+footer { background: #1e1d1a; margin-top: clamp(48px, 8vh, 88px); }
+footer .inner { max-width: 980px; margin: 0 auto; padding: 30px 24px 40px; }
+footer .links { display: flex; flex-wrap: wrap; gap: 22px; font-size: 13px; }
+footer .links a { color: #c7c0b1; text-decoration: none; }
+footer .links a:hover { color: #f5f3ee; text-decoration: underline; }
+
+@media (max-width: 560px) { .cmd { width: 100%; } }

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Native resume vs. HANDOFF.md vs. cross-agent handoff</title>
+<meta name="description" content="Three ways to carry coding-agent context forward: the agent's own resume, a hand-written HANDOFF.md, and a cross-agent transcript handoff. What each preserves, what each loses, and when you do not need a tool at all.">
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+<link rel="canonical" href="https://catchup.pages.dev/compare/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Native resume vs. HANDOFF.md vs. cross-agent handoff">
+<meta property="og:description" content="What each approach preserves, what it loses, and when you do not need a tool at all.">
+<meta property="og:url" content="https://catchup.pages.dev/compare/">
+<meta property="og:image" content="https://catchup.pages.dev/assets/social-card.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314130f'/%3E%3Ctext x='5.5' y='23' font-family='monospace' font-size='17' font-weight='700' fill='%235f7d3b'%3E%24%3C/text%3E%3Crect x='18' y='10' width='8' height='13' fill='%23c2792e'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/page.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Native resume vs. HANDOFF.md vs. cross-agent handoff",
+  "description": "What each way of carrying coding-agent context forward preserves and loses, and when no tool is needed.",
+  "url": "https://catchup.pages.dev/compare/",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://catchup.pages.dev/compare/" },
+  "about": { "@id": "https://catchup.pages.dev/#catchup" },
+  "author": { "@id": "https://catchup.pages.dev/#wilbeibi" },
+  "publisher": { "@id": "https://catchup.pages.dev/#wilbeibi" },
+  "inLanguage": "en"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "catchup", "item": "https://catchup.pages.dev/" },
+    { "@type": "ListItem", "position": 2, "name": "Native resume vs. HANDOFF.md vs. cross-agent handoff" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "When do I not need catchup at all?",
+      "acceptedAnswer": { "@type": "Answer", "text": "When you are staying in the same agent and it has not stopped. Every supported agent ships its own resume, and using it directly is simpler. catchup earns its place when you are crossing agents, crossing machines, or cannot remember which session held the work." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is a hand-written HANDOFF.md worse than a transcript?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Not worse, different. A summary you wrote is shorter and reflects your judgment about what mattered; a transcript is complete but longer and includes detail nobody needs. The transcript's advantage is that it costs nothing to produce and cannot forget something you did not think to write down." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can any tool move native session state between two different agents?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. Agents store different things in incompatible formats, so nothing can reconstruct one agent's internal state inside another. Anything crossing agents carries a transcript. Only same-agent resume preserves real state." }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<nav>
+  <a class="wordmark" href="/"><span>catchup</span><span class="cursor">_</span></a>
+  <div class="navlinks">
+    <a href="https://github.com/wilbeibi/catchup#usage">docs</a>
+    <a href="https://github.com/wilbeibi/catchup">GitHub</a>
+  </div>
+</nav>
+
+<div class="col">
+  <p class="crumb"><a href="/">catchup</a> / native resume vs. HANDOFF.md vs. cross-agent handoff</p>
+
+  <header class="q">
+    <h1>Native resume vs. HANDOFF.md vs. cross-agent handoff</h1>
+    <p class="lead">Three ways to carry a coding-agent session forward. <strong>Native resume</strong> keeps real session state but only within the same agent. <strong>A hand-written HANDOFF.md</strong> works anywhere but costs you the writing and forgets what you left out. <strong>A transcript handoff</strong> costs nothing to produce and crosses agents, but carries conversation only — never native state.</p>
+  </header>
+
+  <main>
+    <table>
+      <thead>
+        <tr><th></th><th>Native resume</th><th>HANDOFF.md</th><th>Transcript handoff</th></tr>
+      </thead>
+      <tbody>
+        <tr><th>Keeps native session state</th><td>Yes</td><td>No</td><td>No</td></tr>
+        <tr><th>Works across different agents</th><td>No</td><td>Yes</td><td>Yes</td></tr>
+        <tr><th>Effort to produce</th><td>None</td><td>You write it</td><td>None</td></tr>
+        <tr><th>Completeness</th><td>Full</td><td>Only what you remembered</td><td>Whole conversation</td></tr>
+        <tr><th>Context cost in the target</th><td>None</td><td>Low</td><td>Proportional to the transcript</td></tr>
+        <tr><th>Works after the agent is closed</th><td>Usually</td><td>Yes</td><td>Yes</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Native resume — the default you should reach for first</h2>
+    <p>Every supported agent has its own resume path, and catchup delegates to it rather than reimplementing it:</p>
+    <div class="cmd"><span class="p">$</span><span class="t">catchup fork claude</span></div>
+    <p>Without <code>--into</code>, this is the agent's real resume: <code>codex fork</code>, <code>claude --resume --fork-session</code>, <code>cursor-agent --resume</code>, <code>cline -i --id</code>, <code>kimi --session</code>, <code>agy --conversation</code>, <code>opencode --session --fork</code>, or <code>pi --fork</code>. State survives intact. The only thing catchup adds is picking the right session for you.</p>
+
+    <div class="limit">
+      <p><strong>If you are staying in one agent and it is still running, you do not need a tool.</strong> Use the agent's own resume. catchup is worth installing for the cases below — crossing agents, crossing machines, or not remembering which session held the work.</p>
+    </div>
+
+    <h2>HANDOFF.md — a summary you write yourself</h2>
+    <p>The common workaround: before switching, write a Markdown file describing where things stand, then paste it into the next agent. It is portable and short, and the act of writing forces you to decide what matters.</p>
+    <p>The costs are that it takes time exactly when you have least of it, and it can only contain what you thought to include. A decision made forty messages ago that turns out to matter is simply gone.</p>
+
+    <h2>Transcript handoff — what catchup does</h2>
+    <p>The conversation already exists on disk. Rendering it costs nothing:</p>
+    <div class="cmd"><span class="p">$</span><span class="t">catchup fork claude --into codex --since-compact</span></div>
+    <p>Tool calls, command output, and reasoning traces are stripped, so what reaches the next agent is the discussion rather than a log of it. Because stdout is the wire format, the same transcript also crosses machines:</p>
+    <div class="cmd"><span class="p">$</span><span class="t">ssh box catchup codex | catchup fork --into claude --from -</span></div>
+    <p>The tradeoff is length. A transcript is bigger than a summary you would have written, which is why <code>--since-compact</code> and <code>--last &lt;N&gt;</code> exist.</p>
+
+    <h2>Questions</h2>
+
+    <h3>When do I not need catchup at all?</h3>
+    <p>When you are staying in the same agent and it has not stopped. Every supported agent ships its own resume, and using it directly is simpler. catchup earns its place when you are crossing agents, crossing machines, or cannot remember which session held the work.</p>
+
+    <h3>Is a hand-written HANDOFF.md worse than a transcript?</h3>
+    <p>Not worse, different. A summary you wrote is shorter and reflects your judgment about what mattered; a transcript is complete but longer and includes detail nobody needs. The transcript's advantage is that it costs nothing to produce and cannot forget something you did not think to write down.</p>
+
+    <h3>Can any tool move native session state between two different agents?</h3>
+    <p>No. Agents store different things in incompatible formats, so nothing can reconstruct one agent's internal state inside another. Anything crossing agents carries a transcript. Only same-agent resume preserves real state.</p>
+
+    <div class="related">
+      <h2>Related</h2>
+      <ul>
+        <li><a href="/handoff/claude-to-codex/">Continue a Claude Code session in Codex</a></li>
+        <li><a href="/handoff/codex-to-claude/">Continue a Codex session in Claude Code</a></li>
+        <li><a href="/usage-limit/">Keep working after an agent hits its usage limit</a></li>
+        <li><a href="/find-session/">Find and reopen an older session</a></li>
+        <li><a href="https://github.com/wilbeibi/catchup#usage">Full command reference</a></li>
+      </ul>
+    </div>
+  </main>
+</div>
+
+<footer>
+  <div class="inner">
+    <div class="links">
+      <a href="/">catchup</a>
+      <a href="https://github.com/wilbeibi/catchup">GitHub</a>
+      <a href="https://pkg.go.dev/github.com/wilbeibi/catchup">pkg.go.dev</a>
+      <a href="https://github.com/wilbeibi">@wilbeibi</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

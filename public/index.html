@@ -6,6 +6,13 @@
 <title>catchup - pick up a coding agent session without starting over</title>
 <meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Cursor, Cline, Kimi, Antigravity, OpenCode, or Pi Agent session and hands it to the next agent. When an agent stops mid-task, catchup fork --into keeps the work moving.">
 <meta name="keywords" content="catchup, AI coding agent, Claude Code, Codex, Cursor CLI, Cline, Kimi Code, Antigravity, agy, OpenCode, Pi Agent, usage limit, session handoff, context handoff, CLI, Go">
+<!--
+  max-snippet:-1 removes the length cap on the text snippet a generative answer
+  (AI Overviews, AI Mode) may quote. Google's RAG pipeline reuses classic-Search
+  snippet eligibility, so a capped snippet gets truncated mid-answer and a
+  competitor that allows the full excerpt gets cited instead.
+-->
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <meta property="og:type" content="website">
 <meta property="og:title" content="catchup - pick up a coding agent session without starting over">
 <meta property="og:description" content="Your agent stopped mid-task. One command hands the session to the next agent, already caught up.">
@@ -22,12 +29,22 @@
 <link rel="alternate" type="text/markdown" href="/index.md">
 <meta name="theme-color" content="#ffffff">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314130f'/%3E%3Ctext x='5.5' y='23' font-family='monospace' font-size='17' font-weight='700' fill='%235f7d3b'%3E%24%3C/text%3E%3Crect x='18' y='10' width='8' height='13' fill='%23c2792e'/%3E%3C/svg%3E">
+<!--
+  One @id for the tool, one for the author, reused verbatim on every page of
+  this site. "catchup" is an ambiguous string on its own — the name is dominated
+  by IPTV/TV catch-up projects — so alternateName and sameAs exist to pin this
+  entity to the repo, the Go package, and the Homebrew tap rather than leave a
+  retriever guessing which "catchup" is meant.
+-->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
+  "@id": "https://catchup.pages.dev/#catchup",
   "name": "catchup",
+  "alternateName": ["catchup CLI", "catchup — coding-agent session handoff CLI"],
   "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "Command-line tool",
   "operatingSystem": "macOS, Linux, Windows",
   "description": "CLI that reads Claude Code, Codex, Cursor, Cline, Kimi, Antigravity, OpenCode & Pi Agent session history so you can recap a session, find the right one, and hand it to the next agent as clean Markdown.",
   "url": "https://catchup.pages.dev/",
@@ -35,7 +52,73 @@
   "softwareHelp": "https://github.com/wilbeibi/catchup#usage",
   "license": "https://opensource.org/licenses/MIT",
   "programmingLanguage": "Go",
-  "author": { "@type": "Person", "name": "wilbeibi", "url": "https://github.com/wilbeibi" }
+  "softwareVersion": "0.5.1",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "sameAs": [
+    "https://github.com/wilbeibi/catchup",
+    "https://pkg.go.dev/github.com/wilbeibi/catchup",
+    "https://github.com/wilbeibi/homebrew-tap"
+  ],
+  "author": {
+    "@type": "Person",
+    "@id": "https://catchup.pages.dev/#wilbeibi",
+    "name": "wilbeibi",
+    "url": "https://github.com/wilbeibi",
+    "sameAs": ["https://github.com/wilbeibi"]
+  }
+}
+</script>
+<!--
+  FAQPage mirrors the "Fair questions" section verbatim. Google requires FAQ
+  structured data to match visible page content, so these strings must be edited
+  in lockstep with the <section class="qa"> markup below — not drifted.
+-->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What does catchup hand over?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The conversation, and only that: your messages and the agent's replies. Tool calls, command output, and reasoning traces get stripped, so the next agent reads what happened, not a log of it."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I have to switch agents, or can the same one resume?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The same agent picks up right where it left off: catchup fork resumes through its own native path, real session state and all. Crossing to another agent is there when you want it, catchup fork claude --into codex seeds it with the transcript."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I find a session from last week?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "It's still on disk. catchup claude -q \"rate limit\" searches by keyword, lists what matches, and opens the exact one you meant."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I have to memorize the flags?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "You don't have to. catchup install-skill teaches your agent the command once, and after that you just say \"catch up on the last Codex session\" in plain words."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does it merge histories across agents?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. One agent at a time. It's a handoff, not a blender."
+      }
+    }
+  ]
 }
 </script>
 <style>
@@ -118,11 +201,14 @@
   /* Q&A */
   .qa { padding: clamp(56px, 9vh, 100px) 0 0; }
   .qa h2 { font-size: clamp(24px, 3.2vw, 32px); letter-spacing: -0.015em; margin: 0 0 34px; }
-  .qa dl { margin: 0; }
-  .qa dt { font-weight: 700; font-size: 18px; margin: 26px 0 6px; }
-  .qa dt:first-child { margin-top: 0; }
-  .qa dd { margin: 0; color: #3c3831; max-width: 60ch; }
-  .qa dd code { background: #f0ede6; padding: 1px 6px; border-radius: 4px; font-size: 14px; color: #1b1a18; }
+  /* headings, not <dt>: a question is a chunk boundary for retrieval, and the
+     FAQPage JSON-LD above needs a visible heading to correspond to. Rendering is
+     unchanged from the previous <dl> — the margins below reproduce it exactly. */
+  .qa .qa-item { margin-top: 26px; }
+  .qa .qa-item:first-of-type { margin-top: 0; }
+  .qa h3 { font-weight: 700; font-size: 18px; margin: 0 0 6px; letter-spacing: 0; }
+  .qa p { margin: 0; color: #3c3831; max-width: 60ch; }
+  .qa p code { background: #f0ede6; padding: 1px 6px; border-radius: 4px; font-size: 14px; color: #1b1a18; }
 
   /* install */
   .install { padding: clamp(56px, 9vh, 100px) 0 0; }
@@ -151,6 +237,9 @@
   footer .links { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 20px; font-size: 13px; }
   footer .links a { color: #c7c0b1; text-decoration: none; }
   footer .links a:hover { color: #f5f3ee; text-decoration: underline; }
+  footer .links.answers { margin-top: 22px; }
+  footer .links.answers a { color: #8f8877; }
+  footer .links.answers a:hover { color: #c7c0b1; }
 
   @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
   @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
@@ -294,22 +383,31 @@
 <section class="qa">
   <div class="col">
     <h2>Fair questions.</h2>
-    <dl>
-      <dt>What actually gets handed over?</dt>
-      <dd>The conversation, and only that: your messages and the agent's replies. Tool calls, command output, and reasoning traces get stripped, so the next agent reads what happened, not a log of it.</dd>
 
-      <dt>Do I have to switch agents?</dt>
-      <dd>No. The same agent picks up right where it left off: <code>catchup fork</code> resumes through its own native path, real session state and all. Crossing to another agent is there when you want it, <code>catchup fork claude --into codex</code> seeds it with the transcript.</dd>
+    <div class="qa-item">
+      <h3>What does catchup hand over?</h3>
+      <p>The conversation, and only that: your messages and the agent's replies. Tool calls, command output, and reasoning traces get stripped, so the next agent reads what happened, not a log of it.</p>
+    </div>
 
-      <dt>What about that session last week about rate limits?</dt>
-      <dd>It's still on disk. <code>catchup claude -q "rate limit"</code> searches by keyword, lists what matches, and opens the exact one you meant.</dd>
+    <div class="qa-item">
+      <h3>Do I have to switch agents, or can the same one resume?</h3>
+      <p>The same agent picks up right where it left off: <code>catchup fork</code> resumes through its own native path, real session state and all. Crossing to another agent is there when you want it, <code>catchup fork claude --into codex</code> seeds it with the transcript.</p>
+    </div>
 
-      <dt>I don't want to memorize all these flags.</dt>
-      <dd>You don't have to. <code>catchup install-skill</code> teaches your agent the command once, and after that you just say "catch up on the last Codex session" in plain words.</dd>
+    <div class="qa-item">
+      <h3>How do I find a session from last week?</h3>
+      <p>It's still on disk. <code>catchup claude -q "rate limit"</code> searches by keyword, lists what matches, and opens the exact one you meant.</p>
+    </div>
 
-      <dt>Does it merge histories across agents?</dt>
-      <dd>No. One agent at a time. It's a handoff, not a blender.</dd>
-    </dl>
+    <div class="qa-item">
+      <h3>Do I have to memorize the flags?</h3>
+      <p>You don't have to. <code>catchup install-skill</code> teaches your agent the command once, and after that you just say "catch up on the last Codex session" in plain words.</p>
+    </div>
+
+    <div class="qa-item">
+      <h3>Does it merge histories across agents?</h3>
+      <p>No. One agent at a time. It's a handoff, not a blender.</p>
+    </div>
   </div>
 </section>
 
@@ -348,6 +446,17 @@
 
 <footer>
   <div class="inner">
+    <!-- The answer pages live here rather than in the nav: the spot has one job
+         and a second row of links would compete with it. Fine print at the
+         bottom is the register these belong to, and it gives both readers and
+         crawlers a path to them. -->
+    <div class="links answers">
+      <a href="/usage-limit/">After a usage limit</a>
+      <a href="/handoff/claude-to-codex/">Claude Code → Codex</a>
+      <a href="/handoff/codex-to-claude/">Codex → Claude Code</a>
+      <a href="/find-session/">Find an old session</a>
+      <a href="/compare/">Resume vs. handoff</a>
+    </div>
     <div class="links">
       <a href="https://github.com/wilbeibi/catchup">GitHub</a>
       <a href="https://pkg.go.dev/github.com/wilbeibi/catchup">pkg.go.dev</a>

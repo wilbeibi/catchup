@@ -2,10 +2,15 @@
 
 ## What this is
 
-Single-page marketing site for `catchup`, an open-source Go CLI that reads a
-coding agent's local session history (Claude Code, Codex, Antigravity,
+Marketing site for `catchup`, an open-source Go CLI that reads a coding agent's
+local session history (Claude Code, Codex, Cursor, Cline, Kimi, Antigravity,
 OpenCode, Pi Agent) and hands the conversation to the next agent. Static HTML
 on Cloudflare Pages; the `site` branch is the deploy source (`just deploy`).
+
+`/` is the spot — one page, one job (see Register). Everything under
+`/handoff/`, `/usage-limit/`, `/find-session/`, and `/compare/` is a separate
+register: **answer pages**, described at the bottom of this file. They are not
+part of the spot and must not drift into marketing.
 
 ## Register
 
@@ -51,3 +56,26 @@ roman numerals, the previous design), terminal-dark cosplay, SaaS gradient.
   with the page), copy-to-clipboard install, zero build step.
 - Truthfulness: never claim cross-agent native-state transfer; `fork --into`
   carries a transcript. Boundaries copy comes from the README.
+- The `FAQPage` JSON-LD in `index.html` mirrors the "Fair questions" section
+  verbatim. Google requires FAQ structured data to match visible content —
+  edit both or neither.
+
+## Answer pages (`/handoff/*`, `/usage-limit/`, `/find-session/`, `/compare/`)
+
+**Register: reference, not spot.** Someone arrives here mid-problem from a
+search or an AI answer, having never seen `/`. The job is to answer the exact
+question in the first paragraph and get out of the way.
+
+- Title and `<h1>` are the question as a person would type it. Not a slogan.
+- First paragraph answers it completely and contains the command. Assume it is
+  the only thing that gets read, quoted, or cited.
+- Same visual system as the spot (system stack, white stage, terminal-green
+  `$`, ochre accent, no webfonts, zero build step) — but no monologue, no
+  narrative beats, no end-card sell. Shared styles live in `/assets/page.css`.
+- `TechArticle` + `FAQPage` + `BreadcrumbList` JSON-LD, reusing the
+  `#catchup` and `#wilbeibi` `@id`s from `index.html` so every page points at
+  one entity rather than minting a new one.
+- The audience is unchanged: allergic to marketing copy, respects plainness
+  and stated limits. Say what does not work as readily as what does.
+- Anti-lane: SEO doorway pages. If a page has nothing to say that the README
+  does not already say better, delete it rather than pad it.

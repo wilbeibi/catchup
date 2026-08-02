@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How to continue a Codex session in Claude Code</title>
+<meta name="description" content="Run catchup fork codex --into claude to continue a Codex session in Claude Code. It reads the local Codex session, strips tool calls and reasoning, and starts Claude Code with the conversation as its opening prompt.">
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+<link rel="canonical" href="https://catchup.pages.dev/handoff/codex-to-claude/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="How to continue a Codex session in Claude Code">
+<meta property="og:description" content="One command hands a Codex session to Claude Code, already caught up.">
+<meta property="og:url" content="https://catchup.pages.dev/handoff/codex-to-claude/">
+<meta property="og:image" content="https://catchup.pages.dev/assets/social-card.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314130f'/%3E%3Ctext x='5.5' y='23' font-family='monospace' font-size='17' font-weight='700' fill='%235f7d3b'%3E%24%3C/text%3E%3Crect x='18' y='10' width='8' height='13' fill='%23c2792e'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/page.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "How to continue a Codex session in Claude Code",
+  "description": "Run catchup fork codex --into claude to continue a Codex session in Claude Code.",
+  "url": "https://catchup.pages.dev/handoff/codex-to-claude/",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://catchup.pages.dev/handoff/codex-to-claude/" },
+  "about": { "@id": "https://catchup.pages.dev/#catchup" },
+  "author": { "@id": "https://catchup.pages.dev/#wilbeibi" },
+  "publisher": { "@id": "https://catchup.pages.dev/#wilbeibi" },
+  "inLanguage": "en"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "catchup", "item": "https://catchup.pages.dev/" },
+    { "@type": "ListItem", "position": 2, "name": "Continue a Codex session in Claude Code" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Does Claude Code get the real Codex session state?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. Crossing agents carries the transcript, not native session state — Claude Code starts a fresh session whose opening prompt is the Codex conversation. Native state is preserved only when you resume the same agent, with catchup fork codex." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I send only part of the Codex session?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. --since-compact keeps only the tail after the last compaction and --last <N> keeps the last N exchanges. Both compose with --into, so the target agent starts on a smaller prompt." }
+    },
+    {
+      "@type": "Question",
+      "name": "Which agents can be the source or the target?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Any supported agent on either end: Claude Code, Codex, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, and Pi Agent. The form is always catchup fork <source> --into <target>." }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<nav>
+  <a class="wordmark" href="/"><span>catchup</span><span class="cursor">_</span></a>
+  <div class="navlinks">
+    <a href="https://github.com/wilbeibi/catchup#usage">docs</a>
+    <a href="https://github.com/wilbeibi/catchup">GitHub</a>
+  </div>
+</nav>
+
+<div class="col">
+  <p class="crumb"><a href="/">catchup</a> / continue a Codex session in Claude Code</p>
+
+  <header class="q">
+    <h1>How to continue a Codex session in Claude Code</h1>
+    <p class="lead">Run <code>catchup fork codex --into claude</code>. It reads the newest Codex session in the current directory, strips the tool calls and reasoning traces, and starts Claude Code with the remaining conversation as its opening prompt. Claude Code picks up knowing what was already decided.</p>
+  </header>
+
+  <main>
+    <div class="cmd"><span class="p">$</span><span class="t">catchup fork codex --into claude</span></div>
+
+    <div class="limit">
+      <p><strong>What crosses, and what doesn't.</strong> Going from one agent to another carries the <em>conversation</em>, not native session state. Claude Code opens a new session seeded with the Codex transcript. Nothing recreates Codex's internal state inside Claude Code, and no tool ever could — the two store different things in different formats.</p>
+    </div>
+
+    <h2>Keeping the prompt small</h2>
+    <p>Codex sessions get long. Trim the transcript before it becomes Claude Code's opening prompt:</p>
+    <div class="cmd"><span class="p">$</span><span class="t">catchup fork codex --into claude --last 20</span></div>
+    <ul>
+      <li><code>--last 20</code> — only the last 20 exchanges.</li>
+      <li><code>--since-compact</code> — only the tail after the last compaction.</li>
+      <li><code>--model &lt;name&gt;</code> — launch Claude Code on a specific model, passed through as-is.</li>
+    </ul>
+
+    <h2>Choosing which Codex session</h2>
+    <p>The default is the most recent Codex session in the current directory. To pick another:</p>
+    <div class="cmd"><span class="p">$</span><span class="t">catchup codex -q "migration"</span></div>
+    <p><code>-q</code> searches by keyword and lists what matches; <code>codex/3</code> selects the third-newest; <code>--id &lt;id&gt;</code> takes an exact session id; <code>--dir &lt;path&gt;</code> reads sessions from another directory. See <a href="/find-session/">finding an older session</a>.</p>
+
+    <h2>Restarting the same agent cleanly</h2>
+    <p>If you want Codex itself to continue but with a fresh, smaller context rather than its accumulated one, point <code>--into</code> back at the same agent:</p>
+    <div class="cmd"><span class="p">$</span><span class="t">catchup fork codex --into codex --since-compact</span></div>
+    <p>That restarts Codex clean, seeded with just the recent work. To instead resume with Codex's real session state, drop <code>--into</code> and run <code>catchup fork codex</code> — see <a href="/compare/">the comparison</a>.</p>
+
+    <h2>Questions</h2>
+
+    <h3>Does Claude Code get the real Codex session state?</h3>
+    <p>No. Crossing agents carries the transcript, not native session state — Claude Code starts a fresh session whose opening prompt is the Codex conversation. Native state is preserved only when you resume the same agent, with <code>catchup fork codex</code>.</p>
+
+    <h3>Can I send only part of the Codex session?</h3>
+    <p>Yes. <code>--since-compact</code> keeps only the tail after the last compaction and <code>--last &lt;N&gt;</code> keeps the last N exchanges. Both compose with <code>--into</code>, so the target agent starts on a smaller prompt.</p>
+
+    <h3>Which agents can be the source or the target?</h3>
+    <p>Any supported agent on either end: Claude Code, Codex, Cursor, Cline, Kimi, Antigravity (<code>agy</code>), OpenCode, and Pi Agent. The form is always <code>catchup fork &lt;source&gt; --into &lt;target&gt;</code>.</p>
+
+    <div class="related">
+      <h2>Related</h2>
+      <ul>
+        <li><a href="/handoff/claude-to-codex/">Continue a Claude Code session in Codex</a></li>
+        <li><a href="/usage-limit/">Keep working after an agent hits its usage limit</a></li>
+        <li><a href="/find-session/">Find and reopen an older session</a></li>
+        <li><a href="/compare/">Native resume vs. HANDOFF.md vs. cross-agent handoff</a></li>
+        <li><a href="https://github.com/wilbeibi/catchup#usage">Full command reference</a></li>
+      </ul>
+    </div>
+  </main>
+</div>
+
+<footer>
+  <div class="inner">
+    <div class="links">
+      <a href="/">catchup</a>
+      <a href="https://github.com/wilbeibi/catchup">GitHub</a>
+      <a href="https://pkg.go.dev/github.com/wilbeibi/catchup">pkg.go.dev</a>
+      <a href="https://github.com/wilbeibi">@wilbeibi</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
