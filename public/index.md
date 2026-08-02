@@ -42,7 +42,6 @@ Each agent keeps its own history format; catchup normalizes the output.
 ## Common tasks
 
 - [Continue a Claude Code session in Codex](https://catchup.pages.dev/handoff/claude-to-codex/) — `catchup fork claude --into codex`
-- [Continue a Codex session in Claude Code](https://catchup.pages.dev/handoff/codex-to-claude/) — `catchup fork codex --into claude`
 - [Keep working after an agent hits its usage limit](https://catchup.pages.dev/usage-limit/) — move the conversation to an agent that still has quota
 - [Find and reopen a past session](https://catchup.pages.dev/find-session/) — `catchup --list`, `-q "keyword"`, `--id`
 - [Native resume vs. HANDOFF.md vs. cross-agent handoff](https://catchup.pages.dev/compare/) — what each keeps and loses

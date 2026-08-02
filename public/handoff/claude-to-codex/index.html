@@ -108,8 +108,15 @@
     <div class="cmd"><span class="p">$</span><span class="t">ssh box catchup claude | catchup fork --into codex --from -</span></div>
     <p><code>--from</code> accepts a file, <code>-</code> for stdin, or an <code>http(s)</code> URL, so the session Claude Code wrote on one machine can seed Codex on another.</p>
 
-    <h2>Going the other way</h2>
-    <p>The direction is symmetric: <a href="/handoff/codex-to-claude/">continue a Codex session in Claude Code</a> with <code>catchup fork codex --into claude</code>. Any supported agent can be either end — Claude Code, Codex, Cursor, Cline, Kimi, Antigravity, OpenCode, or Pi Agent.</p>
+    <h2>Going the other way, and every other pair</h2>
+    <p>The direction is symmetric — swap the two agent names:</p>
+    <div class="cmd"><span class="p">$</span><span class="t">catchup fork codex --into claude</span></div>
+    <p>Any supported agent can be either end: Claude Code, Codex, Cursor, Cline, Kimi, Antigravity (<code>agy</code>), OpenCode, and Pi Agent. Every flag on this page works the same regardless of which pair you use.</p>
+
+    <h2>Restarting the same agent cleanly</h2>
+    <p>If the context is spent but the work isn't, and you want Claude Code itself to carry on with a fresh, smaller context rather than its accumulated one, point <code>--into</code> back at the same agent:</p>
+    <div class="cmd"><span class="p">$</span><span class="t">catchup fork claude --into claude --since-compact</span></div>
+    <p>That restarts it clean, seeded with just the recent work. To instead resume with Claude Code's real session state, drop <code>--into</code> and run <code>catchup fork claude</code> — see <a href="/compare/">the comparison</a>.</p>
 
     <h2>Questions</h2>
 
@@ -125,7 +132,6 @@
     <div class="related">
       <h2>Related</h2>
       <ul>
-        <li><a href="/handoff/codex-to-claude/">Continue a Codex session in Claude Code</a></li>
         <li><a href="/usage-limit/">Keep working after an agent hits its usage limit</a></li>
         <li><a href="/find-session/">Find and reopen an older session</a></li>
         <li><a href="/compare/">Native resume vs. HANDOFF.md vs. cross-agent handoff</a></li>

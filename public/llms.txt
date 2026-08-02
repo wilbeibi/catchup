@@ -42,7 +42,6 @@ Key facts:
 
 ## Answer pages
 - [How to continue a Claude Code session in Codex](https://catchup.pages.dev/handoff/claude-to-codex/): `catchup fork claude --into codex` — what crosses, how to trim the transcript, and how to cross machines.
-- [How to continue a Codex session in Claude Code](https://catchup.pages.dev/handoff/codex-to-claude/): `catchup fork codex --into claude`, choosing which session, and restarting the same agent clean.
 - [How to keep working after a coding agent hits its usage limit](https://catchup.pages.dev/usage-limit/): Move the conversation to an agent that still has quota; what this does and does not do about the limit.
 - [How to find and reopen a past coding-agent session](https://catchup.pages.dev/find-session/): `catchup --list`, `-q` keyword search, `--id`, `--dir`, and reopening with `fork`.
 - [Native resume vs. HANDOFF.md vs. cross-agent handoff](https://catchup.pages.dev/compare/): What each approach preserves and loses, and when no tool is needed.

@@ -79,3 +79,12 @@ question in the first paragraph and get out of the way.
   and stated limits. Say what does not work as readily as what does.
 - Anti-lane: SEO doorway pages. If a page has nothing to say that the README
   does not already say better, delete it rather than pad it.
+
+**One page per job, not per agent pair.** Eight agents is 56 directional
+pairs; if direction justified a page, the honest version of that is 56 pages,
+which is a doorway farm. `/handoff/claude-to-codex/` exists because that pair
+is the product's actual cold open — the hero scene, the demo GIF, the README's
+lead example — not because a template generated it. The reverse direction is
+two sentences on that same page. There was briefly a `/handoff/codex-to-claude/`;
+it was cut because no query in `~/geo/queries/wilbeibi-catchup.json` mapped to
+it. Before adding an answer page, name the query it answers.
