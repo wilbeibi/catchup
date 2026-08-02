@@ -59,6 +59,10 @@ roman numerals, the previous design), terminal-dark cosplay, SaaS gradient.
 - The `FAQPage` JSON-LD in `index.html` mirrors the "Fair questions" section
   verbatim. Google requires FAQ structured data to match visible content —
   edit both or neither.
+- `public/404.html` must exist. Without it Cloudflare Pages answers every
+  unmatched route with `index.html` at status 200, so typos and removed pages
+  become indexable duplicates of the homepage and never leave a crawler's
+  index. It carries `noindex` and stays out of `sitemap.xml`.
 
 ## Answer pages (`/handoff/*`, `/usage-limit/`, `/find-session/`, `/compare/`)
 
