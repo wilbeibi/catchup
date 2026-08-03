@@ -61,9 +61,12 @@ Omit `<agent>` and catchup uses whichever agent has the newest session in this d
 **For you:** run in your terminal to re-enter a session:
 
 ```bash
+catchup --list                   # where was I — recent sessions, every agent
 catchup fork                     # fork the newest session across agents
 catchup fork <agent>             # fork that agent's newest session
 catchup fork codex --into claude # continue a Codex session in Claude
+catchup fork claude --into claude --since-compact
+                                 # restart the same agent clean, keeping the work
 ```
 
 **For agents:** run inside a session to read prior work:
@@ -80,7 +83,7 @@ catchup <agent> --last 4         # read last 4 exchanges
 catchup <agent> --json           # render JSON; also --html
 ```
 
-Use `fork` to continue with the same agent and keep native session state. Use `fork --into` to start another agent with the transcript. Use read commands when you want old work in a clean context.
+Use `fork` to continue with the same agent and keep native session state. Use `fork --into` to start another agent with the transcript — or the same agent with `--last`/`--since-compact`, which restarts it clean on a trimmed transcript when the context is spent but the work isn't. Use read commands when you want old work in a clean context.
 
 ## Boundaries
 
@@ -88,6 +91,7 @@ Use `fork` to continue with the same agent and keep native session state. Use `f
 - Conversation only. It strips tool calls, command output, and reasoning traces.
 - Read-only, except `fork`.
 - Same-agent `fork` uses the agent's native resume path, so it keeps real session state.
+- Same-agent `fork --into` is the opposite trade: native state is dropped for a clean context.
 - Cross-agent `fork --into` seeds the new agent with a transcript, not native state.
 
 ## License

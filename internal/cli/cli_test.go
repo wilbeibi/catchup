@@ -207,8 +207,9 @@ func TestRunCwdFiltering(t *testing.T) {
 	}
 	roots := session.Roots{Codex: root}
 
-	// With cwd: only the matching session appears.
-	out := runWithCwd(t, roots, "/home/u/src/catchup", "codex", "--list")
+	// With cwd: only the matching session appears. Asserted against --json,
+	// which is where session ids live; the table shows handles and titles.
+	out := runWithCwd(t, roots, "/home/u/src/catchup", "codex", "--list", "--json")
 	if !strings.Contains(out, "sess-catchup") {
 		t.Errorf("expected sess-catchup in cwd-filtered listing, got:\n%s", out)
 	}
@@ -217,7 +218,7 @@ func TestRunCwdFiltering(t *testing.T) {
 	}
 
 	// --dir substitutes another directory for the cwd.
-	out = runWithCwd(t, roots, "/somewhere/else", "codex", "--list", "--dir", "/home/u/src/other")
+	out = runWithCwd(t, roots, "/somewhere/else", "codex", "--list", "--json", "--dir", "/home/u/src/other")
 	if !strings.Contains(out, "sess-other") || strings.Contains(out, "sess-catchup") {
 		t.Errorf("--dir should select exactly the named directory, got:\n%s", out)
 	}
@@ -546,6 +547,85 @@ func TestRunInstallSkillAllProviders(t *testing.T) {
 	}
 }
 
+// runBoth is runWithCwd when stderr matters: the guesses, hints, and warnings
+// that keep stdout a clean wire format all land there.
+func runBoth(t *testing.T, roots session.Roots, cwd string, args ...string) (string, string) {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	if err := Run(context.Background(), args, roots, nil, nil, nil, "test", cwd, nil, &out, &errOut); err != nil {
+		t.Fatalf("Run(%v) error: %v (stderr: %s)", args, err, errOut.String())
+	}
+	return out.String(), errOut.String()
+}
+
+// A bare listing spans every agent: "where was I" is a cross-agent question,
+// and each row names the agent that owns it so the handles stay selectable.
+func TestRunListAcrossAgents(t *testing.T) {
+	roots := codexRoot(t)
+	roots.Claude = claudeRoot(t).Claude
+
+	out, _ := runBoth(t, roots, "", "--list")
+	for _, want := range []string{"codex/1", "claude/1", "claude/2"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("cross-agent listing missing %q:\n%s", want, out)
+		}
+	}
+
+	// Naming an agent keeps the listing scoped to it.
+	out, _ = runBoth(t, roots, "", "claude", "--list")
+	if strings.Contains(out, "codex/") {
+		t.Errorf("catchup claude --list should not list codex:\n%s", out)
+	}
+
+	// The JSON listing carries the agent per row too, so scripts can tell the
+	// merged rows apart.
+	out, _ = runBoth(t, roots, "", "--list", "--json")
+	for _, want := range []string{`"agent": "codex"`, `"agent": "claude"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("cross-agent JSON listing missing %s:\n%s", want, out)
+		}
+	}
+}
+
+// fork acts on an inferred source, so it says which one, before the launch.
+func TestRunForkAnnouncesSource(t *testing.T) {
+	roots := codexRoot(t)
+
+	withForkRunner(t, func(ctx context.Context, src session.Source, model string, stdin io.Reader, stdout, stderr io.Writer) error {
+		return nil
+	})
+	_, errOut := runBoth(t, roots, "/home/u/src/proj", "fork")
+	if !strings.Contains(errOut, "catchup: forking codex") {
+		t.Errorf("native fork should name its source:\n%s", errOut)
+	}
+	if strings.Contains(errOut, "→") {
+		t.Errorf("native fork has no target agent to announce:\n%s", errOut)
+	}
+	// The fixture's cwd is /home/u/src/proj and its agent never titled the
+	// session, so codex falls back to "proj" — a name that identifies nothing.
+	if strings.Contains(errOut, "proj") {
+		t.Errorf("announce should drop a directory-name title:\n%s", errOut)
+	}
+
+	// Providers that title a session from its first user message produce
+	// titles of any length: a real cline session was titled with catchup's
+	// own 100-character seed preamble. The announce stays one line.
+	long := session.Source{Ref: session.Ref{Provider: "codex"}, Metadata: map[string]string{"title": strings.Repeat("long ", 40)}}
+	var b bytes.Buffer
+	announceFork(&b, long, "claude")
+	if got := len([]rune(b.String())); got > 100 {
+		t.Errorf("announce line is %d runes, want one line:\n%s", got, b.String())
+	}
+
+	withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		return nil
+	})
+	_, errOut = runBoth(t, roots, "/home/u/src/proj", "fork", "--into", "claude")
+	if !strings.Contains(errOut, "catchup: forking codex → claude") {
+		t.Errorf("--into should announce both ends:\n%s", errOut)
+	}
+}
+
 func withForkRunner(t *testing.T, runner forkRunner) {
 	t.Helper()
 	old := runFork
@@ -584,17 +664,45 @@ func TestRunForkInto(t *testing.T) {
 	}
 }
 
+// A bare same-agent --into is far more likely a mistyped native fork, so it is
+// refused — but a trimmed one is a deliberate reseed: shed the context, keep
+// the knowledge.
 func TestRunForkIntoSameAgent(t *testing.T) {
 	roots := codexRoot(t)
 	withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-		t.Fatal("runner should not be called for a same-agent --into")
+		t.Fatal("runner should not be called for a bare same-agent --into")
 		return nil
 	})
 
 	var out, errOut bytes.Buffer
 	err := Run(context.Background(), []string{"fork", "codex", "--into", "codex"}, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut)
-	if err == nil || !strings.Contains(err.Error(), "native fork") {
-		t.Fatalf("want same-agent rejection pointing at native fork, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "resume it with full state") {
+		t.Fatalf("want same-agent rejection pointing at the native fork, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "--since-compact") {
+		t.Errorf("rejection should name the reseed it was probably meant to be: %v", err)
+	}
+}
+
+func TestRunForkIntoSameAgentReseed(t *testing.T) {
+	roots := codexRoot(t)
+	for _, trim := range [][]string{{"--since-compact"}, {"--last", "5"}} {
+		var gotArgs []string
+		withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+			gotArgs = args
+			return nil
+		})
+		var out, errOut bytes.Buffer
+		args := append([]string{"fork", "codex", "--into", "codex"}, trim...)
+		if err := Run(context.Background(), args, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut); err != nil {
+			t.Fatalf("fork codex --into codex %v: %v", trim, err)
+		}
+		if len(gotArgs) == 0 {
+			t.Fatalf("fork codex --into codex %v seeded nothing", trim)
+		}
+		if !strings.Contains(gotArgs[len(gotArgs)-1], "prior codex session") {
+			t.Errorf("reseed prompt missing the transcript preamble: %q", gotArgs[len(gotArgs)-1])
+		}
 	}
 }
 
@@ -699,9 +807,9 @@ func TestRunForkSelectors(t *testing.T) {
 	if forked {
 		t.Error("ambiguous fork query must not fork")
 	}
-	for _, want := range []string{"sess-auth", "sess-parser"} {
+	for _, want := range []string{"fix the auth flow", "refactor the parser pipeline"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("ambiguous fork listing missing %s:\n%s", want, out)
+			t.Errorf("ambiguous fork listing missing %q:\n%s", want, out)
 		}
 	}
 	if !strings.Contains(errOut, "rerun as catchup fork codex/<rank>") {

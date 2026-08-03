@@ -15,10 +15,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/wilbeibi/catchup/internal/agy"
 	"github.com/wilbeibi/catchup/internal/claude"
 	"github.com/wilbeibi/catchup/internal/cline"
@@ -48,7 +50,7 @@ RECAP — how much of the session (default: all of it)
   -i, --info          metadata only, no messages
 
 FIND — which session (default: newest here)
-  --list              list recent sessions
+  --list              list recent sessions here, across every agent
   -q, --query <text>  search by keyword (implies --list)
   <agent>/<rank>      the Nth newest, e.g. codex/3
   --id <id>           an exact session id
@@ -57,10 +59,11 @@ FIND — which session (default: newest here)
 
 HAND OFF — continue the work
   fork [agent]        native resume, full state
-  --into <agent>      seed a different agent with the transcript
+  --into <agent>      seed a different agent with the transcript; the same
+                      agent, with --last/--since-compact, restarts it clean
   --from <src>        with --into: seed from a file, - (stdin), or http(s) URL
   --model <name>      launch it on a specific model, e.g. a cheaper one
-                      (the target agent's own model name, e.g. gpt-5.6)
+                      (the target agent's own model name, passed as-is)
 
 OUTPUT — as what (default: Markdown)
   --md, --markdown    Markdown (the default)
@@ -76,6 +79,7 @@ Examples:
   catchup claude --dir ~/src/proj      latest session from another directory
   catchup fork --into codex            hand the newest session here to Codex
   catchup fork claude --into codex --model gpt-5.6   ...on a specific model
+  catchup fork claude --into claude --since-compact  ...clean, same agent
   catchup fork --into claude --from handoff.md       ...from a saved transcript
   catchup install-skill                install the SKILL.md for every agent
 
@@ -149,6 +153,10 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		if !ok {
 			return nil // several query matches: the listing printed is the answer
 		}
+		// The source is usually inferred, and this is the one command that
+		// spends money on the guess, so name it before the launch — early
+		// enough to interrupt while a large transcript is still being read.
+		announceFork(stderr, src, cmd.Into)
 		if cmd.Into != "" {
 			return forkInto(ctx, src, cmd, stdin, stdout, stderr)
 		}
@@ -159,9 +167,17 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		return installSkill(cmd.Target.Provider, skillDirs, skillMD, version, stdout)
 	}
 
+	// A listing with no agent named spans every agent: "where was I" is a
+	// cross-agent question by nature — the whole premise of catchup is that
+	// more than one agent works here — and the table's handles carry the agent
+	// name, so its rows stay selectable.
+	if cmd.Target.Provider == "" && cmd.List {
+		return listAcross(ctx, roots, cmd, cwd, stdout, stderr)
+	}
+
 	// With no agent named, the agent owning the newest session in cwd is the
 	// target; the normal locate below then re-selects within that provider, so
-	// --list, -q, and the trims all work against the detected agent.
+	// -q and the trims all work against the detected agent.
 	if cmd.Target.Provider == "" {
 		src, err := newestAcross(ctx, roots, cwd)
 		if err != nil {
@@ -207,6 +223,76 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		thread = clampEntries(thread)
 	}
 	return render.Thread(stdout, thread, cmd.Format)
+}
+
+// listAcross renders one time-ordered table spanning every provider's cwd
+// listing. Ranks stay per-agent — claude/2 selects the same session here as it
+// does in catchup claude --list — so only row order is merged, never the
+// numbering.
+func listAcross(ctx context.Context, roots session.Roots, cmd Command, cwd string, stdout, stderr io.Writer) error {
+	opts := session.ListOptions{Query: cmd.Target.Query, Cwd: cwd, Limit: cmd.Limit}
+	var merged []session.Summary
+	for _, name := range providerNames() {
+		prov, _ := selectProvider(name) // providerNames is the closed set selectProvider switches on
+		sums, err := prov.List(ctx, roots, opts)
+		if err != nil {
+			// A store that cannot be read means missing rows, not a failed
+			// listing: say so and show what the other agents have.
+			fmt.Fprintf(stderr, "catchup: %s sessions omitted: %v\n", name, err)
+			continue
+		}
+		for _, s := range sums {
+			if s.Ref.Provider == "" {
+				s.Ref.Provider = name
+			}
+			merged = append(merged, s)
+		}
+	}
+	sort.SliceStable(merged, func(i, j int) bool { return merged[i].UpdatedAt.After(merged[j].UpdatedAt) })
+	if len(merged) > cmd.Limit {
+		merged = merged[:cmd.Limit]
+	}
+	// Nothing at all in this directory is a diagnosis, not an empty table:
+	// newestAcross's error names where each agent's sessions actually are. A
+	// query finding nothing is just a query finding nothing.
+	if len(merged) == 0 && cmd.Target.Query == "" {
+		if _, err := newestAcross(ctx, roots, cwd); err != nil {
+			return err
+		}
+	}
+	return render.List(stdout, "", merged, cmd.Format)
+}
+
+// announceFork names the session a fork is about to continue. The source is
+// inferred whenever the agent is omitted, and fork is the one action that acts
+// on the guess rather than printing it — with --into a wrong guess spends real
+// tokens seeding the wrong transcript — so the guess is always shown, on
+// stderr, before the launch.
+func announceFork(stderr io.Writer, src session.Source, into string) {
+	line := "catchup: forking " + src.Ref.Provider
+	if into != "" {
+		line += " → " + into
+	}
+	var facts []string
+	if age := render.Age(src.UpdatedAt); age != "" {
+		facts = append(facts, age)
+	}
+	// Fields collapses a multi-line title; the announce is one line. A title
+	// that is just the directory name is a provider's fallback for a session
+	// its agent never named, and identifies nothing here — same as in a
+	// listing, where those rows show their opening message instead.
+	// Providers that title a session from its first user message can produce
+	// hundreds of characters — a pasted prompt, or catchup's own seed
+	// preamble when the session was itself seeded — so it is truncated by
+	// display width, like a table cell.
+	title := strings.Join(strings.Fields(src.Metadata["title"]), " ")
+	if title != "" && title != filepath.Base(src.Metadata["cwd"]) {
+		facts = append(facts, runewidth.Truncate(title, 60, "…"))
+	}
+	if len(facts) > 0 {
+		line += " (" + strings.Join(facts, ": ") + ")"
+	}
+	fmt.Fprintln(stderr, line)
 }
 
 // expandTilde resolves a leading ~ against this process's home. The shell
@@ -503,11 +589,18 @@ func execInto(ctx context.Context, name string, args []string, stdin io.Reader, 
 
 // forkInto is the cross-agent half of fork: it cannot transplant one agent's
 // native state into another, so it renders the source session's transcript and
-// launches the target agent with that transcript as its opening prompt. The
-// same-agent case is rejected because the native fork is strictly better there.
+// launches the target agent with that transcript as its opening prompt.
+//
+// Same-agent --into is the deliberate exception: seeding one agent from its own
+// session is a reseed, not a resume — it sheds a bloated context and keeps the
+// knowledge, which is what someone wants after finishing a task rather than
+// after losing one. A trim is what distinguishes it from a mistyped native
+// fork: --last and --since-compact are rejected on a native fork, so their
+// presence can only mean "seed me a shorter version of this".
 func forkInto(ctx context.Context, src session.Source, cmd Command, stdin io.Reader, stdout, stderr io.Writer) error {
-	if cmd.Into == src.Ref.Provider {
-		return fmt.Errorf("--into %s: the session is already %s's; use catchup fork %s for a native fork with full state", cmd.Into, cmd.Into, cmd.Into)
+	if cmd.Into == src.Ref.Provider && cmd.LastN == 0 && !cmd.SinceCompact {
+		return fmt.Errorf("--into %s: the session is already %s's; use catchup fork %s to resume it with full state, or add --since-compact/--last N to start a clean %s seeded with its transcript",
+			cmd.Into, cmd.Into, cmd.Into, cmd.Into)
 	}
 	if _, err := selectProvider(cmd.Into); err != nil {
 		return err

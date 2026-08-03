@@ -347,22 +347,58 @@ func joinContent(m codexMessage) string {
 	return strings.Join(parts, "\n")
 }
 
+// injectionTags wrap the environment and project context Codex feeds in as
+// user turns.
+var injectionTags = []string{"INSTRUCTIONS", "skill", "user_instructions", "environment_context", "system-reminder", "recommended_plugins"}
+
 // isInjectedUserText reports whether a user message is environment/context that
 // Codex injects as a user turn rather than something the person typed: the
-// project-doc preamble (e.g. "# AGENTS.md instructions for …"), or a block
-// wholly wrapped in a known injection tag. It deliberately matches only the
-// whole-message envelope so real prose is never dropped.
+// project-doc preamble (e.g. "# AGENTS.md instructions for …"), or blocks
+// wrapped in a known injection tag.
+//
+// One turn can carry several of these at once — a plugin catalog, then the
+// project-doc preamble — so the test is that *nothing but* envelopes is there:
+// strip them one by one and see whether anything a person wrote is left. That
+// keeps the original guarantee (real prose is never dropped) while catching
+// the composite turns a single whole-message match misses.
 func isInjectedUserText(s string) bool {
 	t := strings.TrimSpace(s)
-	if strings.HasPrefix(t, "# ") && strings.Contains(firstLine(t), " instructions for ") && strings.Contains(t, "<INSTRUCTIONS>") {
-		return true
+	if t == "" {
+		return false
 	}
-	for _, tag := range []string{"INSTRUCTIONS", "skill", "user_instructions", "environment_context", "system-reminder"} {
-		if strings.HasPrefix(t, "<"+tag+">") && strings.HasSuffix(t, "</"+tag+">") {
+	for {
+		rest, ok := trimEnvelope(t)
+		if !ok {
+			return false
+		}
+		if t = strings.TrimSpace(rest); t == "" {
 			return true
 		}
 	}
-	return false
+}
+
+// trimEnvelope removes one leading injection envelope — a known tag block, or
+// the heading line that introduces a project-doc <INSTRUCTIONS> block — and
+// reports whether it found one.
+func trimEnvelope(t string) (string, bool) {
+	for _, tag := range injectionTags {
+		open, closing := "<"+tag+">", "</"+tag+">"
+		if !strings.HasPrefix(t, open) {
+			continue
+		}
+		if i := strings.Index(t, closing); i >= 0 {
+			return t[i+len(closing):], true
+		}
+	}
+	// The preamble is a heading naming the doc ("# AGENTS.md instructions
+	// for …", or just "# AGENTS.md instructions") ahead of its block; the
+	// block itself is what makes the match safe.
+	if strings.HasPrefix(t, "# ") && strings.Contains(firstLine(t), "instructions") {
+		if rest := strings.TrimSpace(strings.TrimPrefix(t, firstLine(t))); strings.HasPrefix(rest, "<INSTRUCTIONS>") {
+			return rest, true
+		}
+	}
+	return "", false
 }
 
 func firstLine(s string) string {

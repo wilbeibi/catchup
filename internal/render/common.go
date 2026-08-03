@@ -15,6 +15,38 @@ import (
 // tsHuman is the compact, local-friendly timestamp used in headings and tables.
 const tsHuman = "2006-01-02 15:04"
 
+// dateHuman is tsHuman without the clock: the spelling listings use once a
+// session is old enough that the time of day says nothing.
+const dateHuman = "2006-01-02"
+
+// timeNow is the clock the relative ages are measured against; a var so tests
+// can pin "now" and assert exact cells.
+var timeNow = time.Now
+
+// Age renders a timestamp the way someone scanning a listing reads it: how
+// long ago, while "how long ago" is still the question being asked, and a
+// plain date once it is not. The cutoff is a week — past that, "9d ago" is
+// arithmetic, not an answer.
+func Age(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := timeNow().Sub(t)
+	switch {
+	case d < time.Minute: // includes clock skew: a stamp from a machine running ahead
+
+		return "just now"
+	case d < time.Hour:
+		return strconv.Itoa(int(d.Minutes())) + "m ago"
+	case d < 24*time.Hour:
+		return strconv.Itoa(int(d.Hours())) + "h ago"
+	case d < 7*24*time.Hour:
+		return strconv.Itoa(int(d.Hours()/24)) + "d ago"
+	default:
+		return t.Local().Format(dateHuman)
+	}
+}
+
 // kv is an ordered key/value pair for descriptive output (frontmatter, tables).
 type kv struct{ Key, Val string }
 

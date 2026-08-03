@@ -9,6 +9,8 @@ package render
 import (
 	"fmt"
 	"io"
+	"path/filepath"
+	"strconv"
 
 	"github.com/mattn/go-runewidth"
 	"github.com/wilbeibi/catchup/internal/session"
@@ -44,7 +46,8 @@ func Meta(w io.Writer, s session.Source, f session.Format) error {
 
 // List renders a ranked listing: a plain table by default, or a JSON array
 // for scripts. HTML has no listing view; the cli rejects that combination
-// before it gets here.
+// before it gets here. provider names the agent every row belongs to, and is
+// empty for a cross-agent listing, where each row carries its own.
 func List(w io.Writer, provider string, summaries []session.Summary, f session.Format) error {
 	switch f {
 	case session.FormatJSON:
@@ -56,22 +59,35 @@ func List(w io.Writer, provider string, summaries []session.Summary, f session.F
 	}
 }
 
-// tableList renders the human listing. It adapts to terminal width: columns
-// are "#", "UPDATED", "TITLE", "SESSION". TITLE gets the remaining space
-// after fixed columns and the longest session ID in the batch. Columns are
-// aligned with display-width-aware padding so CJK characters (2 columns each
-// in terminals) align correctly.
+// tableList renders the human listing: columns are "SESSION", "UPDATED",
+// "TITLE". SESSION is the selector the reader would retype (claude/3), not the
+// session id — nobody types a UUID by hand, and the id is one --json away for
+// the scripts that want it. TITLE takes whatever width is left, since it is the
+// only column that answers "was this the one?". Columns are aligned with
+// display-width-aware padding so CJK characters (2 columns each in terminals)
+// align correctly.
 func tableList(w io.Writer, provider string, summaries []session.Summary) error {
 	if len(summaries) == 0 {
+		if provider == "" {
+			_, err := fmt.Fprintln(w, "no sessions found")
+			return err
+		}
 		_, err := fmt.Fprintf(w, "no %s sessions found\n", provider)
 		return err
 	}
 
 	const gutter = 1
-	rankW := 3 // fits ranks up to 999
-	updW := 16 // "2006-01-02 15:04"
-	sidW := maxSidWidth(summaries)
-	titleW := termWidth(w) - rankW - updW - sidW - 3*gutter
+	handles := make([]string, len(summaries))
+	for i, s := range summaries {
+		handles[i] = handle(s, provider)
+	}
+	ages := make([]string, len(summaries))
+	for i, s := range summaries {
+		ages[i] = Age(s.UpdatedAt)
+	}
+	selW := maxWidth("SESSION", handles)
+	updW := maxWidth("UPDATED", ages)
+	titleW := termWidth(w) - selW - updW - 2*gutter
 	if titleW < 15 {
 		titleW = 15
 	}
@@ -80,35 +96,58 @@ func tableList(w io.Writer, provider string, summaries []session.Summary) error 
 	}
 
 	// Header
-	fmt.Fprintf(w, "%s %s %s %s\n",
-		runewidth.FillRight("#", rankW),
+	fmt.Fprintf(w, "%s %s %s\n",
+		runewidth.FillRight("SESSION", selW),
 		runewidth.FillRight("UPDATED", updW),
-		runewidth.FillRight("TITLE", titleW),
-		runewidth.FillRight("SESSION", sidW),
+		"TITLE",
 	)
 
-	for _, s := range summaries {
-		updated := ""
-		if !s.UpdatedAt.IsZero() {
-			updated = s.UpdatedAt.Local().Format(tsHuman)
-		}
-		title := runewidth.Truncate(oneLine(s.Title), titleW, "…")
-		fmt.Fprintf(w, "%s %s %s %s\n",
-			runewidth.FillRight(fmt.Sprintf("%d", s.Rank), rankW),
-			runewidth.FillRight(updated, updW),
-			runewidth.FillRight(title, titleW),
-			s.Ref.SessionID,
+	for i, s := range summaries {
+		fmt.Fprintf(w, "%s %s %s\n",
+			runewidth.FillRight(handles[i], selW),
+			runewidth.FillRight(ages[i], updW),
+			runewidth.Truncate(titleCell(s), titleW, "…"),
 		)
 	}
 	return nil
 }
 
-// maxSidWidth returns the maximum display width of session IDs in the batch,
-// clamped to at least the width of the header "SESSION" (7).
-func maxSidWidth(summaries []session.Summary) int {
-	m := 7 // len("SESSION")
-	for _, s := range summaries {
-		if w := runewidth.StringWidth(s.Ref.SessionID); w > m {
+// titleCell is the text that has to answer "was this the one?". Providers whose
+// agent never named the session fall back to the directory name, which says
+// nothing in a listing already scoped to one directory — every row reads the
+// same. The session's opening message is what actually tells those rows apart,
+// so it stands in.
+func titleCell(s session.Summary) string {
+	title := oneLine(s.Title)
+	if s.Preview == "" {
+		return title
+	}
+	if title == "" || title == filepath.Base(s.Cwd) {
+		return oneLine(s.Preview)
+	}
+	return title
+}
+
+// handle is the "<agent>/<rank>" selector that re-selects a listed row on a
+// later invocation. A row's own provider wins over the listing's, so a
+// cross-agent table labels every row correctly; fallback covers the providers
+// whose List leaves Ref.Provider unstamped.
+func handle(s session.Summary, provider string) string {
+	name := s.Ref.Provider
+	if name == "" {
+		name = provider
+	}
+	if name == "" {
+		return strconv.Itoa(s.Rank)
+	}
+	return name + "/" + strconv.Itoa(s.Rank)
+}
+
+// maxWidth returns the display width of the widest of a header and its cells.
+func maxWidth(header string, cells []string) int {
+	m := runewidth.StringWidth(header)
+	for _, c := range cells {
+		if w := runewidth.StringWidth(c); w > m {
 			m = w
 		}
 	}
