@@ -31,6 +31,7 @@ import (
 	"github.com/wilbeibi/catchup/internal/piagent"
 	"github.com/wilbeibi/catchup/internal/render"
 	"github.com/wilbeibi/catchup/internal/session"
+	"github.com/wilbeibi/catchup/internal/zcode"
 )
 
 const helpText = `Usage: catchup [agent[/<rank>]] [flags]        read a past session
@@ -38,7 +39,7 @@ const helpText = `Usage: catchup [agent[/<rank>]] [flags]        read a past ses
        catchup fork --into <agent> --from <file | - | url>
        catchup install-skill [agent]
 
-Agents: codex, claude, agy (Antigravity), cline, cursor, kimi, opencode, pi-agent
+Agents: codex, claude, agy (Antigravity), cline, cursor, kimi, opencode, pi-agent, zcode
 Omit the agent to use whichever has the newest session here. Bare ` + "`catchup`" + `
 prints that session in full, as Markdown. The flags refine three things:
 which session, how much of it, and as what.
@@ -319,6 +320,7 @@ func providerNames() []string {
 		session.ProviderKimi,
 		session.ProviderOpenCode,
 		session.ProviderPiAgent,
+		session.ProviderZCode,
 	}
 }
 
@@ -342,6 +344,8 @@ func selectProvider(name string) (session.Provider, error) {
 		return opencode.New(), nil
 	case session.ProviderPiAgent:
 		return piagent.New(), nil
+	case session.ProviderZCode:
+		return zcode.New(), nil
 	default:
 		if name == "list" {
 			return nil, fmt.Errorf(`unknown agent "list"; did you mean catchup --list?`)
@@ -352,7 +356,7 @@ func selectProvider(name string) (session.Provider, error) {
 		if name == "antigravity" {
 			return nil, fmt.Errorf(`unknown agent "antigravity"; Antigravity's agent name is agy`)
 		}
-		return nil, fmt.Errorf("unknown agent %q (want codex, claude, agy, cline, cursor, kimi, opencode, or pi-agent); run catchup --help", name)
+		return nil, fmt.Errorf("unknown agent %q (want codex, claude, agy, cline, cursor, kimi, opencode, pi-agent, or zcode); run catchup --help", name)
 	}
 }
 
@@ -801,6 +805,12 @@ func intoCommand(target, prompt, model string) (string, []string, error) {
 		// kimi-code v0.26.0). Refusing beats launching a headless run
 		// that answers once and exits.
 		return "", nil, fmt.Errorf("--into kimi: kimi cannot start interactive with a seed prompt; fork kimi resumes a kimi session natively")
+	case session.ProviderZCode:
+		// ZCode is an Electron desktop app with no CLI, so there is no
+		// process to launch or argument to inject a seed prompt through.
+		// The transcript can still be saved (catchup <src> --into zcode is
+		// not the path; write it to a file and paste it inside ZCode).
+		return "", nil, fmt.Errorf("--into zcode: ZCode is a desktop app with no CLI to seed an opening prompt; save the transcript with `catchup <src> > handoff.md` and paste it in ZCode")
 	default:
 		return "", nil, fmt.Errorf("--into: unsupported agent %q", target)
 	}
@@ -877,6 +887,11 @@ func forkCommand(src session.Source, model string) (string, []string, error) {
 		}
 		// Cursor has no fork; --resume is its native resume.
 		return "cursor-agent", append([]string{"--resume", src.Ref.SessionID}, modelArgs("--model", model)...), nil
+	case session.ProviderZCode:
+		// ZCode is an Electron desktop app with no CLI to resume from the
+		// shell. There is nothing to exec; point the user at continuing the
+		// work inside ZCode itself or handing the transcript to a CLI agent.
+		return "", nil, fmt.Errorf("fork zcode: ZCode is a desktop app with no CLI to resume a session; continue inside ZCode, or fork into a CLI agent with `catchup fork zcode --into <agent>`")
 	default:
 		return "", nil, fmt.Errorf("fork: unsupported agent %q", src.Ref.Provider)
 	}
