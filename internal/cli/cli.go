@@ -26,11 +26,13 @@ import (
 	"github.com/wilbeibi/catchup/internal/cline"
 	"github.com/wilbeibi/catchup/internal/codex"
 	"github.com/wilbeibi/catchup/internal/cursor"
+	"github.com/wilbeibi/catchup/internal/deepseek"
 	"github.com/wilbeibi/catchup/internal/kimi"
 	"github.com/wilbeibi/catchup/internal/opencode"
 	"github.com/wilbeibi/catchup/internal/piagent"
 	"github.com/wilbeibi/catchup/internal/render"
 	"github.com/wilbeibi/catchup/internal/session"
+	"github.com/wilbeibi/catchup/internal/zcode"
 )
 
 const helpText = `Usage: catchup [agent[/<rank>]] [flags]        read a past session
@@ -38,7 +40,7 @@ const helpText = `Usage: catchup [agent[/<rank>]] [flags]        read a past ses
        catchup fork --into <agent> --from <file | - | url>
        catchup install-skill [agent]
 
-Agents: codex, claude, agy (Antigravity), cline, cursor, kimi, opencode, pi-agent
+Agents: codex, claude, agy (Antigravity), cline, cursor, deepseek (dsh), kimi, opencode, pi-agent, zcode
 Omit the agent to use whichever has the newest session here. Bare ` + "`catchup`" + `
 prints that session in full, as Markdown. The flags refine three things:
 which session, how much of it, and as what.
@@ -316,9 +318,11 @@ func providerNames() []string {
 		session.ProviderAgy,
 		session.ProviderCline,
 		session.ProviderCursor,
+		session.ProviderDeepSeek,
 		session.ProviderKimi,
 		session.ProviderOpenCode,
 		session.ProviderPiAgent,
+		session.ProviderZCode,
 	}
 }
 
@@ -336,12 +340,16 @@ func selectProvider(name string) (session.Provider, error) {
 		return cline.New(), nil
 	case session.ProviderCursor:
 		return cursor.New(), nil
+	case session.ProviderDeepSeek:
+		return deepseek.New(), nil
 	case session.ProviderKimi:
 		return kimi.New(), nil
 	case session.ProviderOpenCode:
 		return opencode.New(), nil
 	case session.ProviderPiAgent:
 		return piagent.New(), nil
+	case session.ProviderZCode:
+		return zcode.New(), nil
 	default:
 		if name == "list" {
 			return nil, fmt.Errorf(`unknown agent "list"; did you mean catchup --list?`)
@@ -352,7 +360,10 @@ func selectProvider(name string) (session.Provider, error) {
 		if name == "antigravity" {
 			return nil, fmt.Errorf(`unknown agent "antigravity"; Antigravity's agent name is agy`)
 		}
-		return nil, fmt.Errorf("unknown agent %q (want codex, claude, agy, cline, cursor, kimi, opencode, or pi-agent); run catchup --help", name)
+		if name == "dsh" {
+			return nil, fmt.Errorf(`unknown agent "dsh"; DeepSeek Harness's agent name is deepseek`)
+		}
+		return nil, fmt.Errorf("unknown agent %q (want codex, claude, agy, cline, cursor, deepseek, kimi, opencode, pi-agent, or zcode); run catchup --help", name)
 	}
 }
 
@@ -801,6 +812,20 @@ func intoCommand(target, prompt, model string) (string, []string, error) {
 		// kimi-code v0.26.0). Refusing beats launching a headless run
 		// that answers once and exits.
 		return "", nil, fmt.Errorf("--into kimi: kimi cannot start interactive with a seed prompt; fork kimi resumes a kimi session natively")
+	case session.ProviderZCode:
+		// ZCode is an Electron desktop app with no CLI, so there is no
+		// process to launch or argument to inject a seed prompt through.
+		// The transcript can still be saved (catchup <src> --into zcode is
+		// not the path; write it to a file and paste it inside ZCode).
+		return "", nil, fmt.Errorf("--into zcode: ZCode is a desktop app with no CLI to seed an opening prompt; save the transcript with `catchup <src> > handoff.md` and paste it in ZCode")
+	case session.ProviderDeepSeek:
+		// dsh's profiles are per-install compositions; the one universal
+		// profile (headless) answers a single task and exits, and the web
+		// profile serves a browser UI that takes no prompt. No profile can
+		// be named that is guaranteed to open interactive with a seed, so
+		// refusing beats launching a one-shot run (checked against dsh's
+		// --profile headless/web --help on 2026-08-19).
+		return "", nil, fmt.Errorf("--into deepseek: dsh profiles are per-install and none is guaranteed to open interactive with a seed prompt; save the transcript with `catchup <src> > handoff.md` and start it in your dsh profile of choice")
 	default:
 		return "", nil, fmt.Errorf("--into: unsupported agent %q", target)
 	}
@@ -877,6 +902,26 @@ func forkCommand(src session.Source, model string) (string, []string, error) {
 		}
 		// Cursor has no fork; --resume is its native resume.
 		return "cursor-agent", append([]string{"--resume", src.Ref.SessionID}, modelArgs("--model", model)...), nil
+	case session.ProviderZCode:
+		// ZCode is an Electron desktop app with no CLI to resume from the
+		// shell. There is nothing to exec; point the user at continuing the
+		// work inside ZCode itself or handing the transcript to a CLI agent.
+		return "", nil, fmt.Errorf("fork zcode: ZCode is a desktop app with no CLI to resume a session; continue inside ZCode, or fork into a CLI agent with `catchup fork zcode --into <agent>`")
+	case session.ProviderDeepSeek:
+		if src.Ref.SessionID == "" {
+			return "", nil, fmt.Errorf("fork deepseek: missing session id")
+		}
+		if model != "" {
+			// The dsh launcher has no model flag; the model lives in the
+			// profile's settings.yaml. Passing one through would only break
+			// the resume invocation.
+			return "", nil, fmt.Errorf("fork deepseek: dsh takes its model from profile settings, not a flag; edit the profile and re-run without --model")
+		}
+		// dsh's own resume example is `dsh --profile tui --resume <session>`;
+		// launcher flags come first, app flags after (checked against dsh
+		// --help on 2026-08-19). The profile set is per-install, so tui may
+		// not exist — dsh's own error then tells the user how to create it.
+		return "dsh", []string{"--profile", "tui", "--resume", src.Ref.SessionID}, nil
 	default:
 		return "", nil, fmt.Errorf("fork: unsupported agent %q", src.Ref.Provider)
 	}

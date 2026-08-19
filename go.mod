@@ -7,6 +7,7 @@ go 1.25.0
 require modernc.org/sqlite v1.53.0
 
 require (
+	github.com/klauspost/compress v1.19.2
 	github.com/mattn/go-runewidth v0.0.24
 	golang.org/x/term v0.44.0
 )
