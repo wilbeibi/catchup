@@ -3,6 +3,7 @@ package zcode
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -156,11 +157,9 @@ func TestQueryFilterAndResolveByID(t *testing.T) {
 	}
 }
 
-// makeMixedModelDB builds a session whose assistant messages alternate a
-// canonical provider id ("builtin:zai-coding-plan", "GLM-5.2") with an
-// internal/bridge variant (bare UUID provider, "glm-5.2[1m]"). The canonical
-// form must win regardless of order.
-func makeMixedModelDB(t *testing.T, canonicalLast bool) string {
+// makeModelDB builds a session whose assistant messages carry the given
+// (modelID, providerID) pairs, one per message, in sequence order.
+func makeModelDB(t *testing.T, answers [][2]string) string {
 	t.Helper()
 	root := t.TempDir()
 	path := filepath.Join(root, "db.sqlite")
@@ -182,16 +181,15 @@ func makeMixedModelDB(t *testing.T, canonicalLast bool) string {
 		`INSERT INTO message(id,session_id,time_created,sequence,data) VALUES ('mu','sm',1000,0,'{"role":"user"}')`,
 		`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('pu','mu','sm',1000,'{"type":"text","text":"q"}')`,
 	}
-	canon := `INSERT INTO message(id,session_id,time_created,sequence,data) VALUES ('mc','sm',2000,1,'{"role":"assistant","modelID":"GLM-5.2","providerID":"builtin:zai-coding-plan"}')`
-	variant := `INSERT INTO message(id,session_id,time_created,sequence,data) VALUES ('mv','sm',3000,2,'{"role":"assistant","modelID":"glm-5.2[1m]","providerID":"a241de91-6e05-41dc-af42-ae0760d5e579"}')`
-	if canonicalLast {
-		stmts = append(stmts, variant, canon,
-			`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('pv','mv','sm',3000,'{"type":"text","text":"a1"}')`,
-			`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('pc','mc','sm',2000,'{"type":"text","text":"a2"}')`)
-	} else {
-		stmts = append(stmts, canon, variant,
-			`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('pc','mc','sm',2000,'{"type":"text","text":"a2"}')`,
-			`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('pv','mv','sm',3000,'{"type":"text","text":"a1"}')`)
+	for i, a := range answers {
+		mid := fmt.Sprintf("ma%d", i)
+		seq := i + 1
+		ts := 2000 + i*1000
+		stmts = append(stmts,
+			fmt.Sprintf(`INSERT INTO message(id,session_id,time_created,sequence,data) VALUES (%q,'sm',%d,%d,'{"role":"assistant","modelID":%q,"providerID":%q}')`,
+				mid, ts, seq, a[0], a[1]),
+			fmt.Sprintf(`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES (%q,%q,'sm',%d,'{"type":"text","text":"a%d"}')`,
+				"pa"+mid, mid, ts, i))
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -201,14 +199,35 @@ func makeMixedModelDB(t *testing.T, canonicalLast bool) string {
 	return root
 }
 
-func TestModelPrefersCanonicalProvider(t *testing.T) {
-	for _, canonicalLast := range []bool{false, true} {
-		name := "canonicalFirst"
-		if canonicalLast {
-			name = "canonicalLast"
-		}
-		t.Run(name, func(t *testing.T) {
-			roots := session.Roots{ZCode: makeMixedModelDB(t, canonicalLast)}
+// The model that answered last is the one surfaced. A provider id is either a
+// builtin or the uuid of a user-configured provider; neither form is
+// privileged, and a session that only ever used a uuid provider must still
+// report its model.
+func TestModelIsLastRecorded(t *testing.T) {
+	const uuidProv = "a241de91-6e05-41dc-af42-ae0760d5e579"
+	for _, tc := range []struct {
+		name              string
+		answers           [][2]string
+		wantModel, wantPr string
+	}{
+		{
+			name:      "builtinLast",
+			answers:   [][2]string{{"glm-5.2[1m]", uuidProv}, {"GLM-5.2", "builtin:zai-coding-plan"}},
+			wantModel: "GLM-5.2", wantPr: "builtin:zai-coding-plan",
+		},
+		{
+			name:      "uuidLast",
+			answers:   [][2]string{{"GLM-5.2", "builtin:zai-coding-plan"}, {"deepseek-v4-flash", uuidProv}},
+			wantModel: "deepseek-v4-flash", wantPr: uuidProv,
+		},
+		{
+			name:      "uuidOnly",
+			answers:   [][2]string{{"gemini-3.7-flash-high", uuidProv}},
+			wantModel: "gemini-3.7-flash-high", wantPr: uuidProv,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			roots := session.Roots{ZCode: makeModelDB(t, tc.answers)}
 			p := New()
 			src, err := p.Resolve(context.Background(), roots, "")
 			if err != nil {
@@ -218,8 +237,8 @@ func TestModelPrefersCanonicalProvider(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if th.Source.Metadata["model"] != "GLM-5.2" || th.Source.Metadata["model_provider"] != "builtin:zai-coding-plan" {
-				t.Fatalf("model = %v, want canonical GLM-5.2/builtin:zai-coding-plan", th.Source.Metadata)
+			if th.Source.Metadata["model"] != tc.wantModel || th.Source.Metadata["model_provider"] != tc.wantPr {
+				t.Fatalf("model = %v, want %s/%s", th.Source.Metadata, tc.wantModel, tc.wantPr)
 			}
 		})
 	}

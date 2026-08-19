@@ -15,6 +15,7 @@ import "path/filepath"
 //	Cline    : $CLINE_DIR           else <home>/.cline
 //	Cursor   : $CURSOR_CONFIG_DIR   else $XDG_CONFIG_HOME/cursor else <home>/.cursor
 //	ZCode    : $ZCODE_HOME          else <home>/.zcode/cli/db (the dir holding db.sqlite)
+//	DeepSeek : $DSH_HOME            else <home>/.dsh
 //
 // getenv and home are passed in rather than read from the os package so that
 // root resolution is a pure function and can be tested without touching the
@@ -71,7 +72,13 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		zcode = filepath.Join(home, ".zcode", "cli", "db")
 	}
 
-	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor, ZCode: zcode}
+	// dsh keeps session logs under <root>/sessions/<munged-cwd>/session-<id>/.
+	deepseek := getenv("DSH_HOME")
+	if deepseek == "" {
+		deepseek = filepath.Join(home, ".dsh")
+	}
+
+	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor, ZCode: zcode, DeepSeek: deepseek}
 }
 
 // ResolveSkillDirs returns each provider's global Agent Skills directory,
@@ -96,6 +103,8 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 //	Cursor   : roots.Cursor/skills           (respects $CURSOR_CONFIG_DIR)
 //	ZCode    : <home>/.agents/skills         (shares Codex's entry: ZCode
 //	           discovers ~/.agents/skills, so the same SKILL.md serves both)
+//	DeepSeek : roots.DeepSeek/skills         (respects $DSH_HOME; dsh also
+//	           discovers ~/.agents/skills — Codex's entry, same reasoning)
 func ResolveSkillDirs(roots Roots, home string) map[string]string {
 	return map[string]string{
 		ProviderCodex:    filepath.Join(home, ".agents", "skills"),
@@ -107,6 +116,7 @@ func ResolveSkillDirs(roots Roots, home string) map[string]string {
 		ProviderCline:    filepath.Join(roots.Cline, "skills"),
 		ProviderCursor:   filepath.Join(roots.Cursor, "skills"),
 		ProviderZCode:    filepath.Join(home, ".agents", "skills"),
+		ProviderDeepSeek: filepath.Join(roots.DeepSeek, "skills"),
 	}
 }
 

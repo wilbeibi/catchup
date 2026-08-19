@@ -12,7 +12,7 @@
 
 Use it whenever you don't want to explain the whole job again — you hit an agent's usage limit, switch tools mid-task, pick up older work, or want a clean record of what happened.
 
-Works with **Claude Code**, **Codex**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, **Pi Agent**, and **ZCode**.
+Works with **Claude Code**, **Codex**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, **Pi Agent**, **ZCode**, and **DeepSeek Harness**.
 
 <div align="center">
 

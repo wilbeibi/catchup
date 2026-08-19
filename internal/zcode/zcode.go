@@ -287,24 +287,17 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 		curText = nil
 	}
 
-	// modelID/providerID hold the model that answered. A session can mix model
-	// records: real turns carry a canonical provider id like
-	// "builtin:zai-coding-plan", but some assistant rows are internal/bridge
-	// calls tagged with a bare UUID provider and a model id variant such as
-	// "glm-5.2[1m]". setModel prefers the canonical form: once a provider id
-	// containing a colon is seen, internal variants no longer override it, so
-	// the surfaced model stays the one the user actually chose.
+	// modelID/providerID hold the model that answered. A session can switch
+	// models mid-run, and a provider id is either a builtin ("builtin:zai-
+	// coding-plan") or the uuid of a user-configured one — both are real, so
+	// neither form is privileged. The last record wins, which surfaces the
+	// model the session ended on, as the other providers do.
 	var modelID, providerID string
 	setModel := func(id, prov string) {
 		if id == "" {
 			return
 		}
-		if providerID == "" || !strings.Contains(providerID, ":") {
-			// Upgrade an empty/internal value to anything that looks canonical.
-			if prov == "" || strings.Contains(prov, ":") {
-				modelID, providerID = id, prov
-			}
-		}
+		modelID, providerID = id, prov
 	}
 	for rows.Next() {
 		var mid, mdata string

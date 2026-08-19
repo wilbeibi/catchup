@@ -11,8 +11,8 @@
 // projections over them, is what lets the other layers stay independent of one
 // another.
 //
-// internal/zcode is also such a provider. It is omitted from the list above
-// only to keep the line short.
+// internal/zcode and internal/deepseek are also such providers. They are
+// omitted from the list above only to keep the line short.
 package session
 
 import (
@@ -31,8 +31,9 @@ const (
 	ProviderPiAgent  = "pi-agent"
 	ProviderKimi     = "kimi" // Kimi Code CLI
 	ProviderCline    = "cline"
-	ProviderCursor   = "cursor" // Cursor CLI (cursor-agent)
-	ProviderZCode    = "zcode"  // ZCode (Z.ai) desktop agent
+	ProviderCursor   = "cursor"   // Cursor CLI (cursor-agent)
+	ProviderZCode    = "zcode"    // ZCode (Z.ai) desktop agent
+	ProviderDeepSeek = "deepseek" // DeepSeek Harness (dsh)
 )
 
 // Entry kinds and message roles. Providers normalize their own wire formats
@@ -82,6 +83,7 @@ type Roots struct {
 	Cline    string
 	Cursor   string
 	ZCode    string
+	DeepSeek string
 }
 
 // Source is a located session: enough to read it and to describe it in a
