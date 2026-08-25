@@ -16,6 +16,7 @@ import "path/filepath"
 //	Cursor   : $CURSOR_CONFIG_DIR   else $XDG_CONFIG_HOME/cursor else <home>/.cursor
 //	ZCode    : $ZCODE_HOME          else <home>/.zcode/cli/db (the dir holding db.sqlite)
 //	DeepSeek : $DSH_HOME            else <home>/.dsh
+//	Copilot  : $COPILOT_HOME        else <home>/.copilot
 //
 // getenv and home are passed in rather than read from the os package so that
 // root resolution is a pure function and can be tested without touching the
@@ -78,7 +79,13 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		deepseek = filepath.Join(home, ".dsh")
 	}
 
-	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor, ZCode: zcode, DeepSeek: deepseek}
+	// Copilot CLI keeps one directory per session under <root>/session-state.
+	copilot := getenv("COPILOT_HOME")
+	if copilot == "" {
+		copilot = filepath.Join(home, ".copilot")
+	}
+
+	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor, ZCode: zcode, DeepSeek: deepseek, Copilot: copilot}
 }
 
 // ResolveSkillDirs returns each provider's global Agent Skills directory,
@@ -103,6 +110,8 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 //	Cursor   : roots.Cursor/skills           (respects $CURSOR_CONFIG_DIR)
 //	ZCode    : <home>/.agents/skills         (shares Codex's entry: ZCode
 //	           discovers ~/.agents/skills, so the same SKILL.md serves both)
+//	Copilot  : roots.Copilot/skills          (respects $COPILOT_HOME; Copilot
+//	           also discovers ~/.agents/skills — Codex's entry, same reasoning)
 //	DeepSeek : roots.DeepSeek/skills         (respects $DSH_HOME; dsh also
 //	           discovers ~/.agents/skills — Codex's entry, same reasoning)
 func ResolveSkillDirs(roots Roots, home string) map[string]string {
@@ -117,14 +126,16 @@ func ResolveSkillDirs(roots Roots, home string) map[string]string {
 		ProviderCursor:   filepath.Join(roots.Cursor, "skills"),
 		ProviderZCode:    filepath.Join(home, ".agents", "skills"),
 		ProviderDeepSeek: filepath.Join(roots.DeepSeek, "skills"),
+		ProviderCopilot:  filepath.Join(roots.Copilot, "skills"),
 	}
 }
 
 // ResolveCurrent reports the session each provider says we are running inside,
-// keyed by provider name. Only Claude Code injects such a signal today
-// ($CLAUDE_CODE_SESSION_ID, set in every shell it spawns); Codex and OpenCode
-// spawn shells indistinguishable from a plain terminal, so they contribute
-// nothing. A provider absent from the map (or mapped to "") has no in-band
+// keyed by provider name. Two agents inject such a signal into every shell
+// they spawn: Claude Code ($CLAUDE_CODE_SESSION_ID) and Copilot CLI
+// ($COPILOT_AGENT_SESSION_ID, whose value is the id --resume takes); Codex and
+// OpenCode spawn shells indistinguishable from a plain terminal, so they
+// contribute nothing. A provider absent from the map (or mapped to "") has no in-band
 // current session, and the caller falls back to the newest session in the
 // working directory.
 //
@@ -134,6 +145,9 @@ func ResolveCurrent(getenv func(string) string) map[string]string {
 	current := map[string]string{}
 	if id := getenv("CLAUDE_CODE_SESSION_ID"); id != "" {
 		current[ProviderClaude] = id
+	}
+	if id := getenv("COPILOT_AGENT_SESSION_ID"); id != "" {
+		current[ProviderCopilot] = id
 	}
 	return current
 }

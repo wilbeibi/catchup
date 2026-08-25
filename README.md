@@ -12,7 +12,7 @@
 
 Use it whenever you don't want to explain the whole job again — you hit an agent's usage limit, switch tools mid-task, pick up older work, or want a clean record of what happened.
 
-Works with **Claude Code**, **Codex**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, **Pi Agent**, **ZCode**, and **DeepSeek Harness**.
+Works with **Claude Code**, **Codex**, **Copilot CLI**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, **Pi Agent**, **ZCode**, and **DeepSeek Harness**.
 
 <div align="center">
 
@@ -54,7 +54,7 @@ herdr plugin install wilbeibi/herdr-catchup
 
 ## Usage
 
-Agents: `claude` · `codex` · `cursor` · `cline` · `kimi` · `agy` (Antigravity) · `opencode` · `pi-agent`
+Agents: `claude` · `codex` · `copilot` · `cursor` · `cline` · `kimi` · `agy` (Antigravity) · `opencode` · `pi-agent` · `zcode` · `deepseek` (dsh)
 
 Omit `<agent>` and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
 

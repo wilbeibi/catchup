@@ -34,6 +34,7 @@ const (
 	ProviderCursor   = "cursor"   // Cursor CLI (cursor-agent)
 	ProviderZCode    = "zcode"    // ZCode (Z.ai) desktop agent
 	ProviderDeepSeek = "deepseek" // DeepSeek Harness (dsh)
+	ProviderCopilot  = "copilot"  // GitHub Copilot CLI
 )
 
 // Entry kinds and message roles. Providers normalize their own wire formats
@@ -84,6 +85,7 @@ type Roots struct {
 	Cursor   string
 	ZCode    string
 	DeepSeek string
+	Copilot  string
 }
 
 // Source is a located session: enough to read it and to describe it in a

@@ -1,0 +1,326 @@
+// Package copilot implements session.Provider over GitHub Copilot CLI
+// history: one directory per session under $COPILOT_HOME/session-state
+// (default ~/.copilot/session-state).
+//
+// Format reference, derived from a live install (@github/copilot 1.0.80):
+//
+//	session-state/<uuid>/workspace.yaml holds the session's metadata as a
+//	flat key/value map (id, cwd, name, created_at, updated_at, plus git_root,
+//	repository and branch when the session started inside a repository), and
+//	session-state/<uuid>/events.jsonl is the append-only event log. Resuming
+//	a session appends to the same log rather than starting a new directory,
+//	so one session is always one file.
+//
+// Every event is {type, id, parentId, timestamp, data} with an RFC 3339
+// timestamp. Visible on the timeline: user/message content (data.content is
+// what the human typed; data.transformedContent is the same text wrapped in
+// injected datetime and system-reminder context, and is not conversation)
+// and assistant/message content, which is empty on the turns that only carry
+// tool requests. Everything else — system.message, tool.*, assistant.turn_*,
+// session.usage_checkpoint, and the session lifecycle events — is
+// bookkeeping. Sub-agent traffic is emitted under "subagent."-prefixed types,
+// so matching the exact type keeps it off the timeline.
+//
+// The model is read from each assistant message's data.model, last writer
+// wins: sessions run with --model auto are routed per turn, so the last
+// answer's model is the one that produced the tail of the transcript.
+//
+// Session recency comes from the event log's mtime, not workspace.yaml's
+// updated_at: the yaml is rewritten when the session's metadata changes
+// (naming, resume), so it lags a session that is still appending events.
+//
+// Unverified: session.compaction_complete is mapped to a compaction marker
+// from the shipped bundle's event set alone — no local session had compacted.
+// Its payload carries success and token counts, not summary text, so the
+// marker is bare by construction. Legacy sessions under
+// history-session-state/ (pre-migration format) are not read; Copilot
+// migrates one into session-state/ the first time it is resumed.
+package copilot
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/wilbeibi/catchup/internal/session"
+)
+
+// Provider reads Copilot CLI session state. It is stateless; every call
+// re-reads the files, so a concurrently writing copilot is never blocked.
+type Provider struct{}
+
+// New returns a GitHub Copilot CLI provider.
+func New() *Provider { return &Provider{} }
+
+var _ session.Provider = (*Provider)(nil)
+
+const (
+	eventsFile    = "events.jsonl"
+	workspaceFile = "workspace.yaml"
+)
+
+func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) (session.Source, error) {
+	dirs, err := sessionDirs(roots.Copilot)
+	if err != nil {
+		return session.Source{}, err
+	}
+	if len(dirs) == 0 {
+		return session.Source{}, fmt.Errorf("copilot: no sessions found under %s", roots.Copilot)
+	}
+	if id != "" {
+		for _, d := range dirs {
+			if d.id == id {
+				return readMeta(d)
+			}
+		}
+		return session.Source{}, fmt.Errorf("copilot: no session with id %q", id)
+	}
+	return readMeta(dirs[0])
+}
+
+func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread, error) {
+	if src.Path == "" {
+		return session.Thread{}, errors.New("copilot: source has no path")
+	}
+	info, err := os.Stat(src.Path)
+	if err != nil {
+		return session.Thread{}, err
+	}
+	d := dirInfo{path: filepath.Dir(src.Path), mod: info.ModTime(), id: src.Ref.SessionID}
+	return readThread(d, readWorkspace(d.path))
+}
+
+func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
+	dirs, err := sessionDirs(roots.Copilot)
+	if err != nil {
+		return nil, err
+	}
+	q := strings.ToLower(opts.Query)
+	limit := opts.EffectiveLimit()
+	out := make([]session.Summary, 0, limit)
+	for _, d := range dirs {
+		if len(out) >= limit {
+			break
+		}
+		// The directory filter is answered from workspace.yaml alone, so a
+		// session in another directory never costs an event-log parse. The
+		// parsed map is handed on, so the file is read once either way.
+		meta := readWorkspace(d.path)
+		if opts.Cwd != "" && meta["cwd"] != opts.Cwd {
+			continue
+		}
+		t, err := readThread(d, meta)
+		if err != nil || len(t.Entries) == 0 {
+			continue
+		}
+		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {
+			continue
+		}
+		out = append(out, t.Summary())
+	}
+	for i := range out {
+		out[i].Rank = i + 1
+	}
+	return out, nil
+}
+
+// --- directory enumeration --------------------------------------------------
+
+type dirInfo struct {
+	path string
+	mod  time.Time
+	id   string
+}
+
+// sessionDirs returns every session directory under <root>/session-state that
+// holds an event log, newest first. The directory's base name is the session
+// id; workspace.yaml confirms it, but a directory whose yaml is missing or
+// truncated (a session killed mid-write) is still readable from its log.
+func sessionDirs(root string) ([]dirInfo, error) {
+	base := filepath.Join(root, "session-state")
+	entries, err := os.ReadDir(base)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var dirs []dirInfo
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		dir := filepath.Join(base, e.Name())
+		info, err := os.Stat(filepath.Join(dir, eventsFile))
+		if err != nil {
+			continue
+		}
+		dirs = append(dirs, dirInfo{path: dir, mod: info.ModTime(), id: e.Name()})
+	}
+	sort.Slice(dirs, func(i, j int) bool { return dirs[i].mod.After(dirs[j].mod) })
+	return dirs, nil
+}
+
+// readMeta delegates instead of describing the session from workspace.yaml
+// alone: the yaml has no model, and a metadata-only view that omits the model
+// would be poorer than every other provider's. Event logs are small (a long
+// session stays under a few MB).
+func readMeta(d dirInfo) (session.Source, error) {
+	t, err := readThread(d, readWorkspace(d.path))
+	return t.Source, err
+}
+
+// readSource describes a session from its already-parsed workspace.yaml —
+// everything a listing row needs except the timeline itself.
+func readSource(d dirInfo, meta map[string]string) session.Source {
+	src := session.Source{
+		Ref:       session.Ref{Provider: session.ProviderCopilot, SessionID: d.id},
+		Path:      filepath.Join(d.path, eventsFile),
+		UpdatedAt: d.mod,
+		Metadata:  map[string]string{},
+	}
+	if id := meta["id"]; id != "" {
+		src.Ref.SessionID = id
+	}
+	if cwd := meta["cwd"]; cwd != "" {
+		src.Metadata["cwd"] = cwd
+	}
+	if name := meta["name"]; name != "" {
+		src.Metadata["title"] = name
+	} else if cwd := meta["cwd"]; cwd != "" {
+		src.Metadata["title"] = filepath.Base(cwd)
+	}
+	return src
+}
+
+// readWorkspace parses workspace.yaml. The file is a flat map of scalars
+// written by Copilot itself — no nesting, no lists — so a full YAML parser
+// would be a dependency bought for a dozen lines of text. It is read whole
+// because it is small by construction and a session's whole metadata is
+// wanted at once; a missing or unreadable file yields an empty map, leaving
+// the session readable from its event log alone.
+func readWorkspace(dir string) map[string]string {
+	raw, err := os.ReadFile(filepath.Join(dir, workspaceFile))
+	if err != nil {
+		return map[string]string{}
+	}
+	meta := map[string]string{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		// Indented lines would be nested values; Copilot writes none, and
+		// guessing at one's meaning is worse than ignoring it.
+		if line == "" || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, val, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		meta[strings.TrimSpace(key)] = unquote(strings.TrimSpace(val))
+	}
+	return meta
+}
+
+// unquote strips the one quoting form Copilot's writer emits: a single-quoted
+// scalar, which escapes its own quote by doubling it. Bare scalars pass
+// through untouched.
+func unquote(v string) string {
+	if len(v) >= 2 && v[0] == '\'' && v[len(v)-1] == '\'' {
+		return strings.ReplaceAll(v[1:len(v)-1], "''", "'")
+	}
+	return v
+}
+
+// --- parsing ----------------------------------------------------------------
+
+// The envelope decodes only the fields every event carries; data is kept raw
+// and handed to the per-type shapes in applyEvent, because unrelated events
+// reuse field names with different shapes and one mismatch would fail the
+// whole event's decode.
+type cpEvent struct {
+	Type      string          `json:"type"`
+	Timestamp string          `json:"timestamp"`
+	Data      json.RawMessage `json:"data"`
+}
+
+type cpUserMessage struct {
+	Content string `json:"content"`
+}
+
+type cpAssistantMessage struct {
+	Content string `json:"content"`
+	Model   string `json:"model"`
+}
+
+func readThread(d dirInfo, meta map[string]string) (session.Thread, error) {
+	src := readSource(d, meta)
+	f, err := os.Open(src.Path)
+	if err != nil {
+		return session.Thread{}, err
+	}
+	defer f.Close()
+
+	var entries []session.Entry
+	var warnings []string
+	dec := json.NewDecoder(f)
+	for dec.More() {
+		var ev cpEvent
+		if err := dec.Decode(&ev); err != nil {
+			// A killed writer can leave a torn final line; keep the prefix.
+			warnings = append(warnings, "stopped reading at a malformed record")
+			break
+		}
+		applyEvent(&src, &entries, ev)
+	}
+	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
+}
+
+// applyEvent folds one event into the source metadata or the timeline. An
+// unparseable or empty payload makes the event contribute nothing rather than
+// fail the read.
+func applyEvent(src *session.Source, entries *[]session.Entry, ev cpEvent) {
+	switch ev.Type {
+	case "user.message":
+		var d cpUserMessage
+		if json.Unmarshal(ev.Data, &d) != nil || d.Content == "" {
+			return
+		}
+		*entries = append(*entries, session.Entry{
+			Kind: session.KindMessage, Role: session.RoleUser,
+			Text: d.Content, Time: parseTime(ev.Timestamp),
+		})
+	case "assistant.message":
+		var d cpAssistantMessage
+		if json.Unmarshal(ev.Data, &d) != nil {
+			return
+		}
+		if d.Model != "" {
+			src.Metadata["model"] = d.Model
+		}
+		if d.Content == "" {
+			return // a turn that only requested tools
+		}
+		*entries = append(*entries, session.Entry{
+			Kind: session.KindMessage, Role: session.RoleAssistant,
+			Text: d.Content, Time: parseTime(ev.Timestamp),
+		})
+	case "session.compaction_complete":
+		*entries = append(*entries, session.Entry{
+			Kind: session.KindCompact, Time: parseTime(ev.Timestamp),
+		})
+	}
+}
+
+func parseTime(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}

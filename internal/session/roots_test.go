@@ -12,7 +12,7 @@ import (
 var allProviders = []string{
 	ProviderCodex, ProviderClaude, ProviderAgy, ProviderOpenCode,
 	ProviderPiAgent, ProviderKimi, ProviderCline, ProviderCursor,
-	ProviderZCode, ProviderDeepSeek,
+	ProviderZCode, ProviderDeepSeek, ProviderCopilot,
 }
 
 // noEnv is the environment of a machine that overrides nothing.
@@ -41,6 +41,7 @@ func TestResolveRootsDefaults(t *testing.T) {
 		Cursor:   filepath.Join(home, ".cursor"),
 		ZCode:    filepath.Join(home, ".zcode", "cli", "db"),
 		DeepSeek: filepath.Join(home, ".dsh"),
+		Copilot:  filepath.Join(home, ".copilot"),
 	}
 	if got != want {
 		t.Fatalf("roots =\n%+v\nwant\n%+v", got, want)
@@ -58,6 +59,7 @@ func TestResolveRootsOverrides(t *testing.T) {
 		{"CODEX_HOME", map[string]string{"CODEX_HOME": dir}, func(r Roots) string { return r.Codex }, dir},
 		{"CLAUDE_CONFIG_DIR", map[string]string{"CLAUDE_CONFIG_DIR": dir}, func(r Roots) string { return r.Claude }, dir},
 		{"PI_CODING_AGENT_DIR", map[string]string{"PI_CODING_AGENT_DIR": dir}, func(r Roots) string { return r.PiAgent }, dir},
+		{"COPILOT_HOME", map[string]string{"COPILOT_HOME": dir}, func(r Roots) string { return r.Copilot }, dir},
 		{"KIMI_CODE_HOME", map[string]string{"KIMI_CODE_HOME": dir}, func(r Roots) string { return r.Kimi }, dir},
 		{"CLINE_DIR", map[string]string{"CLINE_DIR": dir}, func(r Roots) string { return r.Cline }, dir},
 		{"ZCODE_HOME", map[string]string{"ZCODE_HOME": dir}, func(r Roots) string { return r.ZCode }, dir},
@@ -149,6 +151,10 @@ func TestResolveCurrent(t *testing.T) {
 	}
 	got := ResolveCurrent(envFrom(map[string]string{"CLAUDE_CODE_SESSION_ID": "sess-1"}))
 	if len(got) != 1 || got[ProviderClaude] != "sess-1" {
+		t.Fatalf("current = %+v", got)
+	}
+	got = ResolveCurrent(envFrom(map[string]string{"COPILOT_AGENT_SESSION_ID": "sess-2"}))
+	if len(got) != 1 || got[ProviderCopilot] != "sess-2" {
 		t.Fatalf("current = %+v", got)
 	}
 }
