@@ -2,14 +2,16 @@
 // history: one directory per session under $COPILOT_HOME/session-state
 // (default ~/.copilot/session-state).
 //
-// Format reference, derived from a live install (@github/copilot 1.0.80):
+// Format reference, from a live install (@github/copilot 1.0.80) and the
+// schemas/session-events.schema.json it ships:
 //
 //	session-state/<uuid>/workspace.yaml holds the session's metadata as a
 //	flat key/value map (id, cwd, name, created_at, updated_at, plus git_root,
 //	repository and branch when the session started inside a repository), and
 //	session-state/<uuid>/events.jsonl is the append-only event log. Resuming
 //	a session appends to the same log rather than starting a new directory,
-//	so one session is always one file.
+//	so one session is always one file. The directory name is the session id:
+//	the value --resume takes, and the id every listing reports.
 //
 // Every event is {type, id, parentId, timestamp, agentId, data} with an
 // RFC 3339 timestamp. Visible on the timeline: user/message content
@@ -21,8 +23,8 @@
 // events — is bookkeeping.
 //
 // Sub-agent traffic reuses those same two types and is told apart by the
-// envelope's agentId, which the shipped schemas/session-events.schema.json
-// documents as "absent for events from the root/main agent". A sub-agent's
+// envelope's agentId, which the schema documents as "absent for events from
+// the root/main agent". A sub-agent's
 // prompts and answers are the parent turn's tool plumbing, not conversation,
 // so any event carrying an agentId is skipped — including for the model,
 // which a sub-agent routed to another model would otherwise overwrite.
@@ -87,7 +89,7 @@ func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) 
 	}
 	if id != "" {
 		for _, d := range dirs {
-			if d.id == id {
+			if filepath.Base(d.path) == id {
 				return readMeta(d)
 			}
 		}
@@ -104,7 +106,7 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 	if err != nil {
 		return session.Thread{}, err
 	}
-	d := dirInfo{path: filepath.Dir(src.Path), mod: info.ModTime(), id: src.Ref.SessionID}
+	d := dirInfo{path: filepath.Dir(src.Path), mod: info.ModTime()}
 	return readThread(d, readWorkspace(d.path))
 }
 
@@ -144,10 +146,12 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 
 // --- directory enumeration --------------------------------------------------
 
+// dirInfo is one session directory. The id is not carried alongside it: the
+// directory's base name is the session id, so a second copy could only ever
+// disagree with the path it came from.
 type dirInfo struct {
 	path string
 	mod  time.Time
-	id   string
 }
 
 // sessionDirs returns every session directory under <root>/session-state that
@@ -174,7 +178,7 @@ func sessionDirs(root string) ([]dirInfo, error) {
 		if err != nil {
 			continue
 		}
-		dirs = append(dirs, dirInfo{path: dir, mod: info.ModTime(), id: e.Name()})
+		dirs = append(dirs, dirInfo{path: dir, mod: info.ModTime()})
 	}
 	sort.Slice(dirs, func(i, j int) bool { return dirs[i].mod.After(dirs[j].mod) })
 	return dirs, nil
@@ -193,7 +197,7 @@ func readMeta(d dirInfo) (session.Source, error) {
 // everything a listing row needs except the timeline itself.
 func readSource(d dirInfo, meta map[string]string) session.Source {
 	src := session.Source{
-		Ref:       session.Ref{Provider: session.ProviderCopilot, SessionID: d.id},
+		Ref:       session.Ref{Provider: session.ProviderCopilot, SessionID: filepath.Base(d.path)},
 		Path:      filepath.Join(d.path, eventsFile),
 		UpdatedAt: d.mod,
 		Metadata:  map[string]string{},
