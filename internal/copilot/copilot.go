@@ -11,30 +11,41 @@
 //	a session appends to the same log rather than starting a new directory,
 //	so one session is always one file.
 //
-// Every event is {type, id, parentId, timestamp, data} with an RFC 3339
-// timestamp. Visible on the timeline: user/message content (data.content is
-// what the human typed; data.transformedContent is the same text wrapped in
-// injected datetime and system-reminder context, and is not conversation)
-// and assistant/message content, which is empty on the turns that only carry
-// tool requests. Everything else — system.message, tool.*, assistant.turn_*,
-// session.usage_checkpoint, and the session lifecycle events — is
-// bookkeeping. Sub-agent traffic is emitted under "subagent."-prefixed types,
-// so matching the exact type keeps it off the timeline.
+// Every event is {type, id, parentId, timestamp, agentId, data} with an
+// RFC 3339 timestamp. Visible on the timeline: user/message content
+// (data.content is what the human typed; data.transformedContent is the same
+// text wrapped in injected datetime and system-reminder context, and is not
+// conversation) and assistant/message content, which is empty on the turns
+// that only carry tool requests. Everything else — system.message, tool.*,
+// assistant.turn_*, session.usage_checkpoint, and the session lifecycle
+// events — is bookkeeping.
 //
-// The model is read from each assistant message's data.model, last writer
-// wins: sessions run with --model auto are routed per turn, so the last
+// Sub-agent traffic reuses those same two types and is told apart by the
+// envelope's agentId, which the shipped schemas/session-events.schema.json
+// documents as "absent for events from the root/main agent". A sub-agent's
+// prompts and answers are the parent turn's tool plumbing, not conversation,
+// so any event carrying an agentId is skipped — including for the model,
+// which a sub-agent routed to another model would otherwise overwrite.
+//
+// A session.compaction_complete carries success and, when the compaction
+// succeeded, summaryContent: the LLM-written summary that replaced the
+// history. It becomes the compaction marker's text, so --since-compact opens
+// on what survived rather than on a bare seam. A failed compaction removed
+// nothing and is not a seam, so it produces no marker.
+//
+// The model is read from each root assistant message's data.model, last
+// writer wins: sessions run with --model auto are routed per turn, so the last
 // answer's model is the one that produced the tail of the transcript.
 //
 // Session recency comes from the event log's mtime, not workspace.yaml's
 // updated_at: the yaml is rewritten when the session's metadata changes
 // (naming, resume), so it lags a session that is still appending events.
 //
-// Unverified: session.compaction_complete is mapped to a compaction marker
-// from the shipped bundle's event set alone — no local session had compacted.
-// Its payload carries success and token counts, not summary text, so the
-// marker is bare by construction. Legacy sessions under
-// history-session-state/ (pre-migration format) are not read; Copilot
-// migrates one into session-state/ the first time it is resumed.
+// Unverified: no local session compacted or spawned a sub-agent, so the
+// compaction and agentId handling follows the shipped schema rather than an
+// observed log. Legacy sessions under history-session-state/ (pre-migration
+// format) are not read; Copilot migrates one into session-state/ the first
+// time it is resumed.
 package copilot
 
 import (
@@ -141,8 +152,9 @@ type dirInfo struct {
 
 // sessionDirs returns every session directory under <root>/session-state that
 // holds an event log, newest first. The directory's base name is the session
-// id; workspace.yaml confirms it, but a directory whose yaml is missing or
-// truncated (a session killed mid-write) is still readable from its log.
+// id — the value --resume takes, and the id workspace.yaml repeats — so it is
+// the one Resolve matches and List reports, and a session whose yaml is
+// missing or truncated is still selectable.
 func sessionDirs(root string) ([]dirInfo, error) {
 	base := filepath.Join(root, "session-state")
 	entries, err := os.ReadDir(base)
@@ -185,9 +197,6 @@ func readSource(d dirInfo, meta map[string]string) session.Source {
 		Path:      filepath.Join(d.path, eventsFile),
 		UpdatedAt: d.mod,
 		Metadata:  map[string]string{},
-	}
-	if id := meta["id"]; id != "" {
-		src.Ref.SessionID = id
 	}
 	if cwd := meta["cwd"]; cwd != "" {
 		src.Metadata["cwd"] = cwd
@@ -246,6 +255,7 @@ func unquote(v string) string {
 type cpEvent struct {
 	Type      string          `json:"type"`
 	Timestamp string          `json:"timestamp"`
+	AgentID   string          `json:"agentId"`
 	Data      json.RawMessage `json:"data"`
 }
 
@@ -256,6 +266,11 @@ type cpUserMessage struct {
 type cpAssistantMessage struct {
 	Content string `json:"content"`
 	Model   string `json:"model"`
+}
+
+type cpCompaction struct {
+	Success bool   `json:"success"`
+	Summary string `json:"summaryContent"`
 }
 
 func readThread(d dirInfo, meta map[string]string) (session.Thread, error) {
@@ -285,6 +300,9 @@ func readThread(d dirInfo, meta map[string]string) (session.Thread, error) {
 // unparseable or empty payload makes the event contribute nothing rather than
 // fail the read.
 func applyEvent(src *session.Source, entries *[]session.Entry, ev cpEvent) {
+	if ev.AgentID != "" {
+		return // a sub-agent's own turns: the parent's tool plumbing
+	}
 	switch ev.Type {
 	case "user.message":
 		var d cpUserMessage
@@ -311,8 +329,12 @@ func applyEvent(src *session.Source, entries *[]session.Entry, ev cpEvent) {
 			Text: d.Content, Time: parseTime(ev.Timestamp),
 		})
 	case "session.compaction_complete":
+		var d cpCompaction
+		if json.Unmarshal(ev.Data, &d) != nil || !d.Success {
+			return // a failed compaction removed nothing: not a seam
+		}
 		*entries = append(*entries, session.Entry{
-			Kind: session.KindCompact, Time: parseTime(ev.Timestamp),
+			Kind: session.KindCompact, Text: d.Summary, Time: parseTime(ev.Timestamp),
 		})
 	}
 }

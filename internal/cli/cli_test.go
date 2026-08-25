@@ -490,6 +490,10 @@ func TestForkCommand(t *testing.T) {
 		{"opencode", session.Source{Ref: session.Ref{Provider: session.ProviderOpenCode, SessionID: "o1"}}, "", "opencode --session o1 --fork"},
 		{"pi path", session.Source{Ref: session.Ref{Provider: session.ProviderPiAgent, SessionID: "p1"}, Path: "/tmp/pi.jsonl"}, "", "pi --fork /tmp/pi.jsonl"},
 		{"codex with model", session.Source{Ref: session.Ref{Provider: session.ProviderCodex, SessionID: "c1"}}, "gpt-5.6", "codex fork c1 -m gpt-5.6"},
+		// The id is inline: a bare --resume opens Copilot's session picker,
+		// which would swallow a separated id as an unrelated argument.
+		{"copilot", session.Source{Ref: session.Ref{Provider: session.ProviderCopilot, SessionID: "gh1"}}, "", "copilot --resume=gh1"},
+		{"copilot with model", session.Source{Ref: session.Ref{Provider: session.ProviderCopilot, SessionID: "gh1"}}, "gpt-5.4", "copilot --resume=gh1 --model gpt-5.4"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -715,6 +719,7 @@ func TestIntoCommandModelPlacement(t *testing.T) {
 		{session.ProviderClaude, "--model M PROMPT"},
 		{session.ProviderAgy, "--model M -i PROMPT"},
 		{session.ProviderOpenCode, "--model M --prompt PROMPT"},
+		{session.ProviderCopilot, "--model M -i PROMPT"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.target, func(t *testing.T) {
