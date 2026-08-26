@@ -74,7 +74,8 @@ OUTPUT — as what (default: Markdown)
   --json              JSON, for scripting (never clamped)
   --html              a self-contained page, for sharing
 
-Meta: --version (print version) · -h, --help (this text)
+Meta: --version (print version; names a newer release when your terminal
+      is watching — CATCHUP_NO_UPDATE_CHECK=1 turns that off) · -h, --help
 
 Examples:
   catchup claude --since-compact       recover a Claude session after compaction
@@ -128,6 +129,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 	}
 	if cmd.Version {
 		fmt.Fprintln(stdout, "catchup", version)
+		noticeUpdate(ctx, version, isTerminal(stdout) && isTerminal(stderr), stderr)
 		return nil
 	}
 
