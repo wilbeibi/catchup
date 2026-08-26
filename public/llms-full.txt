@@ -1,6 +1,6 @@
 # catchup — full reference
 
-> catchup is an open-source command-line tool, written in Go and MIT-licensed, that lets your next coding agent catch itself up. It reads local Claude Code, Codex, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, and Pi Agent session history and prints clean, handoff-ready Markdown containing only the user/assistant conversation, with tool calls, reasoning traces, and token noise removed.
+> catchup is an open-source command-line tool, written in Go and MIT-licensed, that lets your next coding agent catch itself up. It reads local Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, Pi Agent, ZCode, and DeepSeek Harness session history and prints clean, handoff-ready Markdown containing only the user/assistant conversation, with tool calls, reasoning traces, and token noise removed.
 
 This is the complete reference. For the short summary, see [llms.txt](https://catchup.pages.dev/llms.txt). Source and README live at [github.com/wilbeibi/catchup](https://github.com/wilbeibi/catchup).
 
@@ -14,11 +14,11 @@ This is the complete reference. For the short summary, see [llms.txt](https://ca
 - Install command: `go install github.com/wilbeibi/catchup@latest`
 - License: MIT
 - Author: wilbeibi (https://github.com/wilbeibi)
-- Supported agents: Claude Code (`claude`), Codex (`codex`), Cursor (`cursor`), Cline (`cline`), Kimi (`kimi`), Antigravity (`agy`), OpenCode (`opencode`), Pi Agent (`pi-agent`)
+- Supported agents: Claude Code (`claude`), Codex (`codex`), Copilot CLI (`copilot`), Cursor (`cursor`), Cline (`cline`), Kimi (`kimi`), Antigravity (`agy`), OpenCode (`opencode`), Pi Agent (`pi-agent`), ZCode (`zcode`), DeepSeek Harness (`deepseek`)
 
 ## The problem catchup solves
 
-Developers increasingly use more than one AI coding agent. Each agent stores its conversation history in a different location and a different format — Claude Code, Codex, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, and Pi Agent all differ. When one agent hits a usage limit, when you want a second opinion from another agent, or when you return to a project days later, the next agent starts with zero context. The usual workaround is to copy-paste or re-summarize what already happened, which is slow and lossy.
+Developers increasingly use more than one AI coding agent. Each agent stores its conversation history in a different location and a different format — Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, Pi Agent, ZCode, and DeepSeek Harness all differ. When one agent hits a usage limit, when you want a second opinion from another agent, or when you return to a project days later, the next agent starts with zero context. The usual workaround is to copy-paste or re-summarize what already happened, which is slow and lossy.
 
 catchup gives the next agent a simple command it can run itself to recover prior work. It reads any supported agent's raw history and emits one consistent, clean Markdown transcript. The output is small enough to paste directly into another agent's context window, and readable enough to skim yourself.
 
@@ -51,7 +51,7 @@ The skill source is at https://raw.githubusercontent.com/wilbeibi/catchup/main/S
 
 Agent handoff:
 
-- `catchup <agent>` — latest session for that agent in the current directory (`claude`, `codex`, `cursor`, `cline`, `kimi`, `agy`, `opencode`, `pi-agent`).
+- `catchup <agent>` — latest session for that agent in the current directory (`claude`, `codex`, `copilot`, `cursor`, `cline`, `kimi`, `agy`, `opencode`, `pi-agent`, `zcode`, `deepseek`).
 - `catchup` — the agent is optional: bare catchup reads the newest session in the current directory, whichever agent wrote it. Inside a live session the newest is usually your own, which pairs with `--since-compact` to recover context after a compaction.
 
 Human browsing:
@@ -90,7 +90,7 @@ Native fork resumes with the agent's real session state; `--into` crosses agents
 Common fork commands for AI agents:
 
 - Same-agent native resume: `catchup fork <agent>` for any supported agent id, e.g. `catchup fork codex`, `catchup fork claude`, `catchup fork cursor`.
-- Cross-agent handoff: `catchup fork claude --into codex`, `catchup fork codex --into claude`, `catchup fork opencode --into codex`, `catchup fork pi-agent --into codex`.
+- Cross-agent handoff: `catchup fork claude --into codex`, `catchup fork codex --into claude`, `catchup fork copilot --into claude`, `catchup fork opencode --into codex`, `catchup fork pi-agent --into codex`.
 - Smaller cross-agent prompt: add `--since-compact` or `--last <N>` so only the recent transcript is seeded into the target agent.
 
 ## Common questions answered
@@ -123,12 +123,15 @@ catchup is not a hosted cloud service and does not merge all agents into a singl
 
 - Claude Code (`claude`)
 - Codex (`codex`)
+- Copilot CLI (`copilot`)
 - Cursor (`cursor`)
 - Cline (`cline`)
 - Kimi (`kimi`)
 - Antigravity (`agy`)
 - OpenCode (`opencode`)
 - Pi Agent (`pi-agent`)
+- ZCode (`zcode`)
+- DeepSeek Harness (`deepseek`)
 
 Each produces the same clean output regardless of how the source agent stored its history.
 
