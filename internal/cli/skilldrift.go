@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/wilbeibi/catchup/internal/session"
 )
 
 // The installed SKILL.md is the LLM-facing half of the interface, and it
@@ -90,7 +92,7 @@ func warnSkillDrift(skillDirs map[string]string, version string, stderr io.Write
 		return
 	}
 	var drifted []string
-	for _, name := range providerNames() {
+	for _, name := range session.Providers {
 		dir, ok := skillDirs[name]
 		if !ok {
 			continue

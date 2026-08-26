@@ -236,8 +236,8 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 func listAcross(ctx context.Context, roots session.Roots, cmd Command, cwd string, stdout, stderr io.Writer) error {
 	opts := session.ListOptions{Query: cmd.Target.Query, Cwd: cwd, Limit: cmd.Limit}
 	var merged []session.Summary
-	for _, name := range providerNames() {
-		prov, _ := selectProvider(name) // providerNames is the closed set selectProvider switches on
+	for _, name := range session.Providers {
+		prov, _ := selectProvider(name) // session.Providers is the closed set selectProvider switches on
 		sums, err := prov.List(ctx, roots, opts)
 		if err != nil {
 			// A store that cannot be read means missing rows, not a failed
@@ -311,22 +311,6 @@ func expandTilde(dir string) string {
 		return dir
 	}
 	return filepath.Join(home, strings.TrimPrefix(dir, "~"))
-}
-
-func providerNames() []string {
-	return []string{
-		session.ProviderCodex,
-		session.ProviderClaude,
-		session.ProviderAgy,
-		session.ProviderCline,
-		session.ProviderCopilot,
-		session.ProviderCursor,
-		session.ProviderDeepSeek,
-		session.ProviderKimi,
-		session.ProviderOpenCode,
-		session.ProviderPiAgent,
-		session.ProviderZCode,
-	}
 }
 
 // orList renders names the way an error message reads them: "a, b, or c".
@@ -453,7 +437,7 @@ func newestAcross(ctx context.Context, roots session.Roots, cwd string) (session
 	var latest session.Source
 	var have bool
 	var failures []error
-	for _, name := range providerNames() {
+	for _, name := range session.Providers {
 		prov, err := selectProvider(name)
 		if err != nil {
 			failures = append(failures, err)
@@ -487,12 +471,12 @@ func newestAcross(ctx context.Context, roots session.Roots, cwd string) (session
 }
 
 // installSkill writes skillMD to "<dir>/catchup/SKILL.md" for one provider, or
-// for every provider in providerNames() when provider is "". Providers with no
+// for every provider in session.Providers when provider is "". Providers with no
 // entry in skillDirs are skipped rather than erroring, so the closed provider
 // set and the skill-directory set can evolve independently. Each copy is
 // stamped with the build version so later runs can detect drift.
 func installSkill(provider string, skillDirs map[string]string, skillMD []byte, version string, stdout io.Writer) error {
-	names := providerNames()
+	names := session.Providers
 	if provider != "" {
 		if _, err := selectProvider(provider); err != nil {
 			return err
