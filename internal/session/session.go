@@ -37,6 +37,14 @@ const (
 	ProviderCopilot  = "copilot"  // GitHub Copilot CLI
 )
 
+// Providers lists every provider name, in the order catchup documents them.
+// Prose that names the agents — the help text, README, SKILL.md — is written
+// by hand and checked against this; machine-read lists build from it.
+var Providers = []string{
+	ProviderCodex, ProviderClaude, ProviderAgy, ProviderCline, ProviderCopilot,
+	ProviderCursor, ProviderDeepSeek, ProviderKimi, ProviderOpenCode, ProviderPiAgent, ProviderZCode,
+}
+
 // Entry kinds and message roles. Providers normalize their own wire formats
 // onto these so the renderer never sees provider-specific strings.
 const (

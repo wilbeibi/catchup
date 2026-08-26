@@ -329,6 +329,14 @@ func providerNames() []string {
 	}
 }
 
+// orList renders names the way an error message reads them: "a, b, or c".
+func orList(names []string) string {
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + ", or " + names[len(names)-1]
+}
+
 // selectProvider maps a provider name to its implementation. The set is closed
 // and small, so this is a switch, not a registry.
 func selectProvider(name string) (session.Provider, error) {
@@ -368,7 +376,7 @@ func selectProvider(name string) (session.Provider, error) {
 		if name == "dsh" {
 			return nil, fmt.Errorf(`unknown agent "dsh"; DeepSeek Harness's agent name is deepseek`)
 		}
-		return nil, fmt.Errorf("unknown agent %q (want codex, claude, agy, cline, copilot, cursor, deepseek, kimi, opencode, pi-agent, or zcode); run catchup --help", name)
+		return nil, fmt.Errorf("unknown agent %q (want %s); run catchup --help", name, orList(session.Providers))
 	}
 }
 
