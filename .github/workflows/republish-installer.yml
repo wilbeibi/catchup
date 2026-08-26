@@ -1,0 +1,25 @@
+name: Republish installer
+
+# catchup.pages.dev/install.sh is served from the site, but scripts/install.sh
+# here is the only copy anyone edits: the site's deploy copies it out of main
+# at deploy time. That deploy only runs on a push to the site branch, so a fix
+# landing here would otherwise sit unserved until the site changed for some
+# unrelated reason. This asks for that deploy.
+
+on:
+  push:
+    branches: [main]
+    paths: ["scripts/install.sh"]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the site branch to redeploy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy.yml --repo ${{ github.repository }} --ref site

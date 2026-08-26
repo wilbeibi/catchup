@@ -33,7 +33,7 @@ Works with **Claude Code**, **Codex**, **Copilot CLI**, **Cursor**, **Cline**, *
 brew install wilbeibi/tap/catchup
 
 # prebuilt binary (Linux/macOS, no Go needed)
-curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh
+curl -fsSL https://catchup.pages.dev/install.sh | sh
 
 # or with Go
 go install github.com/wilbeibi/catchup@latest
