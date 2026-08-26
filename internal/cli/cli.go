@@ -25,6 +25,7 @@ import (
 	"github.com/wilbeibi/catchup/internal/claude"
 	"github.com/wilbeibi/catchup/internal/cline"
 	"github.com/wilbeibi/catchup/internal/codex"
+	"github.com/wilbeibi/catchup/internal/copilot"
 	"github.com/wilbeibi/catchup/internal/cursor"
 	"github.com/wilbeibi/catchup/internal/deepseek"
 	"github.com/wilbeibi/catchup/internal/kimi"
@@ -40,7 +41,8 @@ const helpText = `Usage: catchup [agent[/<rank>]] [flags]        read a past ses
        catchup fork --into <agent> --from <file | - | url>
        catchup install-skill [agent]
 
-Agents: codex, claude, agy (Antigravity), cline, cursor, deepseek (dsh), kimi, opencode, pi-agent, zcode
+Agents: codex, claude, agy (Antigravity), cline, copilot, cursor, deepseek (dsh),
+kimi, opencode, pi-agent, zcode
 Omit the agent to use whichever has the newest session here. Bare ` + "`catchup`" + `
 prints that session in full, as Markdown. The flags refine three things:
 which session, how much of it, and as what.
@@ -317,6 +319,7 @@ func providerNames() []string {
 		session.ProviderClaude,
 		session.ProviderAgy,
 		session.ProviderCline,
+		session.ProviderCopilot,
 		session.ProviderCursor,
 		session.ProviderDeepSeek,
 		session.ProviderKimi,
@@ -338,6 +341,8 @@ func selectProvider(name string) (session.Provider, error) {
 		return agy.New(), nil
 	case session.ProviderCline:
 		return cline.New(), nil
+	case session.ProviderCopilot:
+		return copilot.New(), nil
 	case session.ProviderCursor:
 		return cursor.New(), nil
 	case session.ProviderDeepSeek:
@@ -363,7 +368,7 @@ func selectProvider(name string) (session.Provider, error) {
 		if name == "dsh" {
 			return nil, fmt.Errorf(`unknown agent "dsh"; DeepSeek Harness's agent name is deepseek`)
 		}
-		return nil, fmt.Errorf("unknown agent %q (want codex, claude, agy, cline, cursor, deepseek, kimi, opencode, pi-agent, or zcode); run catchup --help", name)
+		return nil, fmt.Errorf("unknown agent %q (want codex, claude, agy, cline, copilot, cursor, deepseek, kimi, opencode, pi-agent, or zcode); run catchup --help", name)
 	}
 }
 
@@ -805,6 +810,10 @@ func intoCommand(target, prompt, model string) (string, []string, error) {
 		return "cline", append(modelArgs("--model", model), "-i", prompt), nil
 	case session.ProviderCursor:
 		return "cursor-agent", append(modelArgs("--model", model), prompt), nil
+	case session.ProviderCopilot:
+		// -i starts interactive and auto-executes the prompt; a bare -p is
+		// non-interactive and exits when the answer lands.
+		return "copilot", append(modelArgs("--model", model), "-i", prompt), nil
 	case session.ProviderKimi:
 		// Kimi rejects positional arguments and its -p flag is
 		// non-interactive print mode, so there is no way to start an
@@ -896,6 +905,13 @@ func forkCommand(src session.Source, model string) (string, []string, error) {
 		// Cline has no fork, and a bare --id only prints a session summary
 		// and exits; -i opens the TUI resumed on the session.
 		return "cline", append([]string{"-i", "--id", src.Ref.SessionID}, modelArgs("--model", model)...), nil
+	case session.ProviderCopilot:
+		if src.Ref.SessionID == "" {
+			return "", nil, fmt.Errorf("fork copilot: missing session id")
+		}
+		// Copilot has no fork; --resume is its native resume, and it takes
+		// the id inline (a bare --resume opens the session picker).
+		return "copilot", append([]string{"--resume=" + src.Ref.SessionID}, modelArgs("--model", model)...), nil
 	case session.ProviderCursor:
 		if src.Ref.SessionID == "" {
 			return "", nil, fmt.Errorf("fork cursor: missing session id")
