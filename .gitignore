@@ -1,1 +1,4 @@
 .wrangler/
+
+# copied from main at deploy time by scripts/publish-installer.sh
+public/install.sh

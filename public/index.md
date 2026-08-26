@@ -23,7 +23,7 @@ The output is just the conversation: user and assistant messages only, with tool
 brew install wilbeibi/tap/catchup
 
 # or prebuilt binary
-curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh
+curl -fsSL https://catchup.pages.dev/install.sh | sh
 
 # or with Go
 go install github.com/wilbeibi/catchup@latest

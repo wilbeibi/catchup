@@ -12,7 +12,7 @@ Every catchup command is one of three jobs with a session: **recap** it (pull it
 - Canonical site: https://catchup.pages.dev/
 - Repository: https://github.com/wilbeibi/catchup
 - Package: github.com/wilbeibi/catchup
-- Install: `brew install wilbeibi/tap/catchup`, `curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh`, or `go install github.com/wilbeibi/catchup@latest`
+- Install: `brew install wilbeibi/tap/catchup`, `curl -fsSL https://catchup.pages.dev/install.sh | sh`, or `go install github.com/wilbeibi/catchup@latest`
 - License: MIT
 - Supported agents: Claude Code (`claude`), Codex (`codex`), Copilot CLI (`copilot`), Cursor (`cursor`), Cline (`cline`), Kimi (`kimi`), Antigravity (`agy`), OpenCode (`opencode`), Pi Agent (`pi-agent`), ZCode (`zcode`), DeepSeek Harness (`deepseek`)
 
@@ -23,7 +23,7 @@ Key facts:
 - Output is Markdown by default; `--html` and `--json` are also available.
 - Native same-agent fork: `catchup fork [agent]` resumes the newest session through that agent's real fork command, preserving native session state where the agent supports it (`codex fork`, `claude --resume --fork-session`, `cursor-agent --resume`, `cline -i --id`, `kimi --session`, `agy --conversation`, `opencode --session --fork`, `pi --fork`).
 - Cross-agent fork / fork into another agent: `catchup fork <source-agent> --into <target-agent>` continues a session in a different agent by rendering the source transcript and launching the target agent with that transcript as the opening prompt, for example `catchup fork claude --into codex` or `catchup fork codex --into claude`.
-- Install: `brew install wilbeibi/tap/catchup`, `curl -fsSL https://raw.githubusercontent.com/wilbeibi/catchup/main/scripts/install.sh | sh`, or `go install github.com/wilbeibi/catchup@latest`, then `catchup install-skill`.
+- Install: `brew install wilbeibi/tap/catchup`, `curl -fsSL https://catchup.pages.dev/install.sh | sh`, or `go install github.com/wilbeibi/catchup@latest`, then `catchup install-skill`.
 - `install-skill` writes catchup's SKILL.md for every detected agent (or one: `catchup install-skill codex`), so an agent can run it itself to "catch up on the last session".
 
 ## AI agent quickstart

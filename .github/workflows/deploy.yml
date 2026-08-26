@@ -27,6 +27,9 @@ jobs:
       - name: Regenerate sitemap with real lastmod dates
         run: ./scripts/gen-sitemap.sh
 
+      - name: Publish the installer from main
+        run: ./scripts/publish-installer.sh
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:

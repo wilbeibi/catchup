@@ -11,7 +11,7 @@ This is the complete reference. For the short summary, see [llms.txt](https://ca
 - Canonical site: https://catchup.pages.dev/
 - Repository: https://github.com/wilbeibi/catchup
 - Package: github.com/wilbeibi/catchup
-- Install command: `go install github.com/wilbeibi/catchup@latest`
+- Install command: `curl -fsSL https://catchup.pages.dev/install.sh | sh` (prebuilt binary, no Go toolchain), `brew install wilbeibi/tap/catchup`, or `go install github.com/wilbeibi/catchup@latest`
 - License: MIT
 - Author: wilbeibi (https://github.com/wilbeibi)
 - Supported agents: Claude Code (`claude`), Codex (`codex`), Copilot CLI (`copilot`), Cursor (`cursor`), Cline (`cline`), Kimi (`kimi`), Antigravity (`agy`), OpenCode (`opencode`), Pi Agent (`pi-agent`), ZCode (`zcode`), DeepSeek Harness (`deepseek`)
@@ -32,11 +32,20 @@ catchup gives the next agent a simple command it can run itself to recover prior
 
 ## Installation
 
-Install the binary with Go:
+Install the prebuilt binary — Linux and macOS, no Go toolchain, checksum-verified against the release:
 
 ```
+curl -fsSL https://catchup.pages.dev/install.sh | sh
+```
+
+It installs to `~/.local/bin` (override with `CATCHUP_INSTALL_DIR`). Homebrew and Go work too:
+
+```
+brew install wilbeibi/tap/catchup
 go install github.com/wilbeibi/catchup@latest
 ```
+
+Windows binaries are on the releases page: https://github.com/wilbeibi/catchup/releases
 
 catchup also ships as a skill so an agent can run it itself:
 
