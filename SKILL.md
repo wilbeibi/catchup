@@ -28,7 +28,7 @@ Agents: `codex`, `claude`, `agy` (Antigravity), `cline`, `copilot`, `cursor`, `d
 
 ## Operation
 
-- Default to `--since-compact` (final compaction segment).
+- Default to `--since-compact` (final compaction segment). If the output warns the compaction kept no summary, rerun with `--last N` — the briefing you wanted sits before the cut.
 - To pick up another agent's work, always name that agent — bare `catchup` finds your own session, not theirs.
 - Unclear which session? Run `catchup <agent> --list` first — don't guess.
 - Unclear which flag fits the request (full session, `--last N`, a specific rank/id)? Ask the user instead of guessing.

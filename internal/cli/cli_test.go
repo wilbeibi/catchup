@@ -331,6 +331,23 @@ func TestSinceCompact(t *testing.T) {
 			t.Errorf("entry %d = %q, want %q", i, e.Text, want[i])
 		}
 	}
+	if len(got.Warnings) != 0 {
+		t.Errorf("marker with summary: unexpected warnings %q", got.Warnings)
+	}
+
+	// A marker with no summary text still cuts, but appends the --last warning.
+	bare := session.Thread{Entries: []session.Entry{
+		u("q1"), a("a1"),
+		{Kind: session.KindCompact},
+		u("q2"), a("a2"),
+	}}
+	got = sinceCompact(bare)
+	if len(got.Entries) != 3 {
+		t.Fatalf("bare marker: got %d entries, want 3", len(got.Entries))
+	}
+	if len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], "--last N") {
+		t.Errorf("bare marker: warnings = %q, want one mentioning --last N", got.Warnings)
+	}
 
 	// No compaction marker: the whole thread is returned unchanged.
 	plain := session.Thread{Entries: []session.Entry{u("q1"), a("a1")}}

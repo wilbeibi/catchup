@@ -985,12 +985,17 @@ func lastTurns(t session.Thread, n int) session.Thread {
 // KindCompact entry and everything after it. On Claude that entry carries the
 // summary of the pre-compaction context, so the result leads with a recap and
 // continues with the live tail; on Codex and OpenCode the marker is empty, so
-// it is a plain cut. When the thread has no compaction marker at all the whole
-// thread is returned unchanged, which is what lets a caller (e.g. a skill)
-// apply this unconditionally.
+// it is a plain cut, and a warning says to rerun with --last — nothing else
+// in the output shows a summary existed and wasn't kept. When the thread has
+// no compaction marker at all the whole thread is returned unchanged, which
+// is what lets a caller (e.g. a skill) apply this unconditionally.
 func sinceCompact(t session.Thread) session.Thread {
 	for i := len(t.Entries) - 1; i >= 0; i-- {
 		if t.Entries[i].Kind == session.KindCompact {
+			if strings.TrimSpace(t.Entries[i].Text) == "" {
+				t.Warnings = append(t.Warnings,
+					"this agent's log marks the compaction but keeps no summary; rerun with --last N to see the turns before it")
+			}
 			t.Entries = t.Entries[i:]
 			return t
 		}
