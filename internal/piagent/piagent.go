@@ -8,10 +8,11 @@
 // model_change.{provider,modelId} and assistant message provider/model on the
 // current parent chain for model metadata; session_info.name for title;
 // message.role user/assistant with text content for the timeline;
-// compaction.summary as a compaction marker.
+// compaction.summary as a compaction marker; branch_summary.summary as an
+// abandoned-branch recap.
 //
 // Ignored by default: toolCall content blocks, toolResult messages, thinking
-// blocks, labels, custom messages, token usage, and branch bookkeeping.
+// blocks, labels, custom entries and messages, and token usage.
 package piagent
 
 import (
@@ -312,6 +313,12 @@ func pathEntries(path []piLine) []session.Entry {
 			}
 		case "compaction":
 			entries = append(entries, compactEntry(line))
+		case "branch_summary":
+			// The branch left behind via /tree. Not KindCompact — see the kind
+			// docs in session.go.
+			if line.Summary != "" {
+				entries = append(entries, branchEntry(line))
+			}
 		}
 	}
 	return entries
@@ -338,6 +345,10 @@ func messageEntry(line piLine) (session.Entry, bool) {
 
 func compactEntry(line piLine) session.Entry {
 	return session.Entry{Kind: session.KindCompact, Text: line.Summary, Time: parseTime(line.Timestamp)}
+}
+
+func branchEntry(line piLine) session.Entry {
+	return session.Entry{Kind: session.KindBranch, Text: line.Summary, Time: parseTime(line.Timestamp)}
 }
 
 func finalizeMeta(src *session.Source) {

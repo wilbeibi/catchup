@@ -17,8 +17,10 @@ const transcript = `{"type":"session","version":3,"id":"019f-pi","timestamp":"20
 {"type":"message","id":"m2","parentId":"m1","timestamp":"2026-06-28T02:50:26.242Z","message":{"role":"assistant","timestamp":1793155826242,"provider":"anthropic","model":"claude-sonnet-4","content":[{"type":"thinking","thinking":"hidden"},{"type":"toolCall","id":"tc1","name":"read","arguments":{"file":"x"}},{"type":"text","text":"I will inspect the format."}]}}
 {"type":"message","id":"m3","parentId":"m2","timestamp":"2026-06-28T02:50:26.266Z","message":{"role":"toolResult","toolCallId":"tc1","toolName":"read","content":[{"type":"text","text":"tool output"}]}}
 {"type":"compaction","id":"c1","parentId":"m3","timestamp":"2026-06-28T02:51:00.000Z","summary":"summary so far","firstKeptEntryId":"m1"}
-{"type":"session_info","id":"n1","parentId":"c1","timestamp":"2026-06-28T02:51:01.000Z","name":"Pi support"}
-{"type":"message","id":"m4","parentId":"n1","timestamp":"2026-06-28T02:51:02.000Z","message":{"role":"user","content":[{"type":"text","text":"finish it"}]}}
+{"type":"branch_summary","id":"b0","parentId":"c1","timestamp":"2026-06-28T02:51:00.500Z","fromId":"x0"}
+{"type":"session_info","id":"n1","parentId":"b0","timestamp":"2026-06-28T02:51:01.000Z","name":"Pi support"}
+{"type":"branch_summary","id":"b1","parentId":"n1","timestamp":"2026-06-28T02:51:01.500Z","fromId":"x1","summary":"tried approach A; abandoned for B"}
+{"type":"message","id":"m4","parentId":"b1","timestamp":"2026-06-28T02:51:02.000Z","message":{"role":"user","content":[{"type":"text","text":"finish it"}]}}
 {"type":"message","id":"m5","parentId":"m4","timestamp":"2026-06-28T02:51:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}
 `
 
@@ -80,6 +82,8 @@ func TestReadPiAgentSession(t *testing.T) {
 		{session.KindMessage, session.RoleUser, "support pi agent"},
 		{session.KindMessage, session.RoleAssistant, "I will inspect the format."},
 		{session.KindCompact, "", "summary so far"},
+		// b0 has no summary text and must not surface; b1 does and must.
+		{session.KindBranch, "", "tried approach A; abandoned for B"},
 		{session.KindMessage, session.RoleUser, "finish it"},
 		{session.KindMessage, session.RoleAssistant, "done"},
 	}

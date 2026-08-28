@@ -89,7 +89,7 @@ section.entry { margin: 0 0 1.5rem; }
 section.entry h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; opacity: .6; margin: 0 0 .35rem; }
 section.entry.role-user h2 { color: #2a6; }
 section.entry.role-assistant h2 { color: #46c; }
-section.entry.kind-compact h2 { color: #c93; }
+section.entry.kind-compact h2, section.entry.kind-branch h2 { color: #c93; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; }
 </style>
 </head>

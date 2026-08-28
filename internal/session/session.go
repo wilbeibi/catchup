@@ -47,9 +47,15 @@ var Providers = []string{
 
 // Entry kinds and message roles. Providers normalize their own wire formats
 // onto these so the renderer never sees provider-specific strings.
+//
+// KindCompact marks a compaction seam: the context before it was replaced by
+// the entry's text (when the agent's log records the summary at all).
+// KindBranch is a summary of an abandoned conversation branch; it truncates
+// nothing, so code that cuts at compaction seams must leave it alone.
 const (
 	KindMessage = "message"
 	KindCompact = "compact"
+	KindBranch  = "branch"
 
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
@@ -108,9 +114,9 @@ type Source struct {
 	Warnings  []string
 }
 
-// Entry is one visible item on the conversation timeline. Kind is KindMessage
-// or KindCompact; for messages, Role is RoleUser or RoleAssistant. Tool calls,
-// tool results, reasoning, and bookkeeping never become Entries.
+// Entry is one visible item on the conversation timeline. Kind is KindMessage,
+// KindCompact, or KindBranch; for messages, Role is RoleUser or RoleAssistant.
+// Tool calls, tool results, reasoning, and bookkeeping never become Entries.
 type Entry struct {
 	Kind string
 	Role string

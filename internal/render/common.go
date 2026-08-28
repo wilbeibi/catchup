@@ -95,6 +95,8 @@ func entryLabel(e session.Entry) string {
 	switch {
 	case e.Kind == session.KindCompact:
 		return "compact"
+	case e.Kind == session.KindBranch:
+		return "branch"
 	case e.Role != "":
 		return e.Role
 	default:
