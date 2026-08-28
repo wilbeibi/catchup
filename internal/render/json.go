@@ -34,7 +34,6 @@ type threadDoc struct {
 	Entries []entryDoc `json:"entries"`
 }
 
-// jsonThread encodes a Thread as JSON.
 func jsonThread(w io.Writer, t session.Thread) error {
 	doc := threadDoc{
 		sourceDoc: makeSourceDoc(t.Source),
@@ -53,13 +52,11 @@ func jsonThread(w io.Writer, t session.Thread) error {
 	return encode(w, doc)
 }
 
-// jsonMeta encodes a Source's identity and metadata as JSON.
 func jsonMeta(w io.Writer, s session.Source) error {
 	return encode(w, makeSourceDoc(s))
 }
 
-// summaryDoc is one row of a JSON listing. Like the other wire types, its
-// field names are the stable contract integrations script against.
+// summaryDoc is one row of a JSON listing.
 type summaryDoc struct {
 	Rank      int    `json:"rank"`
 	Agent     string `json:"agent"`

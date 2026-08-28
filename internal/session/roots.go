@@ -65,21 +65,17 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		}
 	}
 
-	// ZCode stores its session database under <home>/.zcode/cli/db/db.sqlite.
-	// The root is the directory that holds the database, not the file, so the
-	// provider can join "db.sqlite" itself and tests can point at a temp dir.
+	// The dir holding db.sqlite, not the file, so tests can point at a temp dir.
 	zcode := getenv("ZCODE_HOME")
 	if zcode == "" {
 		zcode = filepath.Join(home, ".zcode", "cli", "db")
 	}
 
-	// dsh keeps session logs under <root>/sessions/<munged-cwd>/session-<id>/.
 	deepseek := getenv("DSH_HOME")
 	if deepseek == "" {
 		deepseek = filepath.Join(home, ".dsh")
 	}
 
-	// Copilot CLI keeps one directory per session under <root>/session-state.
 	copilot := getenv("COPILOT_HOME")
 	if copilot == "" {
 		copilot = filepath.Join(home, ".copilot")
@@ -139,8 +135,7 @@ func ResolveSkillDirs(roots Roots, home string) map[string]string {
 // current session, and the caller falls back to the newest session in the
 // working directory.
 //
-// Like ResolveRoots, getenv is passed in rather than read from os so resolution
-// stays a pure, testable function; main wires in os.Getenv.
+// getenv is injected for the reason given on ResolveRoots.
 func ResolveCurrent(getenv func(string) string) map[string]string {
 	current := map[string]string{}
 	if id := getenv("CLAUDE_CODE_SESSION_ID"); id != "" {

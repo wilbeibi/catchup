@@ -124,8 +124,7 @@ type stateJSON struct {
 }
 
 // sessionDirs returns every session directory under <root>/sessions, newest
-// first. The layout is sessions/wd_<slug>/<sessionId>/state.json; the
-// directory tree is the source of truth for which sessions exist. Recency
+// first. The layout is sessions/wd_<slug>/<sessionId>/state.json. Recency
 // comes from the wire log's mtime — it advances with every record, where
 // state.json's updatedAt is only rewritten around turn boundaries — falling
 // back to updatedAt for log-less dirs.

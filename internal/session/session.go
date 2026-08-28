@@ -3,16 +3,11 @@
 // that maps a user's request onto one of those sessions.
 //
 // This package performs no I/O and knows nothing about the CLI or about output
-// formats. The provider packages (internal/codex, internal/claude, internal/agy,
-// internal/opencode, internal/piagent, internal/kimi, internal/cline,
-// internal/cursor) implement Provider against real history
-// on disk; the cli layer turns user input into a request and hands the result to
-// the renderer (internal/render). Keeping the nouns here, with only pure
-// projections over them, is what lets the other layers stay independent of one
-// another.
-//
-// internal/zcode and internal/deepseek are also such providers. They are
-// omitted from the list above only to keep the line short.
+// formats. The provider packages (one per agent under internal/) implement
+// Provider against real history on disk; the cli layer turns user input into a
+// request and hands the result to the renderer (internal/render). Keeping the
+// nouns here, with only pure projections over them, is what lets the other
+// layers stay independent of one another.
 package session
 
 import (
@@ -104,8 +99,7 @@ type Roots struct {
 
 // Source is a located session: enough to read it and to describe it in a
 // listing without yet parsing its full timeline. Metadata is deliberately
-// shallow (string to string) so providers stay honest about what they surface;
-// it is never a place to stash structured payloads.
+// string-to-string so structured payloads cannot hide in it.
 type Source struct {
 	Ref       Ref
 	Path      string

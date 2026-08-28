@@ -72,8 +72,6 @@ func Parse(args []string) (Command, error) {
 				name, inline, hasInline = tok[:eq], tok[eq+1:], true
 			}
 		}
-		// value consumes the argument for a value-taking flag, from either the
-		// inline =form or the following token.
 		value := func() (string, error) {
 			if hasInline {
 				return inline, nil
@@ -266,8 +264,7 @@ func applyTarget(cmd *Command, spec string) error {
 // looksLikeRemoteDir reports whether a --dir value reads as scp syntax
 // (host:path). A colon before any path anchor is far more likely a
 // transcription of ssh habits than a real directory name; anchor the path
-// (/, ./, ~/) to use a local directory that genuinely contains ':'. WHERE
-// and SCOPE are separate axes — a directory flag never names a machine.
+// (/, ./, ~/) to use a local directory that genuinely contains ':'.
 func looksLikeRemoteDir(dir string) bool {
 	i := strings.IndexByte(dir, ':')
 	if i <= 0 {
@@ -280,7 +277,8 @@ func looksLikeRemoteDir(dir string) bool {
 	return true
 }
 
-// validateFromSpelling enforces D6's closed set of --from shapes: a file
+// validateFromSpelling enforces the closed set of --from shapes
+// (docs/DESIGN.md, D6): a file
 // path, - (stdin), or a plain http(s) URL. Every other shape is a transport,
 // and transports live in the shell — so each rejection names the pipe (or
 // presigned URL) that replaces it.
@@ -300,10 +298,8 @@ func validateFromSpelling(from string) error {
 	return nil
 }
 
-// isHTTPURL reports whether a --from value is the URL spelling. Only plain
-// http(s) counts: every other scheme is rejected by validateFromSpelling,
-// because the reach of "anything" comes from stdin and http, never from
-// per-service integrations.
+// isHTTPURL reports whether a --from value is the URL spelling; only plain
+// http(s) counts (validateFromSpelling rejects the rest).
 func isHTTPURL(s string) bool {
 	l := strings.ToLower(s)
 	return strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://")

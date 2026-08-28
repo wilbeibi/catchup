@@ -267,8 +267,7 @@ func messageEntry(m clineMessage) (session.Entry, bool) {
 	return session.Entry{Kind: session.KindMessage, Role: m.Role, Text: text, Time: ts}, true
 }
 
-// unwrapUserInput strips the <user_input mode="..."> envelope cline wraps
-// around what the user actually typed. Text without the envelope (older
+// unwrapUserInput strips the <user_input> envelope; text without one (older
 // sessions, piped input variants) passes through unchanged.
 func unwrapUserInput(text string) string {
 	trimmed := strings.TrimSpace(text)

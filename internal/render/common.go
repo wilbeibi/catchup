@@ -23,10 +23,9 @@ const dateHuman = "2006-01-02"
 // can pin "now" and assert exact cells.
 var timeNow = time.Now
 
-// Age renders a timestamp the way someone scanning a listing reads it: how
-// long ago, while "how long ago" is still the question being asked, and a
-// plain date once it is not. The cutoff is a week — past that, "9d ago" is
-// arithmetic, not an answer.
+// Age renders a recent timestamp as a relative age and an old one as a plain
+// date. The cutoff is a week — past that, "9d ago" is arithmetic, not an
+// answer.
 func Age(t time.Time) string {
 	if t.IsZero() {
 		return ""
@@ -34,7 +33,6 @@ func Age(t time.Time) string {
 	d := timeNow().Sub(t)
 	switch {
 	case d < time.Minute: // includes clock skew: a stamp from a machine running ahead
-
 		return "just now"
 	case d < time.Hour:
 		return strconv.Itoa(int(d.Minutes())) + "m ago"
@@ -111,8 +109,6 @@ func oneLine(s string) string {
 }
 
 // termWidth returns the terminal width in characters for the given writer.
-// When w is a terminal, it uses the TTY ioctl. Falls back to $COLUMNS,
-// then to a hardcoded default of 80.
 func termWidth(w io.Writer) int {
 	if f, ok := w.(*os.File); ok {
 		if width, _, err := term.GetSize(int(f.Fd())); err == nil && width > 0 {

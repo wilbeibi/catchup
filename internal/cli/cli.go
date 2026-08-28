@@ -115,7 +115,7 @@ var runFork forkRunner = execFork
 // name to its global Agent Skills directory (see session.ResolveSkillDirs)
 // and skillMD is the SKILL.md content to install there; install-skill writes
 // them, every other action reads skillDirs to warn when an installed copy
-// drifts from this build. version is the stamped build version --version
+// drifts from this build. version is the stamped build version that --version
 // reports.
 func Run(ctx context.Context, args []string, roots session.Roots, current map[string]string, skillDirs map[string]string, skillMD []byte, version, cwd string, stdin io.Reader, stdout, stderr io.Writer) error {
 	cmd, err := Parse(args)
@@ -159,9 +159,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		if !ok {
 			return nil // several query matches: the listing printed is the answer
 		}
-		// The source is usually inferred, and this is the one command that
-		// spends money on the guess, so name it before the launch — early
-		// enough to interrupt while a large transcript is still being read.
+		// Announced before the transcript read, early enough to interrupt.
 		announceFork(stderr, src, cmd.Into)
 		if cmd.Into != "" {
 			return forkInto(ctx, src, cmd, stdin, stdout, stderr)
@@ -173,10 +171,8 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		return installSkill(cmd.Target.Provider, skillDirs, skillMD, version, stdout)
 	}
 
-	// A listing with no agent named spans every agent: "where was I" is a
-	// cross-agent question by nature — the whole premise of catchup is that
-	// more than one agent works here — and the table's handles carry the agent
-	// name, so its rows stay selectable.
+	// A listing with no agent named spans every agent; the table's handles
+	// carry the agent name, so its rows stay selectable.
 	if cmd.Target.Provider == "" && cmd.List {
 		return listAcross(ctx, roots, cmd, cwd, stdout, stderr)
 	}
@@ -283,14 +279,10 @@ func announceFork(stderr io.Writer, src session.Source, into string) {
 	if age := render.Age(src.UpdatedAt); age != "" {
 		facts = append(facts, age)
 	}
-	// Fields collapses a multi-line title; the announce is one line. A title
-	// that is just the directory name is a provider's fallback for a session
-	// its agent never named, and identifies nothing here — same as in a
-	// listing, where those rows show their opening message instead.
-	// Providers that title a session from its first user message can produce
-	// hundreds of characters — a pasted prompt, or catchup's own seed
-	// preamble when the session was itself seeded — so it is truncated by
-	// display width, like a table cell.
+	// Fields collapses a multi-line title to one announce line. A title equal
+	// to the directory name is a provider's fallback for an unnamed session
+	// and identifies nothing; one built from a first user message can run to
+	// hundreds of characters, so it is width-truncated like a table cell.
 	title := strings.Join(strings.Fields(src.Metadata["title"]), " ")
 	if title != "" && title != filepath.Base(src.Metadata["cwd"]) {
 		facts = append(facts, runewidth.Truncate(title, 60, "…"))
@@ -547,7 +539,7 @@ func absenceHint(ctx context.Context, prov session.Provider, roots session.Roots
 // resolveRank returns the rank-th Source (1-based) of the listing the provider
 // would produce for opts. Ranks resolve the same way for every provider — the
 // row order List returns — so the composition lives here once instead of
-// behind the Provider interface five times.
+// once per provider.
 func resolveRank(ctx context.Context, prov session.Provider, name string, roots session.Roots, opts session.ListOptions, rank int) (session.Source, error) {
 	if rank < 1 {
 		return session.Source{}, fmt.Errorf("%s: rank must be >= 1", name)
@@ -647,7 +639,7 @@ func forkInto(ctx context.Context, src session.Source, cmd Command, stdin io.Rea
 // terminal.
 var openTTY = func() (io.ReadCloser, error) { return os.Open("/dev/tty") }
 
-// forkFrom is the artifact half of fork (D6 level 1): it seeds the --into
+// forkFrom is the artifact half of fork (docs/DESIGN.md, D6 level 1): it seeds the --into
 // agent from a document that did not come from a provider store — a file,
 // stdin, or a plain-GET URL. The artifact is seeded verbatim (any text
 // document works, not only catchup output), so no Thread is built and the

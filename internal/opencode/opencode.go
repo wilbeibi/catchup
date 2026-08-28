@@ -1,10 +1,8 @@
 // Package opencode implements session.Provider over OpenCode history stored in a
 // SQLite database at <XDG_DATA_HOME|~/.local/share>/opencode/opencode.db.
 //
-// This is the only provider that needs an external dependency: it opens the
-// database read-only via modernc.org/sqlite (a pure-Go, cgo-free driver), which
-// keeps SQLite isolated to this package and the rest of the program
-// dependency-free.
+// It opens the database read-only via modernc.org/sqlite (a pure-Go, cgo-free
+// driver) — the module's one database dependency, shared with internal/cursor.
 //
 // Schema reference, source of truth for the session/message/part tables —
 // packages/core/src/session/sql.ts in the OpenCode repo:
@@ -66,7 +64,7 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 	if src.Ref.SessionID == "" {
 		return session.Thread{}, errors.New("opencode: source has no session id")
 	}
-	// Path is the database file; reopen read-only and read the timeline.
+	// Path is the database file, not a per-session file.
 	db, err := openPath(src.Path)
 	if err != nil {
 		return session.Thread{}, err

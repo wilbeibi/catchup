@@ -12,11 +12,10 @@ import (
 // marker line between them, and the clamp is recoverable where a deletion is
 // not — the marker says exactly how to get the full text back.
 //
-// The threshold splits by who wrote the entry, because "position beats
-// statistics" holds for one author and not the other. A user message is
-// usually a pasted log, stack trace, or blob: the person's own words sit at
-// the edges and the blob in the middle, so head+tail is the right cut, and a
-// small ceiling is right. An assistant message (and a compaction summary) is
+// The threshold splits by who wrote the entry. A user message is usually a
+// pasted log, stack trace, or blob: the person's own words sit at the edges
+// and the blob in the middle, so head+tail is the right cut, and a small
+// ceiling is right. An assistant message (and a compaction summary) is
 // generated prose whose tables, numbers, and conclusions sit in the *middle* —
 // head+tail is exactly wrong there — so it renders whole up to a far higher
 // ceiling that still catches a pathological inline blob (an echoed file, a
@@ -24,16 +23,14 @@ import (
 // threshold, not a derived one: above it, an entry is assumed a dumped payload
 // rather than prose. No tunables, no content sniffing: the only signal is role.
 const (
-	clampPastedMaxBytes    = 4096  // user messages: pasted content, head+tail is right
-	clampGeneratedMaxBytes = 32768 // assistant + compaction: prose kept whole; chosen policy ceiling, not derived
+	clampPastedMaxBytes    = 4096
+	clampGeneratedMaxBytes = 32768
 	clampHeadBytes         = 2048
 	clampTailBytes         = 1024
 )
 
-// clampMax is the byte ceiling above which an entry is clamped, chosen by
-// author: only a user message carries the pasted blobs the head+tail cut was
-// designed for. Everything else — assistant turns, compaction summaries — is
-// generated prose and gets the high ceiling.
+// clampMax picks the byte ceiling by author; the design block above says why
+// role is the only signal.
 func clampMax(e session.Entry) int {
 	if e.Kind == session.KindMessage && e.Role == session.RoleUser {
 		return clampPastedMaxBytes

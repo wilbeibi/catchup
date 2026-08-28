@@ -123,8 +123,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 			break
 		}
 		// The directory filter is answered from workspace.yaml alone, so a
-		// session in another directory never costs an event-log parse. The
-		// parsed map is handed on, so the file is read once either way.
+		// session in another directory never costs an event-log parse.
 		meta := readWorkspace(d.path)
 		if opts.Cwd != "" && meta["cwd"] != opts.Cwd {
 			continue
@@ -146,19 +145,16 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 
 // --- directory enumeration --------------------------------------------------
 
-// dirInfo is one session directory. The id is not carried alongside it: the
-// directory's base name is the session id, so a second copy could only ever
-// disagree with the path it came from.
+// dirInfo is one session directory. No id field: the base name is the id, and
+// a copy could only disagree with the path it came from.
 type dirInfo struct {
 	path string
 	mod  time.Time
 }
 
 // sessionDirs returns every session directory under <root>/session-state that
-// holds an event log, newest first. The directory's base name is the session
-// id — the value --resume takes, and the id workspace.yaml repeats — so it is
-// the one Resolve matches and List reports, and a session whose yaml is
-// missing or truncated is still selectable.
+// holds an event log, newest first. Only the event log is required, so a
+// session whose workspace.yaml is missing or truncated is still listed.
 func sessionDirs(root string) ([]dirInfo, error) {
 	base := filepath.Join(root, "session-state")
 	entries, err := os.ReadDir(base)
@@ -215,10 +211,9 @@ func readSource(d dirInfo, meta map[string]string) session.Source {
 
 // readWorkspace parses workspace.yaml. The file is a flat map of scalars
 // written by Copilot itself — no nesting, no lists — so a full YAML parser
-// would be a dependency bought for a dozen lines of text. It is read whole
-// because it is small by construction and a session's whole metadata is
-// wanted at once; a missing or unreadable file yields an empty map, leaving
-// the session readable from its event log alone.
+// would be a dependency bought for a dozen lines of text. A missing or
+// unreadable file yields an empty map, leaving the session readable from its
+// event log alone.
 func readWorkspace(dir string) map[string]string {
 	raw, err := os.ReadFile(filepath.Join(dir, workspaceFile))
 	if err != nil {

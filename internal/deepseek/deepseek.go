@@ -185,9 +185,7 @@ type dshLine struct {
 	Data      json.RawMessage `json:"data"`
 }
 
-// Per-event data shapes. Unmarshal failures are tolerated (the event then
-// contributes nothing): a shape this provider does not understand is never
-// visible timeline content.
+// Per-event data shapes; decode tolerance is applyLine's contract.
 type dshUserMessage struct {
 	Content []dshBlock `json:"content"`
 	Source  struct {
@@ -274,10 +272,8 @@ func readThread(fi fileInfo) (session.Thread, error) {
 func applyLine(src *session.Source, entries *[]session.Entry, line dshLine) {
 	switch {
 	case line.Type == "user/message":
-		// Only rows a human typed (source.kind "user", appended to the
-		// surface) are conversation. Plugin and skill-catalog rows are
-		// injected context; a non-"append" surfaceOp marks a compaction
-		// replacement, whose shape is unverified and skipped.
+		// Human turns only; injected context and unverified compaction
+		// replacements are skipped (see package doc).
 		var d dshUserMessage
 		if json.Unmarshal(line.Data, &d) != nil {
 			return
@@ -356,8 +352,7 @@ func setModel(src *session.Source, model, provider string) {
 	}
 }
 
-// blocksText joins the text blocks of a content list. Assistant reasoning
-// blocks and any non-text block are skipped.
+// blocksText joins the text blocks of a content list.
 func blocksText(blocks []dshBlock) string {
 	var parts []string
 	for _, b := range blocks {

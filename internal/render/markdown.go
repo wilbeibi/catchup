@@ -9,10 +9,9 @@ import (
 	"github.com/wilbeibi/catchup/internal/session"
 )
 
-// markdownThread writes YAML frontmatter followed by a numbered timeline, built
-// with a strings.Builder. No template engine: Markdown is line-oriented and a
-// builder keeps the output fully under our control (stable key order, exact
-// blank lines).
+// markdownThread writes YAML frontmatter followed by a numbered timeline. No
+// template engine: Markdown is line-oriented and a builder keeps the output
+// fully under our control (stable key order, exact blank lines).
 func markdownThread(w io.Writer, t session.Thread) error {
 	var b strings.Builder
 	extra := []kv{{"entries", strconv.Itoa(len(t.Entries))}}

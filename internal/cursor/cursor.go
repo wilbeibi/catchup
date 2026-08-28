@@ -124,9 +124,8 @@ type metaJSON struct {
 	HasConversation bool   `json:"hasConversation"`
 }
 
-// chatDirs returns every chat directory under <root>/chats, newest first.
-// The layout is chats/<workspace-hash>/<chatId>/meta.json; chats that never
-// held a conversation are skipped.
+// chatDirs returns every chat directory under <root>/chats, newest first;
+// chats that never held a conversation are skipped.
 func chatDirs(root string) ([]chatDir, error) {
 	base := filepath.Join(root, "chats")
 	wss, err := os.ReadDir(base)
@@ -252,13 +251,9 @@ func readThread(src session.Source) (session.Thread, error) {
 	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
 }
 
-// openRO opens the SQLite file for reading. Plain mode=ro comes first because
-// store.db runs in WAL mode and a reader must consult the -wal file to see a
-// live session's newest rows — an immutable open would silently serve the
-// last checkpoint instead. immutable=1 remains as the fallback for the one
-// state mode=ro cannot open (a crashed writer's orphaned -wal with no -shm,
-// whose recovery needs write access); there the checkpointed prefix is the
-// best available answer.
+// openRO opens the SQLite file for reading: mode=ro first, immutable=1 as
+// fallback — see internal/opencode.openPath for why this order matters under
+// WAL.
 func openRO(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
 	if err == nil {
@@ -369,8 +364,7 @@ func messageEntry(msg cursorMessage) (session.Entry, bool) {
 }
 
 // userQuery returns the inner text of the <user_query> tag, or "" when the
-// message has none — which marks it as injected context (<user_info>,
-// timestamps) rather than something the user typed.
+// message has none.
 func userQuery(text string) string {
 	open := strings.Index(text, "<user_query>")
 	if open < 0 {

@@ -51,8 +51,7 @@ var _ session.Provider = (*Provider)(nil)
 
 func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) (session.Source, error) {
 	// The transcript path is a pure function of the conversation id, so an
-	// explicit id needs no enumeration — which is also what keeps conversations
-	// too old for history.jsonl reachable.
+	// explicit id needs no enumeration.
 	if id != "" {
 		fi, err := transcriptOf(roots.Agy, id)
 		if err != nil {
@@ -152,8 +151,8 @@ func sessionFiles(root string) ([]fileInfo, error) {
 
 // historyEntry is one line of <root>/history.jsonl: the prompt the user typed
 // (display), where and when they typed it (workspace, epoch-millisecond
-// timestamp), and which conversation it belongs to — absent on a
-// conversation's opening prompt, which is logged before the id exists.
+// timestamp), and which conversation it belongs to (absent on opening
+// prompts; see package doc).
 type historyEntry struct {
 	Display        string `json:"display"`
 	Workspace      string `json:"workspace"`
@@ -273,8 +272,7 @@ func sourceOf(fi fileInfo, h history) session.Source {
 // listSessions walks transcripts newest-first and collects up to limit
 // summaries. When cwd is set, only conversations located in that directory by
 // history.jsonl (by id, or by matchStart for single-prompt conversations) are
-// included — which also excludes subagent conversations, since those never
-// reach history.jsonl.
+// included.
 func listSessions(root, query, cwd string, limit int) ([]session.Summary, error) {
 	files, err := sessionFiles(root)
 	if err != nil {

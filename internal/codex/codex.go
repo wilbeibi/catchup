@@ -121,9 +121,8 @@ func findByID(files []fileInfo, id string, requireNameHit bool) (session.Source,
 // --- listing ----------------------------------------------------------------
 
 // listSessions walks files newest-first and collects up to limit summaries.
-// Without a query it reads only the first limit files; with a query it reads in
-// recency order until limit matches are found. When cwd is set, only sessions
-// whose working directory matches exactly are included.
+// When cwd is set, only sessions whose working directory matches exactly are
+// included.
 func listSessions(root, query, cwd string, limit int) ([]session.Summary, error) {
 	files, err := sessionFiles(root)
 	if err != nil {
@@ -358,9 +357,8 @@ var injectionTags = []string{"INSTRUCTIONS", "skill", "user_instructions", "envi
 //
 // One turn can carry several of these at once — a plugin catalog, then the
 // project-doc preamble — so the test is that *nothing but* envelopes is there:
-// strip them one by one and see whether anything a person wrote is left. That
-// keeps the original guarantee (real prose is never dropped) while catching
-// the composite turns a single whole-message match misses.
+// strip them one by one and report true only when nothing a person wrote is
+// left.
 func isInjectedUserText(s string) bool {
 	t := strings.TrimSpace(s)
 	if t == "" {

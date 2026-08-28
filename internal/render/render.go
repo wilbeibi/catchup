@@ -95,7 +95,6 @@ func tableList(w io.Writer, provider string, summaries []session.Summary) error 
 		titleW = 80
 	}
 
-	// Header
 	fmt.Fprintf(w, "%s %s %s\n",
 		runewidth.FillRight("SESSION", selW),
 		runewidth.FillRight("UPDATED", updW),
@@ -112,7 +111,7 @@ func tableList(w io.Writer, provider string, summaries []session.Summary) error 
 	return nil
 }
 
-// titleCell is the text that has to answer "was this the one?". Providers whose
+// titleCell picks the text for the TITLE column. Providers whose
 // agent never named the session fall back to the directory name, which says
 // nothing in a listing already scoped to one directory — every row reads the
 // same. The session's opening message is what actually tells those rows apart,

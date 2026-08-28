@@ -75,7 +75,7 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 	if src.Ref.SessionID == "" {
 		return session.Thread{}, errors.New("zcode: source has no session id")
 	}
-	// Path is the database file; reopen read-only and read the timeline.
+	// Path is the database file, not a per-session file.
 	db, err := openPath(src.Path)
 	if err != nil {
 		return session.Thread{}, err
@@ -104,13 +104,9 @@ func open(root string) (*sql.DB, string, error) {
 	return db, path, err
 }
 
-// openPath opens the database for reading. Plain mode=ro comes first because
-// db.sqlite runs in WAL mode and a reader must consult the -wal file to see a
-// live session's newest rows — an immutable open would silently serve the last
-// checkpoint instead. immutable=1 remains as the fallback for the one state
-// mode=ro cannot open (a crashed writer's orphaned -wal with no -shm, whose
-// recovery needs write access); there the checkpointed prefix is the best
-// available answer. This mirrors the OpenCode provider's rationale.
+// openPath opens the database for reading: mode=ro first, immutable=1 as
+// fallback — see internal/opencode.openPath for why this order matters under
+// WAL.
 func openPath(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
 	if err == nil {
@@ -130,7 +126,6 @@ func openPath(path string) (*sql.DB, error) {
 	return fallback, nil
 }
 
-// sessionColumns selects the metadata catchup reads from a session row.
 // time_archived is filtered in the WHERE clause, not selected.
 const sessionColumns = `id, COALESCE(title,''), COALESCE(directory,''), time_created, time_updated`
 
@@ -253,11 +248,10 @@ func firstText(ctx context.Context, db *sql.DB, sessionID string) string {
 // --- timeline ---------------------------------------------------------------
 
 func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Thread, error) {
-	// One pass over the session's text/compaction parts, ordered by message
-	// sequence then part time, grouping each message's text parts into a single
-	// entry. message.sequence is gap-free in ZCode; part.sequence is not, so
-	// parts within a message are ordered by time_created (and id as a tiebreak
-	// for parts sharing a timestamp).
+	// One pass over the session's text/compaction parts, grouping each
+	// message's text parts into one entry. part.sequence is unreliable (see
+	// package doc): time_created orders parts within a message, id breaking
+	// ties.
 	rows, err := db.QueryContext(ctx,
 		`SELECT m.id, m.data, m.sequence, m.time_created, p.data
 		   FROM part p JOIN message m ON p.message_id = m.id

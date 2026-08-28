@@ -276,12 +276,10 @@ func extractText(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""
 	}
-	// content may be a plain string (user turns) ...
 	var s string
 	if json.Unmarshal(raw, &s) == nil {
 		return s
 	}
-	// ... or an array of typed blocks (assistant turns; keep only text).
 	var blocks []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
