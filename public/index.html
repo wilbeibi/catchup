@@ -424,7 +424,7 @@
         <span class="t">brew install wilbeibi/tap/catchup</span>
         <span class="copy">click to copy</span>
       </button>
-      <button class="cmd" onclick="copyCmd(this, 'curl -fsSL https://catchup.pages.dev/install.sh | sh')" aria-label="Copy the install script command">
+      <button class="cmd" onclick="copyCmd(this, 'curl -fsSL https://catchup.pages.dev/install.sh | sh', '/_events/installer-copy')" aria-label="Copy the install script command">
         <span class="p">$</span>
         <span class="t">curl -fsSL https://catchup.pages.dev/install.sh | sh</span>
         <span class="copy">click to copy</span>
@@ -471,7 +471,14 @@
   // Success is only claimed after the clipboard promise resolves; on failure
   // (permissions, insecure context) the command text is selected so a manual
   // copy still works.
-  function copyCmd(btn, cmd) {
+  // The event path contains the only metric label. No visitor or command data
+  // is sent; the Pages Function records one aggregate Analytics Engine point.
+  function countEvent(path) {
+    if (navigator.sendBeacon && navigator.sendBeacon(path)) return;
+    fetch(path, { method: 'POST', keepalive: true }).catch(function () {});
+  }
+
+  function copyCmd(btn, cmd, eventPath) {
     var flash = function (msg) {
       var el = btn.querySelector('.copy');
       if (!el) return;
@@ -492,7 +499,10 @@
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(cmd).then(
-        function () { flash('copied ✓'); },
+        function () {
+          flash('copied ✓');
+          if (eventPath) countEvent(eventPath);
+        },
         fallback
       );
     } else {

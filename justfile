@@ -29,3 +29,7 @@ publish-installer:
 # print the reserved Pages URL
 url:
     @echo "https://catchup.pages.dev/"
+
+# Show aggregate installer intent and start counts from Workers Analytics Engine.
+installer-metrics days="30":
+    ./scripts/installer-metrics.sh {{days}}
