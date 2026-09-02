@@ -18,9 +18,13 @@
 // (data.content is what the human typed; data.transformedContent is the same
 // text wrapped in injected datetime and system-reminder context, and is not
 // conversation) and assistant/message content, which is empty on the turns
-// that only carry tool requests. Everything else — system.message, tool.*,
-// assistant.turn_*, session.usage_checkpoint, and the session lifecycle
-// events — is bookkeeping.
+// that only carry tool requests. A tool.execution_complete with success
+// false is a failure entry, paired through toolCallId with its
+// tool.execution_start for the tool's name and arguments; its text is
+// error.message, or result.content when no error is recorded. Everything
+// else — system.message, the rest of tool.*, assistant.turn_*,
+// session.usage_checkpoint, and the session lifecycle events — is
+// bookkeeping.
 //
 // Sub-agent traffic reuses those same two types and is told apart by the
 // envelope's agentId, which the schema documents as "absent for events from
@@ -43,9 +47,9 @@
 // updated_at: the yaml is rewritten when the session's metadata changes
 // (naming, resume), so it lags a session that is still appending events.
 //
-// Unverified: no local session compacted or spawned a sub-agent, so the
-// compaction and agentId handling follows the shipped schema rather than an
-// observed log. Legacy sessions under history-session-state/ (pre-migration
+// Unverified: no local session compacted, spawned a sub-agent, or had a tool
+// call fail, so the compaction, agentId, and failure handling follow the
+// shipped schema rather than an observed log. Legacy sessions under history-session-state/ (pre-migration
 // format) are not read; Copilot migrates one into session-state/ the first
 // time it is resumed.
 package copilot
@@ -272,6 +276,28 @@ type cpCompaction struct {
 	Summary string `json:"summaryContent"`
 }
 
+type cpToolStart struct {
+	ToolCallID string          `json:"toolCallId"`
+	ToolName   string          `json:"toolName"`
+	Arguments  json.RawMessage `json:"arguments"`
+}
+
+// success is a pointer so that only an explicit false counts as a failure;
+// result and error stay raw because the schema calls them objects and a
+// mismatch must not cost the event.
+type cpToolComplete struct {
+	ToolCallID string          `json:"toolCallId"`
+	Success    *bool           `json:"success"`
+	Result     json.RawMessage `json:"result"`
+	Error      json.RawMessage `json:"error"`
+}
+
+// toolCall is what a failure needs from the tool.execution_start it answers.
+type toolCall struct {
+	name string
+	args json.RawMessage
+}
+
 func readThread(d dirInfo, meta map[string]string) (session.Thread, error) {
 	src := readSource(d, meta)
 	f, err := os.Open(src.Path)
@@ -282,6 +308,7 @@ func readThread(d dirInfo, meta map[string]string) (session.Thread, error) {
 
 	var entries []session.Entry
 	var warnings []string
+	calls := map[string]toolCall{} // toolCallId → call, until its result arrives
 	dec := json.NewDecoder(f)
 	for dec.More() {
 		var ev cpEvent
@@ -290,7 +317,7 @@ func readThread(d dirInfo, meta map[string]string) (session.Thread, error) {
 			warnings = append(warnings, "stopped reading at a malformed record")
 			break
 		}
-		applyEvent(&src, &entries, ev)
+		applyEvent(&src, &entries, calls, ev)
 	}
 	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
 }
@@ -298,7 +325,7 @@ func readThread(d dirInfo, meta map[string]string) (session.Thread, error) {
 // applyEvent folds one event into the source metadata or the timeline. An
 // unparseable or empty payload makes the event contribute nothing rather than
 // fail the read.
-func applyEvent(src *session.Source, entries *[]session.Entry, ev cpEvent) {
+func applyEvent(src *session.Source, entries *[]session.Entry, calls map[string]toolCall, ev cpEvent) {
 	if ev.AgentID != "" {
 		return // a sub-agent's own turns: the parent's tool plumbing
 	}
@@ -335,7 +362,38 @@ func applyEvent(src *session.Source, entries *[]session.Entry, ev cpEvent) {
 		*entries = append(*entries, session.Entry{
 			Kind: session.KindCompact, Text: d.Summary, Time: parseTime(ev.Timestamp),
 		})
+	case "tool.execution_start":
+		var d cpToolStart
+		if json.Unmarshal(ev.Data, &d) == nil && d.ToolCallID != "" {
+			calls[d.ToolCallID] = toolCall{name: d.ToolName, args: d.Arguments}
+		}
+	case "tool.execution_complete":
+		var d cpToolComplete
+		if json.Unmarshal(ev.Data, &d) != nil {
+			return
+		}
+		call := calls[d.ToolCallID]
+		delete(calls, d.ToolCallID)
+		if d.Success == nil || *d.Success {
+			return
+		}
+		text := stringField(d.Error, "message")
+		if text == "" {
+			text = stringField(d.Result, "content")
+		}
+		*entries = append(*entries, session.Failure(call.name, session.CallInput(call.args), text, parseTime(ev.Timestamp)))
 	}
+}
+
+// stringField is the string at key in a JSON object, or "" for anything else.
+func stringField(raw json.RawMessage, key string) string {
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(raw, &obj) != nil {
+		return ""
+	}
+	var s string
+	json.Unmarshal(obj[key], &s)
+	return s
 }
 
 func parseTime(s string) time.Time {
