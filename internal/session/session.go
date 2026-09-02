@@ -11,7 +11,9 @@
 package session
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -47,13 +49,18 @@ var Providers = []string{
 // the entry's text (when the agent's log records the summary at all).
 // KindBranch is a summary of an abandoned conversation branch; it truncates
 // nothing, so code that cuts at compaction seams must leave it alone.
+// KindFailure is a tool result the agent's own log marks failed — the world
+// saying no to something the assistant tried. Successful tool results never
+// become Entries: the assistant's next words already carry what they said.
 const (
 	KindMessage = "message"
 	KindCompact = "compact"
 	KindBranch  = "branch"
+	KindFailure = "failure"
 
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
+	RoleTool      = "tool" // the speaker of a KindFailure entry
 )
 
 // Ref identifies one conversation within one provider. It is the stable handle
@@ -109,13 +116,51 @@ type Source struct {
 }
 
 // Entry is one visible item on the conversation timeline. Kind is KindMessage,
-// KindCompact, or KindBranch; for messages, Role is RoleUser or RoleAssistant.
-// Tool calls, tool results, reasoning, and bookkeeping never become Entries.
+// KindCompact, KindBranch, or KindFailure; for messages, Role is RoleUser or
+// RoleAssistant. Tool calls, successful tool results, reasoning, and
+// bookkeeping never become Entries; a tool result the log marks failed does,
+// as a KindFailure whose Text is what came back.
 type Entry struct {
 	Kind string
 	Role string
 	Text string
 	Time time.Time
+
+	// Tool and Input are set only on KindFailure entries: the provider's own
+	// name for the tool that was called, and what it was asked to do.
+	Tool  string
+	Input string
+}
+
+// Failure builds the entry for a tool result the provider marked failed. All
+// providers go through it, so Kind and Role are paired in one place.
+func Failure(tool, input, text string, at time.Time) Entry {
+	return Entry{Kind: KindFailure, Role: RoleTool, Tool: tool, Input: input, Text: text, Time: at}
+}
+
+// CallInput renders a tool call's input as the line a failure entry shows for
+// it: an input that is a single string field — the command, the path — is that
+// string; anything else is the input as compact JSON. Nothing here knows about
+// particular tools.
+func CallInput(raw json.RawMessage) string {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) == nil && len(fields) == 1 {
+		for _, v := range fields {
+			var s string
+			if json.Unmarshal(v, &s) == nil {
+				return s
+			}
+		}
+	}
+	var buf bytes.Buffer
+	if json.Compact(&buf, raw) != nil {
+		return string(raw)
+	}
+	return buf.String()
 }
 
 // Thread is a fully read session: its Source plus the ordered, visible
