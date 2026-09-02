@@ -88,7 +88,7 @@ Use `fork` to continue with the same agent and keep native session state. Use `f
 ## Boundaries
 
 - One agent at a time. It does not merge histories.
-- Conversation only. It strips tool calls, command output, and reasoning traces.
+- Conversation plus failed tool calls. It strips successful tool calls, command output, and reasoning traces.
 - Read-only, except `fork`.
 - Same-agent `fork` uses the agent's native resume path, so it keeps real session state.
 - Same-agent `fork --into` is the opposite trade: native state is dropped for a clean context.
