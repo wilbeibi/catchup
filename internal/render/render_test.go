@@ -87,6 +87,52 @@ func TestHTMLEscapes(t *testing.T) {
 	}
 }
 
+// TestFailureEntry pins the one shape a failure takes in every format: the
+// heading names the tool, the input precedes the output, and JSON carries
+// tool/input only on failures.
+func TestFailureEntry(t *testing.T) {
+	ts := time.Date(2026, 9, 2, 4, 11, 45, 0, time.UTC)
+	th := sampleThread()
+	th.Entries = append(th.Entries, session.Failure("Bash", "go test ./...", "FAIL\tcatchup/x <0.1s>\nexit status 1", ts))
+
+	var b bytes.Buffer
+	if err := Thread(&b, th, session.FormatMarkdown); err != nil {
+		t.Fatal(err)
+	}
+	wantMD := "## 4. failure: Bash | 2026-09-02 04:11\n\ngo test ./...\n\nFAIL\tcatchup/x <0.1s>\nexit status 1\n"
+	if !strings.Contains(b.String(), wantMD) {
+		t.Errorf("markdown failure block missing %q:\n%s", wantMD, b.String())
+	}
+
+	b.Reset()
+	if err := Thread(&b, th, session.FormatJSON); err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Entries []map[string]any `json:"entries"`
+	}
+	if err := json.Unmarshal(b.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, has := doc.Entries[0]["tool"]; has {
+		t.Errorf("message entry carries tool: %v", doc.Entries[0])
+	}
+	f := doc.Entries[3]
+	if f["kind"] != "failure" || f["role"] != "tool" || f["tool"] != "Bash" || f["input"] != "go test ./..." {
+		t.Errorf("failure entry = %v", f)
+	}
+
+	b.Reset()
+	if err := Thread(&b, th, session.FormatHTML); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`class="entry role-tool kind-failure"`, "4. failure: Bash", `<pre class="input">go test ./...</pre>`} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("html missing %q:\n%s", want, b.String())
+		}
+	}
+}
+
 func TestList(t *testing.T) {
 	var b bytes.Buffer
 	sums := []session.Summary{

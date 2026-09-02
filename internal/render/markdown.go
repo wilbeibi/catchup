@@ -60,6 +60,12 @@ func writeEntry(b *strings.Builder, n int, e session.Entry) {
 	}
 	b.WriteString("\n\n")
 
+	if e.Kind == session.KindFailure && e.Input != "" {
+		// What was asked, then what came back, as two paragraphs: the
+		// input is one line by construction, so no fence is needed.
+		b.WriteString(e.Input)
+		b.WriteString("\n\n")
+	}
 	text := strings.TrimRight(e.Text, "\n")
 	if text == "" && e.Kind == session.KindCompact {
 		text = "_(context compacted)_"

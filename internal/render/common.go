@@ -88,13 +88,20 @@ func header(src session.Source) []kv {
 	return pairs
 }
 
-// entryLabel is the short role/kind tag shown for a timeline entry.
+// entryLabel is the short role/kind tag shown for a timeline entry. A failure
+// names its tool — "failure: Bash" — because the exit status alone says
+// nothing about what was tried.
 func entryLabel(e session.Entry) string {
 	switch {
 	case e.Kind == session.KindCompact:
 		return "compact"
 	case e.Kind == session.KindBranch:
 		return "branch"
+	case e.Kind == session.KindFailure:
+		if e.Tool == "" {
+			return "failure"
+		}
+		return "failure: " + e.Tool
 	case e.Role != "":
 		return e.Role
 	default:

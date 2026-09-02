@@ -38,8 +38,10 @@ type htmlModel struct {
 type htmlEntry struct {
 	Index int
 	Label string
+	Kind  string
 	Role  string
 	Time  string
+	Input string
 	Text  string
 }
 
@@ -53,8 +55,10 @@ func htmlEntries(entries []session.Entry) []htmlEntry {
 		out[i] = htmlEntry{
 			Index: i + 1,
 			Label: entryLabel(e),
+			Kind:  e.Kind,
 			Role:  e.Role,
 			Time:  ts,
+			Input: e.Input,
 			Text:  e.Text,
 		}
 	}
@@ -90,6 +94,8 @@ section.entry h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: 
 section.entry.role-user h2 { color: #2a6; }
 section.entry.role-assistant h2 { color: #46c; }
 section.entry.kind-compact h2, section.entry.kind-branch h2 { color: #c93; }
+section.entry.kind-failure h2 { color: #c44; }
+section.entry.kind-failure pre.input { opacity: .75; margin: 0 0 .5rem; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; }
 </style>
 </head>
@@ -106,8 +112,11 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; 
 {{- end}}
 </header>
 {{- range .Entries}}
-<section class="entry role-{{.Role}} kind-{{.Label}}">
+<section class="entry role-{{.Role}} kind-{{.Kind}}">
 <h2>{{.Index}}. {{.Label}}{{if .Time}} · {{.Time}}{{end}}</h2>
+{{- if .Input}}
+<pre class="input">{{.Input}}</pre>
+{{- end}}
 <pre>{{.Text}}</pre>
 </section>
 {{- end}}
