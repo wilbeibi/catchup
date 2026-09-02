@@ -287,15 +287,17 @@ func TestLastTurns(t *testing.T) {
 		return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: s}
 	}
 	compact := session.Entry{Kind: session.KindCompact}
+	failed := session.Failure("Bash", "go test ./...", "FAIL", time.Time{})
 
+	// A failure is the world answering inside a turn: it never starts one.
 	thread := session.Thread{Entries: []session.Entry{
 		u("q1"), a("a1"),
 		compact,
-		u("q2"), a("a2a"), a("a2b"),
+		u("q2"), failed, a("a2a"), a("a2b"),
 	}}
 
 	got := lastTurns(thread, 1)
-	want := []string{"q2", "a2a", "a2b"}
+	want := []string{"q2", "FAIL", "a2a", "a2b"}
 	if len(got.Entries) != len(want) {
 		t.Fatalf("got %d entries, want %d", len(got.Entries), len(want))
 	}
@@ -303,6 +305,42 @@ func TestLastTurns(t *testing.T) {
 		if e.Text != want[i] {
 			t.Errorf("entry %d = %q, want %q", i, e.Text, want[i])
 		}
+	}
+	if got := lastTurns(thread, 2); len(got.Entries) != len(thread.Entries) {
+		t.Errorf("--last 2 kept %d entries, want all %d", len(got.Entries), len(thread.Entries))
+	}
+}
+
+// TestClampEntriesBoundsFailures covers the two fields a failure carries: a
+// dumped output takes the generated ceiling, an oversized input the pasted
+// one, and the entry keeps its kind and tool either way.
+func TestClampEntriesBoundsFailures(t *testing.T) {
+	input := `{"file_path":"/tmp/big.txt","content":"` + strings.Repeat("x", 10000) + `"}`
+	output := strings.Repeat("GET /health 200\n", 4000)
+	thread := session.Thread{Entries: []session.Entry{
+		{Kind: session.KindMessage, Role: session.RoleUser, Text: "write the file"},
+		session.Failure("Write", input, output, time.Time{}),
+	}}
+
+	got := clampEntries(thread)
+	if got.Entries[0] != thread.Entries[0] {
+		t.Errorf("message entry changed: %+v", got.Entries[0])
+	}
+	f := got.Entries[1]
+	if f.Kind != session.KindFailure || f.Tool != "Write" {
+		t.Errorf("failure lost its shape: %+v", f)
+	}
+	if len(f.Input) > clampPastedMaxBytes || !strings.Contains(f.Input, "elided") {
+		t.Errorf("input not clamped: %d bytes", len(f.Input))
+	}
+	if !strings.HasPrefix(f.Input, `{"file_path":"/tmp/big.txt"`) {
+		t.Errorf("input lost its head: %.80s", f.Input)
+	}
+	if len(f.Text) > clampGeneratedMaxBytes || !strings.Contains(f.Text, "elided") {
+		t.Errorf("output not clamped: %d bytes", len(f.Text))
+	}
+	if thread.Entries[1].Input != input || thread.Entries[1].Text != output {
+		t.Error("clampEntries mutated the caller's thread")
 	}
 }
 
