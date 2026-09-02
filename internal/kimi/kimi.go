@@ -19,8 +19,13 @@
 // kimi-code 0.26 lack workDir there, and session_index.jsonl fills that one
 // gap (see sessionDirs).
 //
+// A tool.result loop event whose result.isError is set becomes a failure
+// entry, paired through toolCallId with the tool.call event for the tool's
+// name and args. Successful results are not on the timeline.
+//
 // Ignored by default: turn.prompt (duplicates append_message), think parts,
-// tool.call/tool.result events, usage, permission, and llm.* bookkeeping.
+// tool.call and successful tool.result events, usage, permission, and llm.*
+// bookkeeping.
 // context.undo and context.clear are also ignored, deliberately: the timeline
 // shows what was said, not what remains in the agent's live context, so
 // undone or cleared turns still render.
@@ -265,8 +270,18 @@ type wireOrigin struct {
 }
 
 type wireEvent struct {
-	Type string    `json:"type"`
-	Part *wirePart `json:"part"`
+	Type       string          `json:"type"`
+	Part       *wirePart       `json:"part"`
+	ToolCallID string          `json:"toolCallId"` // tool.call, tool.result
+	Name       string          `json:"name"`       // tool.call
+	Args       json.RawMessage `json:"args"`       // tool.call
+	Result     json.RawMessage `json:"result"`     // tool.result; decoded only when needed
+}
+
+// toolCall is what a failure needs from the tool.call it answers.
+type toolCall struct {
+	name string
+	args json.RawMessage
 }
 
 type wirePart struct {
@@ -283,6 +298,7 @@ func readThread(src session.Source) (session.Thread, error) {
 
 	var entries []session.Entry
 	var warnings []string
+	calls := map[string]toolCall{} // toolCallId → call, until its result arrives
 	dec := json.NewDecoder(f)
 	for dec.More() {
 		var rec wireRecord
@@ -296,7 +312,7 @@ func readThread(src session.Source) (session.Thread, error) {
 				entries = append(entries, e)
 			}
 		case "context.append_loop_event":
-			if e, ok := loopEntry(rec); ok {
+			if e, ok := loopEntry(rec, calls); ok {
 				entries = append(entries, e)
 			}
 		case "context.apply_compaction":
@@ -337,14 +353,47 @@ func messageEntry(rec wireRecord) (session.Entry, bool) {
 }
 
 // loopEntry converts a context.append_loop_event record: content.part events
-// with a text part are the assistant's visible output on 1.4 logs. Think
-// parts and tool.call/tool.result events never reach the timeline.
-func loopEntry(rec wireRecord) (session.Entry, bool) {
+// with a text part are the assistant's visible output on 1.4 logs, and a
+// tool.result marked isError is a failure. tool.call events are remembered in
+// calls until their result arrives; think parts and successful results never
+// reach the timeline.
+func loopEntry(rec wireRecord, calls map[string]toolCall) (session.Entry, bool) {
 	ev := rec.Event
-	if ev == nil || ev.Type != "content.part" || ev.Part == nil || ev.Part.Type != "text" || ev.Part.Text == "" {
+	if ev == nil {
 		return session.Entry{}, false
 	}
-	return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: ev.Part.Text, Time: recTime(rec)}, true
+	switch ev.Type {
+	case "content.part":
+		if ev.Part == nil || ev.Part.Type != "text" || ev.Part.Text == "" {
+			return session.Entry{}, false
+		}
+		return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: ev.Part.Text, Time: recTime(rec)}, true
+	case "tool.call":
+		if ev.ToolCallID != "" {
+			calls[ev.ToolCallID] = toolCall{name: ev.Name, args: ev.Args}
+		}
+	case "tool.result":
+		call := calls[ev.ToolCallID]
+		delete(calls, ev.ToolCallID)
+		var r struct {
+			Output  json.RawMessage `json:"output"`
+			IsError bool            `json:"isError"`
+		}
+		if json.Unmarshal(ev.Result, &r) != nil || !r.IsError {
+			return session.Entry{}, false
+		}
+		return session.Failure(call.name, session.CallInput(call.args), rawText(r.Output), recTime(rec)), true
+	}
+	return session.Entry{}, false
+}
+
+// rawText is a JSON string's value, or any other JSON as written.
+func rawText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	return string(raw)
 }
 
 func joinText(parts []wirePart) string {
