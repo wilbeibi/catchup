@@ -69,18 +69,19 @@ catchup fork claude --into claude --since-compact
                                  # restart the same agent clean, keeping the work
 ```
 
-**For agents:** run inside a session to read prior work:
+**For agents:** run inside a session to read prior work. `--agent` is the detailed
+form — the same transcript, with the tool calls that failed:
 
 ```bash
-catchup <agent> --since-compact  # another agent's latest, since compaction
-catchup --since-compact          # this session's context after a compaction
-catchup <agent> --list           # list recent sessions
-catchup <agent> -q "auth"        # search sessions
-catchup <agent>/3                # read 3rd newest session
-catchup <agent> --id <id>        # read exact session
+catchup <agent> --agent --since-compact  # another agent's latest, since compaction
+catchup --agent --since-compact          # this session's context after a compaction
+catchup <agent> --agent --last 4         # read last 4 exchanges
+catchup <agent>/3 --agent                # read 3rd newest session
+catchup <agent> --id <id> --agent        # read exact session
+catchup <agent> --list                   # list recent sessions
+catchup <agent> -q "auth"                # search sessions
 
-catchup <agent> --last 4         # read last 4 exchanges
-catchup <agent> --json           # render JSON; also --html
+catchup <agent> --json                   # render JSON; also --html
 ```
 
 Use `fork` to continue with the same agent and keep native session state. Use `fork --into` to start another agent with the transcript — or the same agent with `--last`/`--since-compact`, which restarts it clean on a trimmed transcript when the context is spent but the work isn't. Use read commands when you want old work in a clean context.
@@ -88,7 +89,8 @@ Use `fork` to continue with the same agent and keep native session state. Use `f
 ## Boundaries
 
 - One agent at a time. It does not merge histories.
-- Conversation plus failed tool calls. It strips successful tool calls, command output, and reasoning traces.
+- Conversation only. It strips successful tool calls, command output, and reasoning traces.
+- `--agent` and `--json` add back the tool calls the source log itself marked failed; `--md` and `--html` never show them.
 - Read-only, except `fork`.
 - Same-agent `fork` uses the agent's native resume path, so it keeps real session state.
 - Same-agent `fork --into` is the opposite trade: native state is dropped for a clean context.
