@@ -381,7 +381,7 @@ func applyEvent(src *session.Source, entries *[]session.Entry, calls map[string]
 		if text == "" {
 			text = stringField(d.Result, "content")
 		}
-		*entries = append(*entries, session.Failure(call.name, session.CallInput(call.args), text, parseTime(ev.Timestamp)))
+		*entries = append(*entries, session.Failure(call.name, call.args, text, parseTime(ev.Timestamp)))
 	}
 }
 

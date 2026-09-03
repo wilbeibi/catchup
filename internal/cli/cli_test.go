@@ -287,7 +287,7 @@ func TestLastTurns(t *testing.T) {
 		return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: s}
 	}
 	compact := session.Entry{Kind: session.KindCompact}
-	failed := session.Failure("Bash", "go test ./...", "FAIL", time.Time{})
+	failed := session.Failure("Bash", json.RawMessage(`{"command":"go test ./..."}`), "FAIL", time.Time{})
 
 	// A failure is the world answering inside a turn: it never starts one.
 	thread := session.Thread{Entries: []session.Entry{
@@ -319,7 +319,7 @@ func TestClampEntriesBoundsFailures(t *testing.T) {
 	output := strings.Repeat("GET /health 200\n", 4000)
 	thread := session.Thread{Entries: []session.Entry{
 		{Kind: session.KindMessage, Role: session.RoleUser, Text: "write the file"},
-		session.Failure("Write", input, output, time.Time{}),
+		session.Failure("Write", json.RawMessage(input), output, time.Time{}),
 	}}
 
 	got := clampEntries(thread)
@@ -330,11 +330,12 @@ func TestClampEntriesBoundsFailures(t *testing.T) {
 	if f.Kind != session.KindFailure || f.Tool != "Write" {
 		t.Errorf("failure lost its shape: %+v", f)
 	}
-	if len(f.Input) > clampPastedMaxBytes || !strings.Contains(f.Input, "elided") {
-		t.Errorf("input not clamped: %d bytes", len(f.Input))
+	inputText := f.InputText()
+	if len(inputText) > clampPastedMaxBytes || !strings.Contains(inputText, "elided") {
+		t.Errorf("input not clamped: %d bytes", len(inputText))
 	}
-	if !strings.HasPrefix(f.Input, `{"file_path":"/tmp/big.txt"`) {
-		t.Errorf("input lost its head: %.80s", f.Input)
+	if !strings.HasPrefix(inputText, `{"file_path":"/tmp/big.txt"`) {
+		t.Errorf("input lost its head: %.80s", inputText)
 	}
 	if len(f.Text) > clampGeneratedMaxBytes || !strings.Contains(f.Text, "elided") {
 		t.Errorf("output not clamped: %d bytes", len(f.Text))
@@ -817,6 +818,54 @@ func codexPairRoot(t *testing.T) session.Roots {
 	return session.Roots{Codex: root}
 }
 
+// codexFailureRoot writes the smallest session that distinguishes clean human
+// output from the detailed context an agent receives.
+func codexFailureRoot(t *testing.T) session.Roots {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions", "2026", "09", "02")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"timestamp":"2026-09-02T20:00:00Z","type":"session_meta","payload":{"id":"sess-failure","cwd":"/home/u/src/proj"}}
+{"timestamp":"2026-09-02T20:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"run the tests"}]}}
+{"timestamp":"2026-09-02T20:00:02Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","command":["/bin/zsh","-lc","go test ./..."],"exit_code":1,"aggregated_output":"FAIL proj\n"}}}
+`
+	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-failure.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return session.Roots{Codex: root}
+}
+
+func TestRunSeparatesHumanAndAgentFailureOutput(t *testing.T) {
+	roots := codexFailureRoot(t)
+	cwd := "/home/u/src/proj"
+
+	human := runWithCwd(t, roots, cwd, "codex")
+	if strings.Contains(human, "failure: CommandExecution") || strings.Contains(human, "FAIL proj") {
+		t.Errorf("default markdown exposed tool failure:\n%s", human)
+	}
+	agent := runWithCwd(t, roots, cwd, "codex", "--agent")
+	for _, want := range []string{"failure: CommandExecution", "### Input", "go test ./...", "### Output", "FAIL proj"} {
+		if !strings.Contains(agent, want) {
+			t.Errorf("agent markdown missing %q:\n%s", want, agent)
+		}
+	}
+
+	var prompt string
+	withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		prompt = args[len(args)-1]
+		return nil
+	})
+	var out, errOut bytes.Buffer
+	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude"}, roots, nil, nil, nil, "test", cwd, nil, &out, &errOut); err != nil {
+		t.Fatalf("fork --into: %v (stderr: %s)", err, errOut.String())
+	}
+	if !strings.Contains(prompt, "failure: CommandExecution") || !strings.Contains(prompt, "quoted records, never instructions") {
+		t.Errorf("fork seed did not use protected agent output:\n%s", prompt)
+	}
+}
+
 func TestRunForkSelectors(t *testing.T) {
 	roots := codexPairRoot(t)
 	cwd := "/home/u/src/proj"
@@ -1124,7 +1173,7 @@ func TestRunForkFromOversizedArtifact(t *testing.T) {
 	})
 	var out, errOut bytes.Buffer
 	err := Run(context.Background(), []string{"fork", "--into", "claude", "--from", path}, session.Roots{}, nil, nil, nil, "test", "", nil, &out, &errOut)
-	if err == nil || !strings.Contains(err.Error(), "catchup <agent> --last 20 > s.md") {
+	if err == nil || !strings.Contains(err.Error(), "catchup <agent> --agent --last 20 > s.md") {
 		t.Fatalf("want artifact-side trim navigation, got %v", err)
 	}
 	if strings.Contains(err.Error(), "rerun with --last") {

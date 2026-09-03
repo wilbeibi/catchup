@@ -80,8 +80,8 @@ func TestReadThread(t *testing.T) {
 			t.Errorf("entry %d = %+v, want %v", i, got, w)
 		}
 	}
-	if f := th.Entries[1]; f.Tool != "CommandExecution" || f.Input != "go test ./..." {
-		t.Errorf("failure = %+v, want Tool CommandExecution, Input go test ./...", f)
+	if f := th.Entries[1]; f.Tool != "CommandExecution" || f.Input != `["/bin/zsh","-lc","go test ./..."]` {
+		t.Errorf("failure = %+v, want Tool CommandExecution with command argv", f)
 	}
 	if strings.Contains(th.VisibleText(), "tool output") {
 		t.Errorf("successful command leaked into the timeline: %+v", th.Entries)

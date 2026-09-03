@@ -84,6 +84,10 @@ func Parse(args []string) (Command, error) {
 		}
 
 		switch name {
+		case "--agent":
+			if err := setFormat(&cmd, &formatSet, session.FormatAgent); err != nil {
+				return cmd, err
+			}
 		case "--html":
 			if err := setFormat(&cmd, &formatSet, session.FormatHTML); err != nil {
 				return cmd, err
@@ -223,7 +227,7 @@ func looksLikeSessionID(s string) bool {
 
 func setFormat(cmd *Command, set *bool, f session.Format) error {
 	if *set && cmd.Format != f {
-		return errors.New("conflicting output formats; choose one of --md/--html/--json")
+		return errors.New("conflicting output formats; choose one of --md/--agent/--html/--json")
 	}
 	cmd.Format, *set = f, true
 	return nil
@@ -331,7 +335,8 @@ func normalize(cmd *Command) error {
 	}
 	if cmd.Action == "install-skill" {
 		if cmd.List || cmd.MetaOnly || cmd.Full || cmd.LastN > 0 || cmd.SinceCompact ||
-			cmd.Dir != "" || cmd.From != "" || t.Query != "" || t.Rank > 0 || t.SessionID != "" {
+			cmd.Dir != "" || cmd.From != "" || t.Query != "" || t.Rank > 0 || t.SessionID != "" ||
+			cmd.Format != session.FormatMarkdown {
 			return errors.New("install-skill takes only an agent name")
 		}
 	}
@@ -342,6 +347,8 @@ func normalize(cmd *Command) error {
 		// where they shape the seeded transcript.
 		intoFork := cmd.Into != ""
 		switch {
+		case cmd.Format == session.FormatAgent:
+			return errors.New("fork seeds agent output automatically; omit --agent")
 		case cmd.List:
 			return errors.New("fork cannot be combined with --list; fork -q lists the matches when several fit")
 		case cmd.MetaOnly:
@@ -397,9 +404,11 @@ func normalize(cmd *Command) error {
 	case cmd.LastN > 0 && cmd.SinceCompact:
 		return errors.New("--last cannot be combined with --since-compact; they are alternative trims")
 	case cmd.Full && cmd.Format == session.FormatJSON:
-		return errors.New("--json is never clamped; --full only applies to --md/--html")
+		return errors.New("--json is never clamped; --full only applies to --md/--agent/--html")
 	case cmd.Full && cmd.MetaOnly:
 		return errors.New("--full cannot be combined with -i; -i shows no message bodies")
+	case cmd.Format == session.FormatAgent && cmd.MetaOnly:
+		return errors.New("--agent cannot be combined with -i; agent output needs the transcript")
 	}
 
 	// -q implies list mode unless a concrete row was selected by rank or id —
@@ -409,8 +418,8 @@ func normalize(cmd *Command) error {
 	}
 	// Checked after the implicit rule so -q listings are covered too. There
 	// is no HTML listing view; ignoring the flag would be a silent no-op.
-	if cmd.List && cmd.Format == session.FormatHTML {
-		return errors.New("--html does not apply to listings; use --json or the default table")
+	if cmd.List && (cmd.Format == session.FormatHTML || cmd.Format == session.FormatAgent) {
+		return fmt.Errorf("--%s does not apply to listings; use --json or the default table", cmd.Format)
 	}
 	if cmd.List && cmd.Full {
 		return errors.New("--full does not apply to listings; message bodies are not shown")

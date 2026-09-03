@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -46,12 +47,13 @@ func clampMax(e session.Entry) int {
 // + tail, its input included. Entries are copied on first change, so the
 // caller's thread is never mutated. It is applied by the cli, never by the
 // renderer: --json stays faithful and --full skips it, and those are cli
-// decisions.
+// decisions. A clamped input is re-encoded as a JSON string so Entry.Input
+// stays valid JSON; only the text formats ever see it.
 func clampEntries(t session.Thread) session.Thread {
 	var out []session.Entry
 	for i, e := range t.Entries {
 		text, textOK := clampText(e.Text, clampMax(e))
-		input, inputOK := clampText(e.Input, clampPastedMaxBytes)
+		input, inputOK := clampText(e.InputText(), clampPastedMaxBytes)
 		if !textOK && !inputOK {
 			if out != nil {
 				out = append(out, e)
@@ -65,7 +67,8 @@ func clampEntries(t session.Thread) session.Thread {
 			e.Text = text
 		}
 		if inputOK {
-			e.Input = input
+			encoded, _ := json.Marshal(input)
+			e.Input = string(encoded)
 		}
 		out = append(out, e)
 	}

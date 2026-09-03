@@ -103,7 +103,7 @@ func TestReadKimiSession(t *testing.T) {
 			t.Errorf("entry %d = %+v, want %+v", i, g, w)
 		}
 	}
-	if f := thread.Entries[1]; f.Tool != "Shell" || f.Input != "go test ./..." || !f.Time.Equal(time.UnixMilli(1784292341400)) {
+	if f := thread.Entries[1]; f.Tool != "Shell" || f.Input != `{"command":"go test ./..."}` || !f.Time.Equal(time.UnixMilli(1784292341400)) {
 		t.Errorf("failure = %+v, want Tool Shell, Input go test ./..., the result's time", f)
 	}
 	for _, e := range thread.Entries {

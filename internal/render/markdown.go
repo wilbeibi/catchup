@@ -60,17 +60,38 @@ func writeEntry(b *strings.Builder, n int, e session.Entry) {
 	}
 	b.WriteString("\n\n")
 
-	if e.Kind == session.KindFailure && e.Input != "" {
-		// What was asked, then what came back, as two paragraphs: the
-		// input is one line by construction, so no fence is needed.
-		b.WriteString(e.Input)
-		b.WriteString("\n\n")
+	if e.Kind == session.KindFailure {
+		if input := e.InputText(); input != "" {
+			b.WriteString("### Input\n\n")
+			writeCodeBlock(b, input)
+		}
+		b.WriteString("### Output\n\n")
+		writeCodeBlock(b, strings.TrimRight(e.Text, "\n"))
+		return
 	}
 	text := strings.TrimRight(e.Text, "\n")
 	if text == "" && e.Kind == session.KindCompact {
 		text = "_(context compacted)_"
 	}
 	b.WriteString(text)
+	b.WriteString("\n\n")
+}
+
+// writeCodeBlock frames provider-controlled text so headings or instructions
+// inside a failed result cannot become transcript structure. The delimiter is
+// one backtick longer than the longest run present in the text.
+func writeCodeBlock(b *strings.Builder, text string) {
+	fence := "```"
+	for strings.Contains(text, fence) {
+		fence += "`"
+	}
+	b.WriteString(fence)
+	b.WriteString("text\n")
+	b.WriteString(text)
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		b.WriteByte('\n')
+	}
+	b.WriteString(fence)
 	b.WriteString("\n\n")
 }
 

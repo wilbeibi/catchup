@@ -24,13 +24,13 @@ type sourceDoc struct {
 // tool and input appear exactly when kind is "failure"; keys are added to this
 // document, never renamed.
 type entryDoc struct {
-	Index int    `json:"index"`
-	Kind  string `json:"kind"`
-	Role  string `json:"role,omitempty"`
-	Time  string `json:"time,omitempty"`
-	Tool  string `json:"tool,omitempty"`
-	Input string `json:"input,omitempty"`
-	Text  string `json:"text"`
+	Index int             `json:"index"`
+	Kind  string          `json:"kind"`
+	Role  string          `json:"role,omitempty"`
+	Time  string          `json:"time,omitempty"`
+	Tool  string          `json:"tool,omitempty"`
+	Input json.RawMessage `json:"input,omitempty"`
+	Text  string          `json:"text"`
 }
 
 type threadDoc struct {
@@ -51,8 +51,10 @@ func jsonThread(w io.Writer, t session.Thread) error {
 			Role:  e.Role,
 			Time:  rfc3339(e.Time),
 			Tool:  e.Tool,
-			Input: e.Input,
 			Text:  e.Text,
+		}
+		if e.Input != "" {
+			doc.Entries[i].Input = json.RawMessage(e.Input)
 		}
 	}
 	return encode(w, doc)

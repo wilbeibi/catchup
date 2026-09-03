@@ -98,7 +98,7 @@ func TestReadPiAgentSession(t *testing.T) {
 			t.Errorf("entry %d = %+v, want %+v", i, got[i], want[i])
 		}
 	}
-	if f := thread.Entries[2]; f.Tool != "bash" || f.Input != "go test ./..." || !f.Time.Equal(time.UnixMilli(1793155828000)) {
+	if f := thread.Entries[2]; f.Tool != "bash" || f.Input != `{"command":"go test ./..."}` || !f.Time.Equal(time.UnixMilli(1793155828000)) {
 		t.Errorf("failure = %+v, want Tool bash, Input go test ./..., the result's own time", f)
 	}
 	for _, e := range thread.Entries {

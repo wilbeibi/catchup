@@ -382,7 +382,7 @@ func loopEntry(rec wireRecord, calls map[string]toolCall) (session.Entry, bool) 
 		if json.Unmarshal(ev.Result, &r) != nil || !r.IsError {
 			return session.Entry{}, false
 		}
-		return session.Failure(call.name, session.CallInput(call.args), rawText(r.Output), recTime(rec)), true
+		return session.Failure(call.name, call.args, rawText(r.Output), recTime(rec)), true
 	}
 	return session.Entry{}, false
 }

@@ -252,7 +252,7 @@ func readThread(fi fileInfo) (session.Thread, error) {
 				call := calls[b.ToolUseID]
 				delete(calls, b.ToolUseID)
 				if b.IsError {
-					entries = append(entries, session.Failure(call.name, session.CallInput(call.input), extractText(b.Content), ts))
+					entries = append(entries, session.Failure(call.name, call.input, extractText(b.Content), ts))
 				}
 			}
 		}

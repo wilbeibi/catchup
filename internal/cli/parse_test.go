@@ -73,6 +73,11 @@ func TestParse(t *testing.T) {
 			want: Command{Target: session.Target{Provider: "claude"}, Format: session.FormatHTML, Limit: DefaultLimit},
 		},
 		{
+			name: "agent mode is detailed markdown",
+			args: []string{"claude", "--agent", "--since-compact"},
+			want: Command{Target: session.Target{Provider: "claude"}, Format: session.FormatAgent, SinceCompact: true, Limit: DefaultLimit},
+		},
+		{
 			name: "numeric rank selects a row",
 			args: []string{"codex/2"},
 			want: Command{Target: session.Target{Provider: "codex", Rank: 2}, Format: session.FormatMarkdown, Limit: DefaultLimit},
@@ -235,6 +240,12 @@ func TestParseRejects(t *testing.T) {
 		{"install-skill", "codex", "-q", "x"},                             // install-skill does not take selectors
 		{"claude", "--model", "gpt-5.6"},                                  // --model only applies to fork
 		{"claude", "--full", "--json"},                                    // --json is never clamped
+		{"claude", "--agent", "--json"},                                   // output modes are exclusive
+		{"claude", "--agent", "--list"},                                   // listings have no detailed transcript
+		{"claude", "--agent", "-i"},                                       // metadata has no detailed transcript
+		{"fork", "codex", "--into", "claude", "--agent"},                  // --into selects agent output automatically
+		{"install-skill", "codex", "--agent"},                             // install-skill has no output mode
+		{"install-skill", "codex", "--json"},                              // ...nor any other one
 		{"claude", "--full", "--list"},                                    // listings show no bodies to clamp
 		{"claude", "--full", "-i"},                                        // -i shows no bodies to clamp
 		{"install-skill", "codex", "--dir", "/x"},                         // install-skill takes no scope

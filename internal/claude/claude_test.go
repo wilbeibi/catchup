@@ -75,8 +75,8 @@ func TestReadThread(t *testing.T) {
 		}
 	}
 	// The failure is paired with its tool_use for the name and input.
-	if f := th.Entries[2]; f.Tool != "Bash" || f.Input != "go test ./..." {
-		t.Errorf("failure = %+v, want Tool Bash, Input go test ./...", f)
+	if f := th.Entries[2]; f.Tool != "Bash" || f.Input != `{"command":"go test ./..."}` {
+		t.Errorf("failure = %+v, want Tool Bash with structured command input", f)
 	}
 	// The successful Read never reaches the timeline.
 	if strings.Contains(th.VisibleText(), "tool output") {

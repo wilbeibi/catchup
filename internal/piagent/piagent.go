@@ -372,7 +372,7 @@ func failureEntry(line piLine, call piBlock) session.Entry {
 	if tool == "" {
 		tool = call.Name
 	}
-	return session.Failure(tool, session.CallInput(call.Arguments), extractText(line.Message.Content), messageTime(line))
+	return session.Failure(tool, call.Arguments, extractText(line.Message.Content), messageTime(line))
 }
 
 // messageTime prefers the message's own millisecond stamp over the record's.

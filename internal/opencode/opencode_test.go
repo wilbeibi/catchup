@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 
@@ -37,7 +38,8 @@ func makeDB(t *testing.T) string {
 		`INSERT INTO message(id,session_id,time_created,data) VALUES ('m2','ses1',1100,'{"role":"assistant"}')`,
 		`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('p1','m1','ses1',1000,'{"type":"text","text":"hello opencode"}')`,
 		`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('p2','m2','ses1',1100,'{"type":"text","text":"hi there"}')`,
-		`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('p3','m2','ses1',1110,'{"type":"tool","tool":"bash"}')`,
+		`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('p3','m2','ses1',1110,'{"type":"tool","tool":"bash","state":{"status":"completed","input":{"command":"ls"},"output":"error-looking success"}}')`,
+		`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('p3a','m2','ses1',1115,'{"type":"tool","tool":"bash","state":{"status":"error","input":{"command":"go test ./..."},"error":"FAIL proj"}}')`,
 		`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('p4','m2','ses1',1120,'{"type":"compaction"}')`,
 
 		// older session
@@ -86,7 +88,8 @@ func TestListAndRead(t *testing.T) {
 	}
 	want := []struct{ kind, role, text string }{
 		{session.KindMessage, session.RoleUser, "hello opencode"},
-		{session.KindMessage, session.RoleAssistant, "hi there"}, // tool part dropped
+		{session.KindMessage, session.RoleAssistant, "hi there"},
+		{session.KindFailure, session.RoleTool, "FAIL proj"},
 		{session.KindCompact, "", ""},
 	}
 	if len(th.Entries) != len(want) {
@@ -97,6 +100,9 @@ func TestListAndRead(t *testing.T) {
 		if got.Kind != w.kind || got.Role != w.role || got.Text != w.text {
 			t.Errorf("entry %d = %+v, want %v", i, got, w)
 		}
+	}
+	if failure := th.Entries[2]; failure.Tool != "bash" || failure.Input != `{"command":"go test ./..."}` || !failure.Time.Equal(time.UnixMilli(1115)) {
+		t.Errorf("failure = %+v, want structured bash failure at part time", failure)
 	}
 }
 

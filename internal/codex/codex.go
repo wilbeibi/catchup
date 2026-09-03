@@ -327,7 +327,8 @@ func payloadType(raw json.RawMessage) string {
 // failedCommand converts an item_completed event whose CommandExecution item
 // exited non-zero. The entry is named after the item type — the function_call
 // that started it carries a different id, so there is nothing to pair with —
-// and its text ends with the exit status, which the output alone omits.
+// and retains the command argv as its structured input. Its text ends with the
+// exit status, which the output alone omits.
 func failedCommand(raw json.RawMessage, ts time.Time) (session.Entry, bool) {
 	var p struct {
 		Item struct {
@@ -348,23 +349,7 @@ func failedCommand(raw json.RawMessage, ts time.Time) (session.Entry, bool) {
 		text += "\n"
 	}
 	text += fmt.Sprintf("exit status %d", *p.Item.ExitCode)
-	return session.Failure(p.Item.Type, commandLine(p.Item.Command), text, ts), true
-}
-
-// commandLine is the script of a [shell, -lc, script] argv — the shape Codex
-// runs every command through — else the argv joined by spaces, or a string
-// command as-is.
-func commandLine(raw json.RawMessage) string {
-	var argv []string
-	if json.Unmarshal(raw, &argv) == nil {
-		if len(argv) == 3 && (argv[1] == "-lc" || argv[1] == "-c") {
-			return argv[2]
-		}
-		return strings.Join(argv, " ")
-	}
-	var s string
-	json.Unmarshal(raw, &s)
-	return s
+	return session.Failure(p.Item.Type, p.Item.Command, text, ts), true
 }
 
 func decodeEvent(raw json.RawMessage) string {

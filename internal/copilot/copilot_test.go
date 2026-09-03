@@ -2,6 +2,7 @@ package copilot
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,7 +72,7 @@ func wantEntries(t *testing.T) []session.Entry {
 	return []session.Entry{
 		{Kind: session.KindMessage, Role: session.RoleUser, Text: "support copilot", Time: ts(t, "2026-08-24T15:07:48.023Z")},
 		{Kind: session.KindMessage, Role: session.RoleAssistant, Text: "I will read the log.", Time: ts(t, "2026-08-24T15:07:49.558Z")},
-		session.Failure("bash", "go test ./...", "Command exited with code 1\nFAIL\tproj", ts(t, "2026-08-24T15:07:50.900Z")),
+		session.Failure("bash", json.RawMessage(`{"command":"go test ./..."}`), "Command exited with code 1\nFAIL\tproj", ts(t, "2026-08-24T15:07:50.900Z")),
 		{Kind: session.KindCompact, Text: "The user asked for Copilot support; the log format is settled.", Time: ts(t, "2026-08-24T15:08:00.000Z")},
 		{Kind: session.KindMessage, Role: session.RoleUser, Text: "finish it", Time: ts(t, "2026-08-24T15:08:37.037Z")},
 		{Kind: session.KindMessage, Role: session.RoleAssistant, Text: "done", Time: ts(t, "2026-08-24T15:08:40.397Z")},

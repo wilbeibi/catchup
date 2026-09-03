@@ -1,9 +1,10 @@
 // Package render turns the core data types into bytes. Every function is a pure
 // transformation from a session value to a Writer: it performs no history lookup
-// and makes no decisions about which session to show. There are three encodings
-// (Markdown, HTML, JSON) and three views (a full Thread, a Source's metadata, a
-// listing). The Format is a closed set, so dispatch is a switch rather than an
-// interface — polymorphism lives at the Provider boundary, not here.
+// and makes no decisions about which session to show. There are four output
+// modes (clean Markdown, agent Markdown, clean HTML, complete JSON) and three
+// views (a full Thread, a Source's metadata, a listing). The Format is a closed
+// set, so dispatch is a switch rather than an interface — polymorphism lives at
+// the Provider boundary, not here.
 package render
 
 import (
@@ -20,14 +21,40 @@ import (
 func Thread(w io.Writer, t session.Thread, f session.Format) error {
 	switch f {
 	case session.FormatMarkdown:
+		return markdownThread(w, withoutFailures(t))
+	case session.FormatAgent:
 		return markdownThread(w, t)
 	case session.FormatHTML:
-		return htmlThread(w, t)
+		return htmlThread(w, withoutFailures(t))
 	case session.FormatJSON:
 		return jsonThread(w, t)
 	default:
 		return fmt.Errorf("render: unsupported format %s", f)
 	}
+}
+
+// withoutFailures returns the clean human projection. Providers always retain
+// failure entries in the core Thread so agent Markdown and JSON can expose the
+// same facts without rereading the native log.
+func withoutFailures(t session.Thread) session.Thread {
+	var entries []session.Entry
+	removed := false
+	for i, e := range t.Entries {
+		if e.Kind != session.KindFailure {
+			if removed {
+				entries = append(entries, e)
+			}
+			continue
+		}
+		if !removed {
+			entries = append(entries, t.Entries[:i]...)
+			removed = true
+		}
+	}
+	if removed {
+		t.Entries = entries
+	}
+	return t
 }
 
 // Meta renders only a session's metadata/frontmatter (the -i view).
