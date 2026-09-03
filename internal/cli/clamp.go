@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -22,6 +23,10 @@ import (
 // dumped payload). That ceiling (32 KiB) is an intentionally chosen policy
 // threshold, not a derived one: above it, an entry is assumed a dumped payload
 // rather than prose. No tunables, no content sniffing: the only signal is role.
+//
+// A failure's text is what a tool sent back — generated, so it takes the
+// generated ceiling — and its input takes the pasted one: an input that large
+// is a payload (a file being written), and its edges say what was tried.
 const (
 	clampPastedMaxBytes    = 4096
 	clampGeneratedMaxBytes = 32768
@@ -39,14 +44,17 @@ func clampMax(e session.Entry) int {
 }
 
 // clampEntries returns t with every oversized entry reduced to head + marker
-// + tail. Entries are copied on first change, so the caller's thread is
-// never mutated. It is applied by the cli, never by the renderer: --json
-// stays faithful and --full skips it, and those are cli decisions.
+// + tail, its input included. Entries are copied on first change, so the
+// caller's thread is never mutated. It is applied by the cli, never by the
+// renderer: --json stays faithful and --full skips it, and those are cli
+// decisions. A clamped input is re-encoded as a JSON string so Entry.Input
+// stays valid JSON; only the text formats ever see it.
 func clampEntries(t session.Thread) session.Thread {
 	var out []session.Entry
 	for i, e := range t.Entries {
-		clamped, ok := clampText(e.Text, clampMax(e))
-		if !ok {
+		text, textOK := clampText(e.Text, clampMax(e))
+		input, inputOK := clampText(e.InputText(), clampPastedMaxBytes)
+		if !textOK && !inputOK {
 			if out != nil {
 				out = append(out, e)
 			}
@@ -55,7 +63,13 @@ func clampEntries(t session.Thread) session.Thread {
 		if out == nil {
 			out = append(out, t.Entries[:i]...)
 		}
-		e.Text = clamped
+		if textOK {
+			e.Text = text
+		}
+		if inputOK {
+			encoded, _ := json.Marshal(input)
+			e.Input = string(encoded)
+		}
 		out = append(out, e)
 	}
 	if out != nil {

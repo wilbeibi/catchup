@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,7 +31,10 @@ const transcript = `{"type":"ai-title","aiTitle":"Wire up catchup","sessionId":"
 {"type":"user","sessionId":"sess-a","cwd":"/home/u/src/catchup","gitBranch":"main","timestamp":"2026-06-26T10:00:00Z","isMeta":true,"message":{"role":"user","content":"<command-stdout>injected</command-stdout>"}}
 {"type":"user","sessionId":"sess-a","cwd":"/home/u/src/catchup","timestamp":"2026-06-26T10:01:00Z","message":{"role":"user","content":"implement the parser"}}
 {"type":"user","sessionId":"sess-a","isSidechain":true,"timestamp":"2026-06-26T10:01:30Z","message":{"role":"user","content":"subagent noise"}}
-{"type":"assistant","sessionId":"sess-a","timestamp":"2026-06-26T10:02:00Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"hmm","signature":"x"},{"type":"text","text":"on it"},{"type":"tool_use","name":"Edit","input":{}}]}}
+{"type":"assistant","sessionId":"sess-a","timestamp":"2026-06-26T10:02:00Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"hmm","signature":"x"},{"type":"text","text":"on it"},{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"go test ./..."}}]}}
+{"type":"user","sessionId":"sess-a","timestamp":"2026-06-26T10:02:10Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"FAIL\tproj\nexit status 1","is_error":true}]}}
+{"type":"assistant","sessionId":"sess-a","timestamp":"2026-06-26T10:02:20Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Read","input":{"file_path":"/x.go"}}]}}
+{"type":"user","sessionId":"sess-a","timestamp":"2026-06-26T10:02:30Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":[{"type":"text","text":"tool output"}]}]}}
 {"type":"user","sessionId":"sess-a","isCompactSummary":true,"timestamp":"2026-06-26T10:03:00Z","message":{"role":"user","content":"summary so far"}}
 `
 
@@ -58,6 +62,7 @@ func TestReadThread(t *testing.T) {
 	want := []struct{ kind, role, text string }{
 		{session.KindMessage, session.RoleUser, "implement the parser"},
 		{session.KindMessage, session.RoleAssistant, "on it"}, // thinking + tool_use dropped
+		{session.KindFailure, session.RoleTool, "FAIL\tproj\nexit status 1"},
 		{session.KindCompact, "", "summary so far"},
 	}
 	if len(th.Entries) != len(want) {
@@ -68,6 +73,14 @@ func TestReadThread(t *testing.T) {
 		if got.Kind != w.kind || got.Role != w.role || got.Text != w.text {
 			t.Errorf("entry %d = %+v, want %v", i, got, w)
 		}
+	}
+	// The failure is paired with its tool_use for the name and input.
+	if f := th.Entries[2]; f.Tool != "Bash" || f.Input != `{"command":"go test ./..."}` {
+		t.Errorf("failure = %+v, want Tool Bash with structured command input", f)
+	}
+	// The successful Read never reaches the timeline.
+	if strings.Contains(th.VisibleText(), "tool output") {
+		t.Errorf("successful tool result leaked into the timeline: %+v", th.Entries)
 	}
 }
 

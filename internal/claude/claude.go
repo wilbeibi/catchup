@@ -11,10 +11,14 @@
 // system records; ai-title, cwd, gitBranch, sessionId, and timestamp for
 // metadata and listing.
 //
-// Ignored by default: tool_use, tool_result, thinking, queue/mode/permission
-// bookkeeping, file-history snapshots, last-prompt, subagent (isSidechain) and
-// injected (isMeta) entries, subagent files under */subagents/*, and
-// .claude/transcripts/ses_*.jsonl (v1).
+// A tool_result block with is_error set becomes a failure entry, paired
+// through tool_use_id with the assistant's tool_use block for the tool's name
+// and input. Successful results are not on the timeline.
+//
+// Ignored by default: tool_use, successful tool_result, thinking, queue/mode/
+// permission bookkeeping, file-history snapshots, last-prompt, subagent
+// (isSidechain) and injected (isMeta) entries, subagent files under
+// */subagents/*, and .claude/transcripts/ses_*.jsonl (v1).
 package claude
 
 import (
@@ -167,6 +171,25 @@ type claudeMessage struct {
 	Content json.RawMessage `json:"content"`
 }
 
+// claudeBlock is one item of an array-form message.content. Only the fields a
+// text, tool_use, or tool_result block needs are decoded.
+type claudeBlock struct {
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	ID        string          `json:"id"`          // tool_use
+	Name      string          `json:"name"`        // tool_use
+	Input     json.RawMessage `json:"input"`       // tool_use
+	ToolUseID string          `json:"tool_use_id"` // tool_result
+	IsError   bool            `json:"is_error"`    // tool_result
+	Content   json.RawMessage `json:"content"`     // tool_result: a string or text blocks
+}
+
+// toolCall is what a failure needs from the tool_use it answers.
+type toolCall struct {
+	name  string
+	input json.RawMessage
+}
+
 // readMeta scans a transcript for metadata only (session id, cwd, branch,
 // ai-title) without building the timeline. It reads the whole file, but Resolve
 // only ever does this for a single session, so the cost is bounded.
@@ -200,6 +223,7 @@ func readThread(fi fileInfo) (session.Thread, error) {
 	src := newSource(fi)
 	var entries []session.Entry
 	var warnings []string
+	calls := map[string]toolCall{} // tool_use id → call, until its result arrives
 
 	dec := json.NewDecoder(f)
 	for dec.More() {
@@ -216,11 +240,26 @@ func readThread(fi fileInfo) (session.Thread, error) {
 		if line.IsSidechain || line.Message == nil {
 			continue // subagent turns live in their own thread
 		}
-		text := extractText(line.Message.Content)
+		ts := parseTime(line.Timestamp)
+		blocks := decodeBlocks(line.Message.Content)
+		for _, b := range blocks {
+			switch b.Type {
+			case "tool_use":
+				if b.ID != "" {
+					calls[b.ID] = toolCall{name: b.Name, input: b.Input}
+				}
+			case "tool_result":
+				call := calls[b.ToolUseID]
+				delete(calls, b.ToolUseID)
+				if b.IsError {
+					entries = append(entries, session.Failure(call.name, call.input, extractText(b.Content), ts))
+				}
+			}
+		}
+		text := joinText(blocks, line.Message.Content)
 		if text == "" {
 			continue
 		}
-		ts := parseTime(line.Timestamp)
 
 		if line.IsCompactSummary {
 			entries = append(entries, session.Entry{Kind: session.KindCompact, Text: text, Time: ts})
@@ -272,28 +311,38 @@ func finalizeMeta(src *session.Source) {
 	}
 }
 
+// decodeBlocks returns the blocks of an array-form content; nil when content
+// is a plain string or absent.
+func decodeBlocks(raw json.RawMessage) []claudeBlock {
+	var blocks []claudeBlock
+	if len(raw) == 0 || raw[0] != '[' || json.Unmarshal(raw, &blocks) != nil {
+		return nil
+	}
+	return blocks
+}
+
+// extractText is the visible text of a content field: the string itself, or
+// the text blocks of an array joined by newlines.
 func extractText(raw json.RawMessage) string {
-	if len(raw) == 0 {
+	return joinText(decodeBlocks(raw), raw)
+}
+
+// joinText is extractText for content whose blocks are already decoded.
+func joinText(blocks []claudeBlock, raw json.RawMessage) string {
+	if blocks == nil {
+		var s string
+		if json.Unmarshal(raw, &s) == nil {
+			return s
+		}
 		return ""
 	}
-	var s string
-	if json.Unmarshal(raw, &s) == nil {
-		return s
-	}
-	var blocks []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	if json.Unmarshal(raw, &blocks) == nil {
-		var parts []string
-		for _, b := range blocks {
-			if b.Type == "text" && b.Text != "" {
-				parts = append(parts, b.Text)
-			}
+	var parts []string
+	for _, b := range blocks {
+		if b.Type == "text" && b.Text != "" {
+			parts = append(parts, b.Text)
 		}
-		return strings.Join(parts, "\n")
 	}
-	return ""
+	return strings.Join(parts, "\n")
 }
 
 func normalizeRole(role string) string {

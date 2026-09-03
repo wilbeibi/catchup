@@ -13,7 +13,8 @@ import (
 
 // wire14 is a protocol-1.4 log: user prompts as append_message with origin,
 // assistant text as content.part loop events, an injection reminder, a
-// compaction, and think/tool noise that must not reach the timeline.
+// compaction, one tool call that failed, and think/tool noise that must not
+// reach the timeline.
 const wire14 = `{"type":"metadata","protocol_version":"1.4","created_at":1784292334522}
 {"type":"config.update","modelAlias":"moonshot-ai/kimi-k2.7-code","time":1784292334607}
 {"type":"context.append_message","message":{"role":"user","content":[{"type":"text","text":"support kimi"}],"origin":{"kind":"user"}},"time":1784292334633}
@@ -21,6 +22,8 @@ const wire14 = `{"type":"metadata","protocol_version":"1.4","created_at":1784292
 {"type":"context.append_loop_event","event":{"type":"content.part","turnId":"0","part":{"type":"think","think":"hidden reasoning"}},"time":1784292341000}
 {"type":"context.append_loop_event","event":{"type":"tool.call","toolCallId":"Write_0","name":"Write","args":{"path":"x"}},"time":1784292341100}
 {"type":"context.append_loop_event","event":{"type":"tool.result","toolCallId":"Write_0","result":{"output":"tool output"}},"time":1784292341200}
+{"type":"context.append_loop_event","event":{"type":"tool.call","toolCallId":"Shell_1","name":"Shell","args":{"command":"go test ./..."}},"time":1784292341300}
+{"type":"context.append_loop_event","event":{"type":"tool.result","toolCallId":"Shell_1","result":{"output":"FAIL\tproj\nexit status 1","isError":true}},"time":1784292341400}
 {"type":"context.append_loop_event","event":{"type":"content.part","turnId":"0","part":{"type":"text","text":"I will inspect the format."}},"time":1784292346295}
 {"type":"context.apply_compaction","summary":"summary so far","compactedCount":4,"tokensBefore":9000,"tokensAfter":900,"time":1784292350000}
 {"type":"context.append_message","message":{"role":"user","content":[{"type":"text","text":"finish it"}],"origin":{"kind":"user"}},"time":1784292351000}
@@ -85,6 +88,7 @@ func TestReadKimiSession(t *testing.T) {
 	}
 	wantEntries := []session.Entry{
 		{Kind: session.KindMessage, Role: session.RoleUser, Text: "support kimi"},
+		{Kind: session.KindFailure, Role: session.RoleTool, Text: "FAIL\tproj\nexit status 1"},
 		{Kind: session.KindMessage, Role: session.RoleAssistant, Text: "I will inspect the format."},
 		{Kind: session.KindCompact, Text: "summary so far"},
 		{Kind: session.KindMessage, Role: session.RoleUser, Text: "finish it"},
@@ -98,6 +102,9 @@ func TestReadKimiSession(t *testing.T) {
 		if g.Kind != w.Kind || g.Role != w.Role || g.Text != w.Text {
 			t.Errorf("entry %d = %+v, want %+v", i, g, w)
 		}
+	}
+	if f := thread.Entries[1]; f.Tool != "Shell" || f.Input != `{"command":"go test ./..."}` || !f.Time.Equal(time.UnixMilli(1784292341400)) {
+		t.Errorf("failure = %+v, want Tool Shell, Input go test ./..., the result's time", f)
 	}
 	for _, e := range thread.Entries {
 		if strings.Contains(e.Text, "tool output") || strings.Contains(e.Text, "hidden") ||

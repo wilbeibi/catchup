@@ -11,8 +11,13 @@
 // compaction.summary as a compaction marker; branch_summary.summary as an
 // abandoned-branch recap.
 //
-// Ignored by default: toolCall content blocks, toolResult messages, thinking
-// blocks, labels, custom entries and messages, and token usage.
+// A toolResult message with isError set becomes a failure entry, paired
+// through toolCallId with the assistant's toolCall block for the arguments;
+// the result names its own tool. Successful results are not on the timeline.
+//
+// Ignored by default: toolCall content blocks, successful toolResult
+// messages, thinking blocks, labels, custom entries and messages, and token
+// usage.
 package piagent
 
 import (
@@ -162,16 +167,22 @@ type piLine struct {
 }
 
 type piMessage struct {
-	Role      string          `json:"role"`
-	Timestamp int64           `json:"timestamp"`
-	Provider  string          `json:"provider"`
-	Model     string          `json:"model"`
-	Content   json.RawMessage `json:"content"`
+	Role       string          `json:"role"`
+	Timestamp  int64           `json:"timestamp"`
+	Provider   string          `json:"provider"`
+	Model      string          `json:"model"`
+	ToolCallID string          `json:"toolCallId"` // toolResult
+	ToolName   string          `json:"toolName"`   // toolResult
+	IsError    bool            `json:"isError"`    // toolResult
+	Content    json.RawMessage `json:"content"`
 }
 
 type piBlock struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	ID        string          `json:"id"`        // toolCall
+	Name      string          `json:"name"`      // toolCall
+	Arguments json.RawMessage `json:"arguments"` // toolCall
 }
 
 // readMeta delegates instead of doing a cheap metadata-only scan like the
@@ -305,9 +316,23 @@ func currentPath(lines []piLine) []piLine {
 
 func pathEntries(path []piLine) []session.Entry {
 	var entries []session.Entry
+	calls := map[string]piBlock{} // toolCall id → block, until its result arrives
 	for _, line := range path {
 		switch line.Type {
 		case "message":
+			if line.Message.Role == "toolResult" {
+				call := calls[line.Message.ToolCallID]
+				delete(calls, line.Message.ToolCallID)
+				if line.Message.IsError {
+					entries = append(entries, failureEntry(line, call))
+				}
+				continue
+			}
+			for _, b := range decodeBlocks(line.Message.Content) {
+				if b.Type == "toolCall" && b.ID != "" {
+					calls[b.ID] = b
+				}
+			}
 			if e, ok := messageEntry(line); ok {
 				entries = append(entries, e)
 			}
@@ -336,11 +361,26 @@ func messageEntry(line piLine) (session.Entry, bool) {
 	if text == "" {
 		return session.Entry{}, false
 	}
-	ts := parseTime(line.Timestamp)
-	if line.Message.Timestamp > 0 {
-		ts = time.UnixMilli(line.Message.Timestamp)
+	return session.Entry{Kind: session.KindMessage, Role: role, Text: text, Time: messageTime(line)}, true
+}
+
+// failureEntry converts a toolResult message marked isError. The result names
+// its tool; the call it answers, when found on the branch, supplies the
+// arguments.
+func failureEntry(line piLine, call piBlock) session.Entry {
+	tool := line.Message.ToolName
+	if tool == "" {
+		tool = call.Name
 	}
-	return session.Entry{Kind: session.KindMessage, Role: role, Text: text, Time: ts}, true
+	return session.Failure(tool, call.Arguments, extractText(line.Message.Content), messageTime(line))
+}
+
+// messageTime prefers the message's own millisecond stamp over the record's.
+func messageTime(line piLine) time.Time {
+	if line.Message.Timestamp > 0 {
+		return time.UnixMilli(line.Message.Timestamp)
+	}
+	return parseTime(line.Timestamp)
 }
 
 func compactEntry(line piLine) session.Entry {
@@ -376,17 +416,23 @@ func extractText(raw json.RawMessage) string {
 	if json.Unmarshal(raw, &s) == nil {
 		return s
 	}
-	var blocks []piBlock
-	if json.Unmarshal(raw, &blocks) != nil {
-		return ""
-	}
 	var parts []string
-	for _, b := range blocks {
+	for _, b := range decodeBlocks(raw) {
 		if b.Type == "text" && b.Text != "" {
 			parts = append(parts, b.Text)
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+// decodeBlocks returns the blocks of an array-form content; nil when content
+// is a plain string or absent.
+func decodeBlocks(raw json.RawMessage) []piBlock {
+	var blocks []piBlock
+	if len(raw) == 0 || raw[0] != '[' || json.Unmarshal(raw, &blocks) != nil {
+		return nil
+	}
+	return blocks
 }
 
 func parseTime(s string) time.Time {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,9 @@ const rolloutOne = `{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta",
 {"timestamp":"2026-06-26T21:31:52.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions for /home/u/src/proj\n\n<INSTRUCTIONS>\nbe nice\n</INSTRUCTIONS>"}]}}
 {"timestamp":"2026-06-26T21:31:55.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"hello codex"}]}}
 {"timestamp":"2026-06-26T21:32:00.0Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{}"}}
+{"timestamp":"2026-06-26T21:32:01.0Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"exec-1","command":["/bin/zsh","-lc","go test ./..."],"status":"failed","exit_code":1,"aggregated_output":"FAIL\tproj\n"}}}
+{"timestamp":"2026-06-26T21:32:02.0Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-1","output":"Process exited with code 1\nFAIL\tproj"}}
+{"timestamp":"2026-06-26T21:32:03.0Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"exec-2","command":["/bin/zsh","-lc","ls"],"status":"completed","exit_code":0,"aggregated_output":"tool output\n"}}}
 {"timestamp":"2026-06-26T21:32:05.0Z","type":"response_item","payload":{"type":"reasoning","summary":[]}}
 {"timestamp":"2026-06-26T21:32:08.0Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi human"}]}}
 {"timestamp":"2026-06-26T21:32:10.0Z","type":"event_msg","payload":{"type":"context_compacted"}}
@@ -58,10 +62,12 @@ func TestReadThread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// developer role, the AGENTS.md injection, function_call and reasoning are
-	// all dropped; only the typed turns and the compaction marker remain.
+	// developer role, the AGENTS.md injection, function_call, its output, and
+	// reasoning are all dropped; the typed turns, the command that exited
+	// non-zero, and the compaction marker remain.
 	want := []struct{ kind, role, text string }{
 		{session.KindMessage, session.RoleUser, "hello codex"},
+		{session.KindFailure, session.RoleTool, "FAIL\tproj\nexit status 1"},
 		{session.KindMessage, session.RoleAssistant, "hi human"},
 		{session.KindCompact, "", ""},
 	}
@@ -73,6 +79,12 @@ func TestReadThread(t *testing.T) {
 		if got.Kind != w.kind || got.Role != w.role || got.Text != w.text {
 			t.Errorf("entry %d = %+v, want %v", i, got, w)
 		}
+	}
+	if f := th.Entries[1]; f.Tool != "CommandExecution" || f.Input != `["/bin/zsh","-lc","go test ./..."]` {
+		t.Errorf("failure = %+v, want Tool CommandExecution with command argv", f)
+	}
+	if strings.Contains(th.VisibleText(), "tool output") {
+		t.Errorf("successful command leaked into the timeline: %+v", th.Entries)
 	}
 }
 

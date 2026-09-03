@@ -11,7 +11,9 @@
 package session
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -47,13 +49,18 @@ var Providers = []string{
 // the entry's text (when the agent's log records the summary at all).
 // KindBranch is a summary of an abandoned conversation branch; it truncates
 // nothing, so code that cuts at compaction seams must leave it alone.
+// KindFailure is a tool result the agent's own log marks failed — the world
+// saying no to something the assistant tried. Successful tool results never
+// become Entries: the assistant's next words already carry what they said.
 const (
 	KindMessage = "message"
 	KindCompact = "compact"
 	KindBranch  = "branch"
+	KindFailure = "failure"
 
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
+	RoleTool      = "tool" // the speaker of a KindFailure entry
 )
 
 // Ref identifies one conversation within one provider. It is the stable handle
@@ -109,13 +116,78 @@ type Source struct {
 }
 
 // Entry is one visible item on the conversation timeline. Kind is KindMessage,
-// KindCompact, or KindBranch; for messages, Role is RoleUser or RoleAssistant.
-// Tool calls, tool results, reasoning, and bookkeeping never become Entries.
+// KindCompact, KindBranch, or KindFailure; for messages, Role is RoleUser or
+// RoleAssistant. Tool calls, successful tool results, reasoning, and
+// bookkeeping never become Entries; a tool result the log marks failed does,
+// as a KindFailure whose Text is what came back.
 type Entry struct {
 	Kind string
 	Role string
 	Text string
 	Time time.Time
+
+	// Tool and Input are set only on KindFailure entries: the provider's own
+	// name for the tool that was called, and what it was asked to do. Input is the
+	// compact JSON value from the provider so JSON output stays structured; text
+	// renderers choose their own human-readable projection.
+	Tool  string
+	Input string
+}
+
+// Failure builds the entry for a tool result the provider marked failed. All
+// providers go through it, so Kind, Role, and the JSON input invariant are
+// paired in one place.
+func Failure(tool string, input json.RawMessage, text string, at time.Time) Entry {
+	return Entry{
+		Kind: KindFailure, Role: RoleTool, Tool: tool,
+		Input: compactInput(input), Text: text, Time: at,
+	}
+}
+
+// compactInput preserves a provider's structured call input as valid compact
+// JSON. A malformed value degrades to a JSON string instead of making the
+// renderer's JSON document invalid.
+func compactInput(raw json.RawMessage) string {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var buf bytes.Buffer
+	if json.Compact(&buf, raw) != nil {
+		encoded, _ := json.Marshal(string(raw))
+		return string(encoded)
+	}
+	return buf.String()
+}
+
+// InputText is the one-line reading of Input for text output: an input that is
+// a single string field — the command, the URL, the path — is that string, a
+// `[shell, -c, script]` argv is the script, and anything else stays compact
+// JSON. Nothing here knows about particular tools; JSON output keeps the
+// structure this flattens.
+func (e Entry) InputText() string {
+	if e.Input == "" {
+		return ""
+	}
+	raw := json.RawMessage(e.Input)
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) == nil && len(fields) == 1 {
+		for _, v := range fields {
+			var s string
+			if json.Unmarshal(v, &s) == nil {
+				return s
+			}
+		}
+	}
+	var argv []string
+	if json.Unmarshal(raw, &argv) == nil && len(argv) == 3 && (argv[1] == "-lc" || argv[1] == "-c") {
+		return argv[2]
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	return e.Input
 }
 
 // Thread is a fully read session: its Source plus the ordered, visible
@@ -221,13 +293,16 @@ type Provider interface {
 	List(ctx context.Context, roots Roots, opts ListOptions) ([]Summary, error)
 }
 
-// Format selects an output encoding for the renderer.
+// Format selects an output mode for the renderer. Agent is detailed Markdown;
+// Markdown and HTML are clean human views, while JSON is the complete
+// structured projection.
 type Format int
 
 const (
-	FormatMarkdown Format = iota // YAML frontmatter + numbered timeline (default)
-	FormatHTML                   // self-contained HTML, inline CSS, no JavaScript
-	FormatJSON                   // structured Thread/Source as JSON
+	FormatMarkdown Format = iota // clean YAML frontmatter + numbered timeline (default)
+	FormatAgent                  // detailed Markdown for an LLM agent
+	FormatHTML                   // clean self-contained HTML, inline CSS, no JavaScript
+	FormatJSON                   // complete structured Thread/Source as JSON
 )
 
 // String returns the canonical lowercase name of the format.
@@ -235,6 +310,8 @@ func (f Format) String() string {
 	switch f {
 	case FormatMarkdown:
 		return "markdown"
+	case FormatAgent:
+		return "agent"
 	case FormatHTML:
 		return "html"
 	case FormatJSON:

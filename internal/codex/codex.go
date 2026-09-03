@@ -11,6 +11,12 @@
 // timeline; type=compacted and event_msg.payload.type=context_compacted as
 // compaction markers.
 //
+// A command that exited non-zero becomes a failure entry, read from the
+// event_msg.item_completed record whose item.type is CommandExecution
+// (exit_code, command, aggregated_output). Codex writes those from cli 0.147
+// on; earlier rollouts record the outcome only as prose inside
+// function_call_output, which is not a flag, so they yield nothing.
+//
 // Ignored by default: function_call, function_call_output, custom_tool_call,
 // web_search_call, MCP/tool events, patches, token counts, rate limits, memory
 // citations, encrypted reasoning, turn_context, base instructions, and
@@ -271,6 +277,10 @@ func readThread(fi fileInfo) (session.Thread, error) {
 				if e := decodeEvent(line.Payload); e != "" {
 					fallback = append(fallback, session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: e, Time: ts})
 				}
+			case "item_completed":
+				if e, ok := failedCommand(line.Payload, ts); ok {
+					entries = append(entries, e)
+				}
 			}
 		}
 	}
@@ -312,6 +322,34 @@ func payloadType(raw json.RawMessage) string {
 	}
 	json.Unmarshal(raw, &p)
 	return p.Type
+}
+
+// failedCommand converts an item_completed event whose CommandExecution item
+// exited non-zero. The entry is named after the item type — the function_call
+// that started it carries a different id, so there is nothing to pair with —
+// and retains the command argv as its structured input. Its text ends with the
+// exit status, which the output alone omits.
+func failedCommand(raw json.RawMessage, ts time.Time) (session.Entry, bool) {
+	var p struct {
+		Item struct {
+			Type     string          `json:"type"`
+			Command  json.RawMessage `json:"command"`
+			ExitCode *int            `json:"exit_code"`
+			Output   string          `json:"aggregated_output"`
+		} `json:"item"`
+	}
+	if json.Unmarshal(raw, &p) != nil || p.Item.Type != "CommandExecution" {
+		return session.Entry{}, false
+	}
+	if p.Item.ExitCode == nil || *p.Item.ExitCode == 0 {
+		return session.Entry{}, false
+	}
+	text := strings.TrimRight(p.Item.Output, "\n")
+	if text != "" {
+		text += "\n"
+	}
+	text += fmt.Sprintf("exit status %d", *p.Item.ExitCode)
+	return session.Failure(p.Item.Type, p.Item.Command, text, ts), true
 }
 
 func decodeEvent(raw json.RawMessage) string {

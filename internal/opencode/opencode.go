@@ -14,10 +14,11 @@
 // part.data.type=compaction as a compaction marker. Times are epoch
 // milliseconds.
 //
-// Ignored by default: part.type=tool (it dominates database size), reasoning,
-// step-start, step-finish, token/cost plumbing, snapshots, patch payloads, and
-// raw file payloads. Child session ids can be read, but v1 does not expand
-// parent/child trees.
+// A part.type=tool whose state.status is error becomes a failure entry with
+// state.input and state.error. Successful tool parts stay off the timeline.
+// Ignored by default: other tool states, reasoning, step-start, step-finish,
+// token/cost plumbing, snapshots, patch payloads, and raw file payloads. Child
+// session ids can be read, but v1 does not expand parent/child trees.
 package opencode
 
 import (
@@ -249,7 +250,7 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 	// One pass over the session's text/compaction parts, ordered by message then
 	// part time, grouping each message's text parts into a single entry.
 	rows, err := db.QueryContext(ctx,
-		`SELECT m.id, m.data, m.time_created, p.data
+		`SELECT m.id, m.data, m.time_created, p.time_created, p.data
 		   FROM part p JOIN message m ON p.message_id = m.id
 		   WHERE p.session_id = ?
 		   ORDER BY m.time_created, p.time_created, p.id`,
@@ -279,8 +280,8 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 
 	for rows.Next() {
 		var mid, mdata, pdata string
-		var mtime int64
-		if err := rows.Scan(&mid, &mdata, &mtime, &pdata); err != nil {
+		var mtime, ptime int64
+		if err := rows.Scan(&mid, &mdata, &mtime, &ptime, &pdata); err != nil {
 			return session.Thread{}, err
 		}
 		if mid != curID {
@@ -298,6 +299,11 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 		case "compaction":
 			flush()
 			entries = append(entries, session.Entry{Kind: session.KindCompact, Time: curTime})
+		case "tool":
+			if failure, ok := toolFailure(pdata, msToTime(ptime)); ok {
+				flush()
+				entries = append(entries, failure)
+			}
 		}
 	}
 	flush()
@@ -336,6 +342,25 @@ func partText(partData string) string {
 	}
 	json.Unmarshal([]byte(partData), &p)
 	return p.Text
+}
+
+// toolFailure converts the one OpenCode tool state that belongs on the
+// timeline. The status is structural; error-looking successful output is not
+// classified as a failure.
+func toolFailure(partData string, at time.Time) (session.Entry, bool) {
+	var p struct {
+		Type  string `json:"type"`
+		Tool  string `json:"tool"`
+		State struct {
+			Status string          `json:"status"`
+			Input  json.RawMessage `json:"input"`
+			Error  string          `json:"error"`
+		} `json:"state"`
+	}
+	if json.Unmarshal([]byte(partData), &p) != nil || p.Type != "tool" || p.State.Status != "error" {
+		return session.Entry{}, false
+	}
+	return session.Failure(p.Tool, p.State.Input, p.State.Error, at), true
 }
 
 // cleanModel reduces the model column (sometimes a JSON object) to a readable

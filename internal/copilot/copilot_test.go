@@ -2,6 +2,7 @@ package copilot
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,10 +16,10 @@ import (
 // event shapes taken from the schemas/session-events.schema.json that ships
 // with the CLI. It carries one of each kind the provider must handle: the
 // lifecycle rows, the system prompt, a tool-only assistant turn, the tool
-// plumbing around it, and a sub-agent's own messages — which reuse the
-// ordinary message types and are marked by the envelope's agentId — plus a
-// failed compaction, a successful one, and the human turns and answers that
-// are the actual conversation.
+// plumbing around it, a tool call that failed, and a sub-agent's own
+// messages — which reuse the ordinary message types and are marked by the
+// envelope's agentId — plus a failed compaction, a successful one, and the
+// human turns and answers that are the actual conversation.
 const events = `{"type":"session.start","id":"e1","timestamp":"2026-08-24T15:07:45.905Z","data":{"sessionId":"816a9dd1","version":1,"producer":"copilot-agent","context":{"cwd":"/home/u/src/catchup"}}}
 {"type":"session.model_change","id":"e2","timestamp":"2026-08-24T15:07:47.149Z","data":{"newModel":"auto","reasoningEffort":null}}
 {"type":"session.auto_mode_resolved","id":"e3","timestamp":"2026-08-24T15:07:47.958Z","data":{"chosenModel":"claude-haiku-4.5","routingMethod":"hydra"}}
@@ -27,8 +28,10 @@ const events = `{"type":"session.start","id":"e1","timestamp":"2026-08-24T15:07:
 {"type":"assistant.turn_start","id":"e6","timestamp":"2026-08-24T15:07:48.070Z","data":{"turnId":"0"}}
 {"type":"assistant.message","id":"e7","timestamp":"2026-08-24T15:07:49.558Z","data":{"messageId":"m1","model":"claude-haiku-4.5","content":"I will read the log.","toolRequests":[],"turnId":"0"}}
 {"type":"assistant.message","id":"e8","timestamp":"2026-08-24T15:07:50.100Z","data":{"messageId":"m2","model":"claude-haiku-4.5","content":"","toolRequests":[{"toolCallId":"t1","name":"bash","arguments":{"command":"ls"}}],"turnId":"0"}}
-{"type":"tool.execution_start","id":"e9","timestamp":"2026-08-24T15:07:50.200Z","data":{"toolCallId":"t1","name":"bash"}}
-{"type":"tool.execution_complete","id":"e10","timestamp":"2026-08-24T15:07:50.900Z","data":{"toolCallId":"t1","result":"a.txt"}}
+{"type":"tool.execution_start","id":"e9","timestamp":"2026-08-24T15:07:50.200Z","data":{"toolCallId":"t1","toolName":"bash","arguments":{"command":"ls"}}}
+{"type":"tool.execution_complete","id":"e10","timestamp":"2026-08-24T15:07:50.300Z","data":{"toolCallId":"t1","success":true,"result":{"content":"a.txt"}}}
+{"type":"tool.execution_start","id":"e10a","timestamp":"2026-08-24T15:07:50.400Z","data":{"toolCallId":"t2","toolName":"bash","arguments":{"command":"go test ./..."}}}
+{"type":"tool.execution_complete","id":"e10b","timestamp":"2026-08-24T15:07:50.900Z","data":{"toolCallId":"t2","success":false,"error":{"message":"Command exited with code 1\nFAIL\tproj"}}}
 {"type":"subagent.started","id":"e11","timestamp":"2026-08-24T15:07:50.950Z","data":{"toolCallId":"t1","agentName":"explore"}}
 {"type":"user.message","id":"e12","agentId":"agent-7","timestamp":"2026-08-24T15:07:51.000Z","data":{"content":"sub-agent instructions"}}
 {"type":"assistant.message","id":"e13","agentId":"agent-7","timestamp":"2026-08-24T15:07:51.500Z","data":{"messageId":"m9","model":"gpt-5-mini","content":"sub-agent answer"}}
@@ -69,6 +72,7 @@ func wantEntries(t *testing.T) []session.Entry {
 	return []session.Entry{
 		{Kind: session.KindMessage, Role: session.RoleUser, Text: "support copilot", Time: ts(t, "2026-08-24T15:07:48.023Z")},
 		{Kind: session.KindMessage, Role: session.RoleAssistant, Text: "I will read the log.", Time: ts(t, "2026-08-24T15:07:49.558Z")},
+		session.Failure("bash", json.RawMessage(`{"command":"go test ./..."}`), "Command exited with code 1\nFAIL\tproj", ts(t, "2026-08-24T15:07:50.900Z")),
 		{Kind: session.KindCompact, Text: "The user asked for Copilot support; the log format is settled.", Time: ts(t, "2026-08-24T15:08:00.000Z")},
 		{Kind: session.KindMessage, Role: session.RoleUser, Text: "finish it", Time: ts(t, "2026-08-24T15:08:37.037Z")},
 		{Kind: session.KindMessage, Role: session.RoleAssistant, Text: "done", Time: ts(t, "2026-08-24T15:08:40.397Z")},

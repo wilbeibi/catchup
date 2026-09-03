@@ -87,6 +87,84 @@ func TestHTMLEscapes(t *testing.T) {
 	}
 }
 
+// TestFailureViews pins the audience split: human Markdown and HTML omit tool
+// failures, agent Markdown frames them as quoted records, and JSON keeps the
+// structured call input.
+func TestFailureViews(t *testing.T) {
+	ts := time.Date(2026, 9, 2, 4, 11, 45, 0, time.UTC)
+	th := sampleThread()
+	th.Entries = append(th.Entries, session.Failure(
+		"Bash", json.RawMessage(`{"command":"go test ./..."}`),
+		"FAIL\tcatchup/x <0.1s>\n```\nexit status 1", ts,
+	))
+
+	var b bytes.Buffer
+	if err := Thread(&b, th, session.FormatMarkdown); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(b.String(), "failure: Bash") || strings.Contains(b.String(), "FAIL\tcatchup") {
+		t.Errorf("human markdown exposed a tool failure:\n%s", b.String())
+	}
+	if !strings.Contains(b.String(), "entries: 3\n") {
+		t.Errorf("human markdown counted a hidden failure:\n%s", b.String())
+	}
+
+	b.Reset()
+	if err := Thread(&b, th, session.FormatAgent); err != nil {
+		t.Fatal(err)
+	}
+	wantAgent := []string{
+		"entries: 4\n",
+		"## 4. failure: Bash | 2026-09-02 04:11",
+		"### Input\n\n```text\ngo test ./...\n```",
+		"### Output\n\n````text\nFAIL\tcatchup/x <0.1s>\n```\nexit status 1\n````",
+	}
+	for _, want := range wantAgent {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("agent markdown missing %q:\n%s", want, b.String())
+		}
+	}
+
+	// A provider that records no call input leaves out the heading rather
+	// than framing an empty block.
+	b.Reset()
+	bare := sampleThread()
+	bare.Entries = append(bare.Entries, session.Failure("webfetch", nil, "404", ts))
+	if err := Thread(&b, bare, session.FormatAgent); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(b.String(), "### Input") || !strings.Contains(b.String(), "### Output\n\n```text\n404\n```") {
+		t.Errorf("inputless failure not framed as output only:\n%s", b.String())
+	}
+
+	b.Reset()
+	if err := Thread(&b, th, session.FormatJSON); err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Entries []map[string]any `json:"entries"`
+	}
+	if err := json.Unmarshal(b.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, has := doc.Entries[0]["tool"]; has {
+		t.Errorf("message entry carries tool: %v", doc.Entries[0])
+	}
+	f := doc.Entries[3]
+	input, ok := f["input"].(map[string]any)
+	if f["kind"] != "failure" || f["role"] != "tool" || f["tool"] != "Bash" || !ok || input["command"] != "go test ./..." {
+		t.Errorf("failure entry = %v", f)
+	}
+
+	b.Reset()
+	if err := Thread(&b, th, session.FormatHTML); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(b.String(), "failure: Bash") || strings.Contains(b.String(), "FAIL\tcatchup") {
+		t.Errorf("human html exposed a tool failure:\n%s", b.String())
+	}
+}
+
 func TestList(t *testing.T) {
 	var b bytes.Buffer
 	sums := []session.Summary{

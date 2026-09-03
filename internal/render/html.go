@@ -38,6 +38,7 @@ type htmlModel struct {
 type htmlEntry struct {
 	Index int
 	Label string
+	Kind  string
 	Role  string
 	Time  string
 	Text  string
@@ -53,6 +54,7 @@ func htmlEntries(entries []session.Entry) []htmlEntry {
 		out[i] = htmlEntry{
 			Index: i + 1,
 			Label: entryLabel(e),
+			Kind:  e.Kind,
 			Role:  e.Role,
 			Time:  ts,
 			Text:  e.Text,
@@ -106,7 +108,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; 
 {{- end}}
 </header>
 {{- range .Entries}}
-<section class="entry role-{{.Role}} kind-{{.Label}}">
+<section class="entry role-{{.Role}} kind-{{.Kind}}">
 <h2>{{.Index}}. {{.Label}}{{if .Time}} · {{.Time}}{{end}}</h2>
 <pre>{{.Text}}</pre>
 </section>

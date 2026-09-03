@@ -16,7 +16,9 @@ const transcript = `{"type":"session","version":3,"id":"019f-pi","timestamp":"20
 {"type":"message","id":"m1","parentId":"m0","timestamp":"2026-06-28T02:50:23.414Z","message":{"role":"user","timestamp":1793155823414,"content":[{"type":"text","text":"support pi agent"}]}}
 {"type":"message","id":"m2","parentId":"m1","timestamp":"2026-06-28T02:50:26.242Z","message":{"role":"assistant","timestamp":1793155826242,"provider":"anthropic","model":"claude-sonnet-4","content":[{"type":"thinking","thinking":"hidden"},{"type":"toolCall","id":"tc1","name":"read","arguments":{"file":"x"}},{"type":"text","text":"I will inspect the format."}]}}
 {"type":"message","id":"m3","parentId":"m2","timestamp":"2026-06-28T02:50:26.266Z","message":{"role":"toolResult","toolCallId":"tc1","toolName":"read","content":[{"type":"text","text":"tool output"}]}}
-{"type":"compaction","id":"c1","parentId":"m3","timestamp":"2026-06-28T02:51:00.000Z","summary":"summary so far","firstKeptEntryId":"m1"}
+{"type":"message","id":"m3a","parentId":"m3","timestamp":"2026-06-28T02:50:27.000Z","message":{"role":"assistant","timestamp":1793155827000,"content":[{"type":"toolCall","id":"tc2","name":"bash","arguments":{"command":"go test ./..."}}]}}
+{"type":"message","id":"m3b","parentId":"m3a","timestamp":"2026-06-28T02:50:28.000Z","message":{"role":"toolResult","toolCallId":"tc2","toolName":"bash","content":[{"type":"text","text":"FAIL\tproj\n\nCommand exited with code 1"}],"isError":true,"timestamp":1793155828000}}
+{"type":"compaction","id":"c1","parentId":"m3b","timestamp":"2026-06-28T02:51:00.000Z","summary":"summary so far","firstKeptEntryId":"m1"}
 {"type":"branch_summary","id":"b0","parentId":"c1","timestamp":"2026-06-28T02:51:00.500Z","fromId":"x0"}
 {"type":"session_info","id":"n1","parentId":"b0","timestamp":"2026-06-28T02:51:01.000Z","name":"Pi support"}
 {"type":"branch_summary","id":"b1","parentId":"n1","timestamp":"2026-06-28T02:51:01.500Z","fromId":"x1","summary":"tried approach A; abandoned for B"}
@@ -81,6 +83,7 @@ func TestReadPiAgentSession(t *testing.T) {
 	}{
 		{session.KindMessage, session.RoleUser, "support pi agent"},
 		{session.KindMessage, session.RoleAssistant, "I will inspect the format."},
+		{session.KindFailure, session.RoleTool, "FAIL\tproj\n\nCommand exited with code 1"},
 		{session.KindCompact, "", "summary so far"},
 		// b0 has no summary text and must not surface; b1 does and must.
 		{session.KindBranch, "", "tried approach A; abandoned for B"},
@@ -94,6 +97,9 @@ func TestReadPiAgentSession(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("entry %d = %+v, want %+v", i, got[i], want[i])
 		}
+	}
+	if f := thread.Entries[2]; f.Tool != "bash" || f.Input != `{"command":"go test ./..."}` || !f.Time.Equal(time.UnixMilli(1793155828000)) {
+		t.Errorf("failure = %+v, want Tool bash, Input go test ./..., the result's own time", f)
 	}
 	for _, e := range thread.Entries {
 		if strings.Contains(e.Text, "tool output") || strings.Contains(e.Text, "hidden") {
