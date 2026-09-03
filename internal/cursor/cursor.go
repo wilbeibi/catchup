@@ -89,7 +89,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 			break
 		}
 		// meta.json answers the cwd filter without opening the database.
-		if opts.Cwd != "" && d.meta.Cwd != opts.Cwd {
+		if opts.Cwd != "" && !session.SameDir(d.meta.Cwd, opts.Cwd) {
 			continue
 		}
 		t, err := readThread(newSource(d))

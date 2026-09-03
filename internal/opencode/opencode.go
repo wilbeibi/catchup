@@ -189,7 +189,7 @@ func listSessions(ctx context.Context, db *sql.DB, path, query, cwd string, limi
 		if err != nil {
 			return nil, err
 		}
-		if cwd != "" && src.Metadata["cwd"] != cwd {
+		if cwd != "" && !session.SameDir(src.Metadata["cwd"], cwd) {
 			continue
 		}
 		if q != "" {

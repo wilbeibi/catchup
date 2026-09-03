@@ -136,7 +136,7 @@ func listSessions(root, query, cwd string, limit int) ([]session.Summary, error)
 		if err != nil || len(t.Entries) == 0 {
 			continue
 		}
-		if cwd != "" && t.Source.Metadata["cwd"] != cwd {
+		if cwd != "" && !session.SameDir(t.Source.Metadata["cwd"], cwd) {
 			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {

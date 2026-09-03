@@ -129,7 +129,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 		// The directory filter is answered from workspace.yaml alone, so a
 		// session in another directory never costs an event-log parse.
 		meta := readWorkspace(d.path)
-		if opts.Cwd != "" && meta["cwd"] != opts.Cwd {
+		if opts.Cwd != "" && !session.SameDir(meta["cwd"], opts.Cwd) {
 			continue
 		}
 		t, err := readThread(d, meta)

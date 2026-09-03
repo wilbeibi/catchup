@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -17,6 +19,60 @@ import (
 
 	"github.com/wilbeibi/catchup/internal/session"
 )
+
+// fixtureRoot is a real directory that every fixture path hangs under. Two
+// things need that: the stores record an absolute cwd and --dir resolves
+// through filepath.Abs, so a bare Unix literal matches nothing on Windows;
+// and a Windows fork --into writes its seed into the directory the agent
+// starts in, which therefore has to be somewhere a test may write. Forward
+// slashes throughout — they need no JSON escaping, and filepath.Clean
+// normalizes them inside session.SameDir.
+var fixtureRoot = func() string {
+	dir, err := os.MkdirTemp("", "catchup-cli")
+	if err != nil {
+		panic(err)
+	}
+	return filepath.ToSlash(dir)
+}()
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	os.RemoveAll(fixtureRoot)
+	os.Exit(code)
+}
+
+// fxDir renders one fixture directory under that root.
+func fxDir(p string) string { return fixtureRoot + p }
+
+// fxBody does the same for every directory quoted inside a fixture body.
+func fxBody(s string) string {
+	return strings.ReplaceAll(s, `"/home/u`, `"`+fixtureRoot+`/home/u`)
+}
+
+// seedText is what the launched agent effectively receives. On Windows the
+// transcript travels in a file beside it rather than in argv (docs/DESIGN.md,
+// D6b), so assertions about what was handed over read both through here and
+// stay channel-blind; TestSeedPromptChannel covers the channel itself.
+func seedText(t *testing.T, dir, prompt string) string {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return prompt
+	}
+	rel := seedPathRE.FindString(prompt)
+	if rel == "" {
+		t.Fatalf("prompt names no seed file, so the transcript went nowhere: %q", prompt)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return prompt + "\n\n" + string(b)
+}
+
+// seedPathRE picks the seed file out of a prompt that points at one. Reading
+// the named path, rather than globbing the directory, keeps a test that seeds
+// twice from seeing the first seed in the second assertion.
+var seedPathRE = regexp.MustCompile(regexp.QuoteMeta(seedDirName) + `[\\/]seed-[-0-9a-z]+\.md`)
 
 const rollout = `{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta","payload":{"id":"sess-1","cwd":"/home/u/src/proj","cli_version":"0.1"}}
 {"timestamp":"2026-06-26T21:31:55.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"hello from cli test"}]}}
@@ -32,7 +88,7 @@ func codexRoot(t *testing.T) session.Roots {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-1.jsonl"), []byte(rollout), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-1.jsonl"), []byte(fxBody(rollout)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return session.Roots{Codex: root}
@@ -60,7 +116,7 @@ func claudeRoot(t *testing.T) session.Roots {
 {"type":"assistant","sessionId":%q,"cwd":"/home/u/proj","timestamp":"2026-06-26T10:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}
 `, id, text, id)
 		p := filepath.Join(dir, id+".jsonl")
-		if err := os.WriteFile(p, []byte(lines), 0o644); err != nil {
+		if err := os.WriteFile(p, []byte(fxBody(lines)), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Chtimes(p, mod, mod); err != nil {
@@ -84,7 +140,7 @@ func piAgentRoot(t *testing.T) session.Roots {
 {"type":"message","id":"m1","parentId":null,"timestamp":"2026-06-28T02:50:23.414Z","message":{"role":"user","content":[{"type":"text","text":"hello pi"}]}}
 {"type":"message","id":"m2","parentId":"m1","timestamp":"2026-06-28T02:50:26.242Z","message":{"role":"assistant","content":[{"type":"text","text":"hi pi"}]}}
 `
-	if err := os.WriteFile(filepath.Join(dir, "2026-06-28T02-50-19-365Z_pi-1.jsonl"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "2026-06-28T02-50-19-365Z_pi-1.jsonl"), []byte(fxBody(body)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return session.Roots{PiAgent: root}
@@ -150,11 +206,11 @@ func TestResolveRank(t *testing.T) {
 // error names the directory that has the provider's newest session.
 func TestEmptyStateHint(t *testing.T) {
 	var out, errOut bytes.Buffer
-	err := Run(context.Background(), []string{"codex"}, codexRoot(t), nil, nil, nil, "test", "/somewhere/else", nil, &out, &errOut)
+	err := Run(context.Background(), []string{"codex"}, codexRoot(t), nil, nil, nil, "test", fxDir("/somewhere/else"), nil, &out, &errOut)
 	if err == nil {
 		t.Fatal("want error when cwd has no sessions")
 	}
-	for _, want := range []string{"no sessions in /somewhere/else", "newest is in /home/u/src/proj"} {
+	for _, want := range []string{"no sessions in " + fxDir("/somewhere/else"), "newest is in " + fxDir("/home/u/src/proj")} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q missing %q", err, want)
 		}
@@ -162,7 +218,7 @@ func TestEmptyStateHint(t *testing.T) {
 }
 
 func TestListJSON(t *testing.T) {
-	out := runWithCwd(t, codexRoot(t), "/home/u/src/proj", "codex", "--list", "--json")
+	out := runWithCwd(t, codexRoot(t), fxDir("/home/u/src/proj"), "codex", "--list", "--json")
 	var rows []map[string]any
 	if err := json.Unmarshal([]byte(out), &rows); err != nil {
 		t.Fatalf("listing is not JSON: %v\n%s", err, out)
@@ -171,7 +227,7 @@ func TestListJSON(t *testing.T) {
 		t.Fatalf("got %d rows, want 1: %+v", len(rows), rows)
 	}
 	r := rows[0]
-	if r["session_id"] != "sess-1" || r["agent"] != "codex" || r["rank"] != float64(1) || r["cwd"] != "/home/u/src/proj" {
+	if r["session_id"] != "sess-1" || r["agent"] != "codex" || r["rank"] != float64(1) || r["cwd"] != fxDir("/home/u/src/proj") {
 		t.Errorf("row = %+v", r)
 	}
 }
@@ -199,17 +255,17 @@ func TestRunCwdFiltering(t *testing.T) {
 {"timestamp":"2026-06-26T22:01:00.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"unrelated work"}]}}
 {"timestamp":"2026-06-26T22:02:00.0Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}}
 `
-	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-catchup.jsonl"), []byte(catchupRollout), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-catchup.jsonl"), []byte(fxBody(catchupRollout)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-other.jsonl"), []byte(otherRollout), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-other.jsonl"), []byte(fxBody(otherRollout)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	roots := session.Roots{Codex: root}
 
 	// With cwd: only the matching session appears. Asserted against --json,
 	// which is where session ids live; the table shows handles and titles.
-	out := runWithCwd(t, roots, "/home/u/src/catchup", "codex", "--list", "--json")
+	out := runWithCwd(t, roots, fxDir("/home/u/src/catchup"), "codex", "--list", "--json")
 	if !strings.Contains(out, "sess-catchup") {
 		t.Errorf("expected sess-catchup in cwd-filtered listing, got:\n%s", out)
 	}
@@ -218,7 +274,7 @@ func TestRunCwdFiltering(t *testing.T) {
 	}
 
 	// --dir substitutes another directory for the cwd.
-	out = runWithCwd(t, roots, "/somewhere/else", "codex", "--list", "--json", "--dir", "/home/u/src/other")
+	out = runWithCwd(t, roots, fxDir("/somewhere/else"), "codex", "--list", "--json", "--dir", fxDir("/home/u/src/other"))
 	if !strings.Contains(out, "sess-other") || strings.Contains(out, "sess-catchup") {
 		t.Errorf("--dir should select exactly the named directory, got:\n%s", out)
 	}
@@ -234,8 +290,8 @@ func TestRunForkFromAnotherDir(t *testing.T) {
 		return nil
 	})
 	var out, errOut bytes.Buffer
-	args := []string{"fork", "codex", "--dir", "/home/u/src/proj"}
-	if err := Run(context.Background(), args, roots, nil, nil, nil, "test", "/somewhere/worktree", nil, &out, &errOut); err != nil {
+	args := []string{"fork", "codex", "--dir", fxDir("/home/u/src/proj")}
+	if err := Run(context.Background(), args, roots, nil, nil, nil, "test", fxDir("/somewhere/worktree"), nil, &out, &errOut); err != nil {
 		t.Fatalf("Run(%v) error: %v (stderr: %s)", args, err, errOut.String())
 	}
 	if got.Ref.SessionID != "sess-parser" {
@@ -243,13 +299,31 @@ func TestRunForkFromAnotherDir(t *testing.T) {
 	}
 }
 
+// setHome points os.UserHomeDir at dir. The variable it reads is
+// platform-specific, so tests that stand in a home go through here rather
+// than setting $HOME and passing only on Unix.
+func setHome(t *testing.T, dir string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", dir)
+		return
+	}
+	t.Setenv("HOME", dir)
+}
+
 func TestExpandTilde(t *testing.T) {
-	t.Setenv("HOME", "/home/test")
+	home := t.TempDir()
+	setHome(t, home)
+	abs := filepath.Join(home, "abs", "path")
 	tests := []struct{ in, want string }{
-		{"~", "/home/test"},
-		{"~/proj", "/home/test/proj"},
-		{"/abs/path", "/abs/path"},
+		{"~", home},
+		{"~/proj", filepath.Join(home, "proj")},
+		{abs, abs},
 		{"~user/x", "~user/x"}, // other users' homes are not resolved
+	}
+	if runtime.GOOS == "windows" {
+		// cmd.exe expands neither spelling, so both arrive intact.
+		tests = append(tests, struct{ in, want string }{`~\proj`, filepath.Join(home, "proj")})
 	}
 	for _, tt := range tests {
 		if got := expandTilde(tt.in); got != tt.want {
@@ -397,7 +471,7 @@ func TestSinceCompact(t *testing.T) {
 
 func TestCurrentSessionBeatsNewest(t *testing.T) {
 	roots := claudeRoot(t)
-	cwd := "/home/u/proj"
+	cwd := fxDir("/home/u/proj")
 
 	// With no injected current id, the default selection is the newest session
 	// in cwd.
@@ -423,7 +497,7 @@ func TestCurrentSessionBeatsNewest(t *testing.T) {
 	// An explicit --dir outranks the injected current id: pointing at a
 	// directory means pointing away from the session this process sits in.
 	var dirOut bytes.Buffer
-	if err := Run(context.Background(), []string{"claude", "--dir", "/home/u/proj"}, roots, current, nil, nil, "test", cwd, nil, &dirOut, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"claude", "--dir", fxDir("/home/u/proj")}, roots, current, nil, nil, "test", cwd, nil, &dirOut, &errOut); err != nil {
 		t.Fatalf("Run --dir error: %v (stderr: %s)", err, errOut.String())
 	}
 	if !strings.Contains(dirOut.String(), "session: sess-new") {
@@ -448,7 +522,7 @@ func TestRunForkProvider(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), []string{"fork", "codex"}, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"fork", "codex"}, roots, nil, nil, nil, "test", fxDir("/home/u/src/proj"), nil, &out, &errOut); err != nil {
 		t.Fatalf("Run fork error: %v (stderr: %s)", err, errOut.String())
 	}
 	if got.Ref.Provider != session.ProviderCodex || got.Ref.SessionID != "sess-1" {
@@ -477,7 +551,7 @@ func multiProviderRoots(t *testing.T) session.Roots {
 	codexBody := `{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta","payload":{"id":"old-codex","cwd":"/home/u/src/proj","cli_version":"0.1"}}
 {"timestamp":"2026-06-26T21:31:55.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"old codex"}]}}
 `
-	if err := os.WriteFile(codexPath, []byte(codexBody), 0o644); err != nil {
+	if err := os.WriteFile(codexPath, []byte(fxBody(codexBody)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chtimes(codexPath, now.Add(-time.Hour), now.Add(-time.Hour)); err != nil {
@@ -493,7 +567,7 @@ func multiProviderRoots(t *testing.T) session.Roots {
 {"type":"message","id":"m1","parentId":null,"timestamp":"2026-06-28T02:50:23.414Z","message":{"role":"user","content":[{"type":"text","text":"new pi"}]}}
 {"type":"message","id":"m2","parentId":"m1","timestamp":"2026-06-28T02:50:26.242Z","message":{"role":"assistant","content":[{"type":"text","text":"hi new pi"}]}}
 `
-	if err := os.WriteFile(piPath, []byte(piBody), 0o644); err != nil {
+	if err := os.WriteFile(piPath, []byte(fxBody(piBody)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chtimes(piPath, now, now); err != nil {
@@ -512,7 +586,7 @@ func TestRunForkLatestAcrossProviders(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), []string{"fork"}, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"fork"}, roots, nil, nil, nil, "test", fxDir("/home/u/src/proj"), nil, &out, &errOut); err != nil {
 		t.Fatalf("Run fork latest error: %v (stderr: %s)", err, errOut.String())
 	}
 	if got.Ref.Provider != session.ProviderPiAgent || got.Ref.SessionID != "new-pi" {
@@ -522,7 +596,7 @@ func TestRunForkLatestAcrossProviders(t *testing.T) {
 
 func TestRunBareReadsLatestAcrossProviders(t *testing.T) {
 	roots := multiProviderRoots(t)
-	out := runWithCwd(t, roots, "/home/u/src/proj", "--last", "1")
+	out := runWithCwd(t, roots, fxDir("/home/u/src/proj"), "--last", "1")
 	for _, want := range []string{"agent: pi-agent", "session: new-pi", "new pi"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("bare read missing %q:\n%s", want, out)
@@ -654,7 +728,7 @@ func TestRunForkAnnouncesSource(t *testing.T) {
 	withForkRunner(t, func(ctx context.Context, src session.Source, model string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return nil
 	})
-	_, errOut := runBoth(t, roots, "/home/u/src/proj", "fork")
+	_, errOut := runBoth(t, roots, fxDir("/home/u/src/proj"), "fork")
 	if !strings.Contains(errOut, "catchup: forking codex") {
 		t.Errorf("native fork should name its source:\n%s", errOut)
 	}
@@ -680,7 +754,7 @@ func TestRunForkAnnouncesSource(t *testing.T) {
 	withIntoRunner(t, func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return nil
 	})
-	_, errOut = runBoth(t, roots, "/home/u/src/proj", "fork", "--into", "claude")
+	_, errOut = runBoth(t, roots, fxDir("/home/u/src/proj"), "fork", "--into", "claude")
 	if !strings.Contains(errOut, "catchup: forking codex → claude") {
 		t.Errorf("--into should announce both ends:\n%s", errOut)
 	}
@@ -696,8 +770,44 @@ func withForkRunner(t *testing.T, runner forkRunner) {
 func withIntoRunner(t *testing.T, runner intoRunner) {
 	t.Helper()
 	old := runInto
-	runInto = runner
+	// Every --into launch is checked for the Windows single-line invariant
+	// before the test's own runner sees it. npm installs most agents as .cmd
+	// shims, and cmd.exe hands the agent everything up to the first newline
+	// and drops the rest with a successful exit — so a multi-line argument
+	// is a silent data loss no assertion about catchup's own argv catches.
+	// Guarding here covers every seed path, not the one a test looked at.
+	runInto = func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		if runtime.GOOS == "windows" {
+			if a, bad := truncatableArg(args); bad {
+				t.Errorf("a .cmd shim would truncate this argument at its first newline: %q", a)
+			}
+		}
+		return runner(ctx, name, args, stdin, stdout, stderr)
+	}
 	t.Cleanup(func() { runInto = old })
+}
+
+// truncatableArg reports an argument a .cmd shim would cut short. Split out
+// from the guard above so the rule itself is tested on every platform, not
+// only where it is enforced.
+func truncatableArg(args []string) (string, bool) {
+	for _, a := range args {
+		if strings.ContainsAny(a, "\r\n") {
+			return a, true
+		}
+	}
+	return "", false
+}
+
+func TestTruncatableArg(t *testing.T) {
+	if _, bad := truncatableArg([]string{"-p", "one line, no cut"}); bad {
+		t.Error("single-line arguments survive a .cmd shim")
+	}
+	for _, arg := range []string{"lead\n\nSource: s.md", "lead\r\nSource: s.md"} {
+		if got, bad := truncatableArg([]string{"-p", arg}); !bad || got != arg {
+			t.Errorf("truncatableArg(%q) = %q, %v; want it flagged", arg, got, bad)
+		}
+	}
 }
 
 func TestRunForkInto(t *testing.T) {
@@ -710,17 +820,21 @@ func TestRunForkInto(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude"}, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut); err != nil {
+	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude"}, roots, nil, nil, nil, "test", fxDir("/home/u/src/proj"), nil, &out, &errOut); err != nil {
 		t.Fatalf("Run fork --into error: %v (stderr: %s)", err, errOut.String())
 	}
 	if gotName != "claude" {
 		t.Fatalf("fork --into launched %q, want claude", gotName)
 	}
-	if len(gotArgs) != 1 || !strings.Contains(gotArgs[0], "hello from cli test") {
-		t.Fatalf("fork --into prompt missing transcript, got %q", gotArgs)
+	if len(gotArgs) != 1 {
+		t.Fatalf("fork --into passed %d args, want one prompt: %q", len(gotArgs), gotArgs)
 	}
-	if !strings.Contains(gotArgs[0], "prior codex session") {
-		t.Fatalf("fork --into prompt missing source framing, got %q", gotArgs[0])
+	seeded := seedText(t, fxDir("/home/u/src/proj"), gotArgs[0])
+	if !strings.Contains(seeded, "hello from cli test") {
+		t.Fatalf("fork --into seed missing transcript, got %q", seeded)
+	}
+	if !strings.Contains(seeded, "prior codex session") {
+		t.Fatalf("fork --into seed missing source framing, got %q", seeded)
 	}
 }
 
@@ -735,7 +849,7 @@ func TestRunForkIntoSameAgent(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	err := Run(context.Background(), []string{"fork", "codex", "--into", "codex"}, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut)
+	err := Run(context.Background(), []string{"fork", "codex", "--into", "codex"}, roots, nil, nil, nil, "test", fxDir("/home/u/src/proj"), nil, &out, &errOut)
 	if err == nil || !strings.Contains(err.Error(), "resume it with full state") {
 		t.Fatalf("want same-agent rejection pointing at the native fork, got %v", err)
 	}
@@ -754,7 +868,7 @@ func TestRunForkIntoSameAgentReseed(t *testing.T) {
 		})
 		var out, errOut bytes.Buffer
 		args := append([]string{"fork", "codex", "--into", "codex"}, trim...)
-		if err := Run(context.Background(), args, roots, nil, nil, nil, "test", "/home/u/src/proj", nil, &out, &errOut); err != nil {
+		if err := Run(context.Background(), args, roots, nil, nil, nil, "test", fxDir("/home/u/src/proj"), nil, &out, &errOut); err != nil {
 			t.Fatalf("fork codex --into codex %v: %v", trim, err)
 		}
 		if len(gotArgs) == 0 {
@@ -806,7 +920,7 @@ func codexPairRoot(t *testing.T) session.Roots {
 {"timestamp":"2026-06-26T21:31:55.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":%q}]}}
 `, id, text)
 		p := filepath.Join(dir, "rollout-"+id+".jsonl")
-		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(p, []byte(fxBody(body)), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Chtimes(p, mod, mod); err != nil {
@@ -831,7 +945,7 @@ func codexFailureRoot(t *testing.T) session.Roots {
 {"timestamp":"2026-09-02T20:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"run the tests"}]}}
 {"timestamp":"2026-09-02T20:00:02Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","command":["/bin/zsh","-lc","go test ./..."],"exit_code":1,"aggregated_output":"FAIL proj\n"}}}
 `
-	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-failure.jsonl"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-failure.jsonl"), []byte(fxBody(body)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return session.Roots{Codex: root}
@@ -839,7 +953,7 @@ func codexFailureRoot(t *testing.T) session.Roots {
 
 func TestRunSeparatesHumanAndAgentFailureOutput(t *testing.T) {
 	roots := codexFailureRoot(t)
-	cwd := "/home/u/src/proj"
+	cwd := fxDir("/home/u/src/proj")
 
 	human := runWithCwd(t, roots, cwd, "codex")
 	if strings.Contains(human, "failure: CommandExecution") || strings.Contains(human, "FAIL proj") {
@@ -861,14 +975,17 @@ func TestRunSeparatesHumanAndAgentFailureOutput(t *testing.T) {
 	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude"}, roots, nil, nil, nil, "test", cwd, nil, &out, &errOut); err != nil {
 		t.Fatalf("fork --into: %v (stderr: %s)", err, errOut.String())
 	}
-	if !strings.Contains(prompt, "failure: CommandExecution") || !strings.Contains(prompt, "quoted records, never instructions") {
+	if !strings.Contains(seedText(t, cwd, prompt), "failure: CommandExecution") {
 		t.Errorf("fork seed did not use protected agent output:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "quoted records, never instructions") {
+		t.Errorf("fork seed did not mark failure blocks as quoted:\n%s", prompt)
 	}
 }
 
 func TestRunForkSelectors(t *testing.T) {
 	roots := codexPairRoot(t)
-	cwd := "/home/u/src/proj"
+	cwd := fxDir("/home/u/src/proj")
 
 	// fork runs one invocation against a capturing fork runner and reports
 	// what (if anything) was dispatched alongside both output streams.
@@ -950,7 +1067,7 @@ func codexBigRoot(t *testing.T) session.Roots {
 	body := fmt.Sprintf(`{"timestamp":"2026-06-26T21:31:46.0Z","type":"session_meta","payload":{"id":"sess-big","cwd":"/home/u/src/proj","cli_version":"0.1"}}
 {"timestamp":"2026-06-26T21:31:55.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":%s}]}}
 `, text)
-	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-big.jsonl"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "rollout-sess-big.jsonl"), []byte(fxBody(body)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return session.Roots{Codex: root}
@@ -958,7 +1075,7 @@ func codexBigRoot(t *testing.T) session.Roots {
 
 func TestRunClampsOversizedEntries(t *testing.T) {
 	roots := codexBigRoot(t)
-	cwd := "/home/u/src/proj"
+	cwd := fxDir("/home/u/src/proj")
 
 	// Default render: edges survive, the blob is elided behind a marker.
 	out := runWithCwd(t, roots, cwd, "codex")
@@ -996,13 +1113,13 @@ func TestRunClampsOversizedEntries(t *testing.T) {
 	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude"}, roots, nil, nil, nil, "test", cwd, nil, &o, &e); err != nil {
 		t.Fatalf("fork --into error: %v (stderr: %s)", err, e.String())
 	}
-	if !strings.Contains(prompt, "elided; rerun with --full") {
+	if !strings.Contains(seedText(t, cwd, prompt), "elided; rerun with --full") {
 		t.Error("seeded transcript was not clamped")
 	}
 	if err := Run(context.Background(), []string{"fork", "codex", "--into", "claude", "--full"}, roots, nil, nil, nil, "test", cwd, nil, &o, &e); err != nil {
 		t.Fatalf("fork --into --full error: %v (stderr: %s)", err, e.String())
 	}
-	if strings.Contains(prompt, "elided") {
+	if strings.Contains(seedText(t, cwd, prompt), "elided") {
 		t.Error("--full seed was still clamped")
 	}
 }
@@ -1025,11 +1142,22 @@ func forkFromRun(t *testing.T, stdin io.Reader, args ...string) (name string, pr
 		return nil
 	})
 	var out, errOut bytes.Buffer
-	err = Run(context.Background(), args, session.Roots{}, nil, nil, nil, "test", "", stdin, &out, &errOut)
+	dir := t.TempDir()
+	err = Run(context.Background(), args, session.Roots{}, nil, nil, nil, "test", dir, stdin, &out, &errOut)
 	if len(gotArgs) > 0 {
-		prompt = gotArgs[len(gotArgs)-1]
+		prompt = seedText(t, dir, gotArgs[len(gotArgs)-1])
 	}
 	return name, prompt, childStdin, err
+}
+
+// namesSource is how a seed tells the agent where the artifact came from.
+// The wording belongs to the channel: argv gives provenance its own line, the
+// file channel folds it into the first sentence to stay single-line.
+func namesSource(label string) string {
+	if runtime.GOOS == "windows" {
+		return "a copy of " + label
+	}
+	return "Source: " + label
 }
 
 func TestRunForkFromFile(t *testing.T) {
@@ -1044,7 +1172,7 @@ func TestRunForkFromFile(t *testing.T) {
 	if name != "claude" {
 		t.Fatalf("launched %q, want claude", name)
 	}
-	for _, want := range []string{"carry on with the parser", "Source: " + path, "transcript or handoff notes"} {
+	for _, want := range []string{"carry on with the parser", namesSource(path), "transcript or handoff notes"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("seed prompt missing %q:\n%.300s", want, prompt)
 		}
@@ -1060,7 +1188,7 @@ func TestRunForkFromStdin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fork --from - error: %v", err)
 	}
-	if !strings.Contains(prompt, "piped transcript body") || !strings.Contains(prompt, "Source: stdin") {
+	if !strings.Contains(prompt, "piped transcript body") || !strings.Contains(prompt, namesSource("stdin")) {
 		t.Errorf("seed prompt wrong:\n%.300s", prompt)
 	}
 	if childStdin != io.Reader(fakeTTY) {
@@ -1089,7 +1217,7 @@ func TestRunForkFromURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fork --from url error: %v", err)
 	}
-	if !strings.Contains(prompt, "remote transcript body") || !strings.Contains(prompt, "Source: "+srv.URL+"/s.md") {
+	if !strings.Contains(prompt, "remote transcript body") || !strings.Contains(prompt, namesSource(srv.URL+"/s.md")) {
 		t.Errorf("seed prompt wrong:\n%.300s", prompt)
 	}
 	if strings.Contains(prompt, "secret") {
@@ -1130,7 +1258,7 @@ func TestSeedIntoSizeGates(t *testing.T) {
 
 	// At the warning threshold: silent.
 	var quiet bytes.Buffer
-	if err := seedInto(ctx, "claude", "", strings.Repeat("a", warnTranscriptBytes), "HINT", nil, nil, &quiet); err != nil {
+	if err := seedInto(ctx, "claude", "", seed{body: strings.Repeat("a", warnTranscriptBytes), trimHint: "HINT", dir: t.TempDir()}, nil, nil, &quiet); err != nil {
 		t.Fatal(err)
 	}
 	if quiet.Len() != 0 {
@@ -1139,7 +1267,7 @@ func TestSeedIntoSizeGates(t *testing.T) {
 
 	// Above it: warns with the caller's own trim hint, still launches.
 	var warned bytes.Buffer
-	if err := seedInto(ctx, "claude", "", strings.Repeat("a", warnTranscriptBytes+1), "HINT", nil, nil, &warned); err != nil {
+	if err := seedInto(ctx, "claude", "", seed{body: strings.Repeat("a", warnTranscriptBytes+1), trimHint: "HINT", dir: t.TempDir()}, nil, nil, &warned); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(warned.String(), "HINT") {
@@ -1149,14 +1277,14 @@ func TestSeedIntoSizeGates(t *testing.T) {
 	// No size is pre-rejected — the OS owns the argv ceiling — but exec's
 	// terse E2BIG refusal is translated into the same trim navigation.
 	runErr = fmt.Errorf("fork/exec /usr/bin/claude: %w", syscall.E2BIG)
-	err := seedInto(ctx, "claude", "", "small prompt", "HINT", nil, nil, &quiet)
+	err := seedInto(ctx, "claude", "", seed{body: "small prompt", trimHint: "HINT", dir: t.TempDir()}, nil, nil, &quiet)
 	if err == nil || !strings.Contains(err.Error(), "argument limit") || !strings.Contains(err.Error(), "HINT") {
 		t.Fatalf("want E2BIG translated with the trim hint, got %v", err)
 	}
 
 	// Every other launch failure passes through untouched.
 	runErr = fmt.Errorf("exec: %q: executable file not found", "claude")
-	if err := seedInto(ctx, "claude", "", "small prompt", "HINT", nil, nil, &quiet); err == nil || strings.Contains(err.Error(), "HINT") {
+	if err := seedInto(ctx, "claude", "", seed{body: "small prompt", trimHint: "HINT", dir: t.TempDir()}, nil, nil, &quiet); err == nil || strings.Contains(err.Error(), "HINT") {
 		t.Fatalf("non-E2BIG failure must pass through untranslated, got %v", err)
 	}
 }
@@ -1172,7 +1300,7 @@ func TestRunForkFromOversizedArtifact(t *testing.T) {
 		return fmt.Errorf("fork/exec /usr/bin/claude: %w", syscall.E2BIG)
 	})
 	var out, errOut bytes.Buffer
-	err := Run(context.Background(), []string{"fork", "--into", "claude", "--from", path}, session.Roots{}, nil, nil, nil, "test", "", nil, &out, &errOut)
+	err := Run(context.Background(), []string{"fork", "--into", "claude", "--from", path}, session.Roots{}, nil, nil, nil, "test", t.TempDir(), nil, &out, &errOut)
 	if err == nil || !strings.Contains(err.Error(), "catchup <agent> --agent --last 20 > s.md") {
 		t.Fatalf("want artifact-side trim navigation, got %v", err)
 	}

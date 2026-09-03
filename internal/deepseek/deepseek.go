@@ -108,7 +108,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 		if err != nil || len(t.Entries) == 0 {
 			continue
 		}
-		if opts.Cwd != "" && t.Source.Metadata["cwd"] != opts.Cwd {
+		if opts.Cwd != "" && !session.SameDir(t.Source.Metadata["cwd"], opts.Cwd) {
 			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {

@@ -95,6 +95,7 @@ Use `fork` to continue with the same agent and keep native session state. Use `f
 - Same-agent `fork` uses the agent's native resume path, so it keeps real session state.
 - Same-agent `fork --into` is the opposite trade: native state is dropped for a clean context.
 - Cross-agent `fork --into` seeds the new agent with a transcript, not native state.
+- On Windows, `fork --into` passes the transcript in a file under `.catchup/` — the command line there truncates multi-line prompts.
 
 ## License
 
