@@ -116,7 +116,7 @@ func TestFailureViews(t *testing.T) {
 	wantAgent := []string{
 		"entries: 4\n",
 		"## 4. failure: Bash | 2026-09-02 04:11",
-		"### Input\n\n```text\ngo test ./...\n```",
+		"### Input\n\n```text\n{\"command\":\"go test ./...\"}\n```",
 		"### Output\n\n````text\nFAIL\tcatchup/x <0.1s>\n```\nexit status 1\n````",
 	}
 	for _, want := range wantAgent {

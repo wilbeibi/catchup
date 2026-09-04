@@ -11,9 +11,9 @@ import (
 // the transcript cannot travel in the command line at any size: npm installs
 // agents as .cmd shims, and cmd.exe cuts an argument at its first newline —
 // silently, and with a successful exit. So the body is written beside the
-// agent and the prompt names it (docs/DESIGN.md, D6b).
+// agent and the prompt names it.
 func seedPrompt(s seed) (string, error) {
-	path, err := writeSeedFile(s.dir, s.label, s.body)
+	path, err := writeSeedFile(s.dir, s.body)
 	if err != nil {
 		return "", err
 	}

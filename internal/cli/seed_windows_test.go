@@ -16,7 +16,7 @@ import (
 func TestSeedDirIsHidden(t *testing.T) {
 	dir := t.TempDir()
 	for i := range 2 {
-		rel, err := writeSeedFile(dir, "codex-sess-1", "BODY")
+		rel, err := writeSeedFile(dir, "BODY")
 		if err != nil {
 			t.Fatalf("write %d: %v", i, err)
 		}

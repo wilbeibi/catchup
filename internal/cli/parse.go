@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -271,17 +272,14 @@ func applyTarget(cmd *Command, spec string) error {
 // (/, ./, ~/) to use a local directory that genuinely contains ':'.
 //
 // A drive prefix is the one anchor that is not a leading character: C:\src
-// is an absolute path on Windows, and rejecting it made every native Windows
-// path unusable. The exemption is unconditional rather than GOOS-gated so
-// that one parse behaves the same everywhere and its tests run everywhere;
-// the trade is that a one-letter host (a:path) now reads as local, which no
-// real ssh config uses.
+// is an absolute path on Windows. It is exempt only on Windows; on Unix the
+// same spelling is valid scp syntax for a one-letter host.
 func looksLikeRemoteDir(dir string) bool {
 	i := strings.IndexByte(dir, ':')
 	if i <= 0 {
 		return false
 	}
-	if i == 1 && isDriveLetter(dir[0]) {
+	if runtime.GOOS == "windows" && i == 1 && isDriveLetter(dir[0]) {
 		return false
 	}
 	switch dir[0] {
@@ -296,9 +294,8 @@ func isDriveLetter(c byte) bool {
 	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
-// validateFromSpelling enforces the closed set of --from shapes
-// (docs/DESIGN.md, D6): a file
-// path, - (stdin), or a plain http(s) URL. Every other shape is a transport,
+// validateFromSpelling enforces the closed set of --from shapes: a file path,
+// - (stdin), or a plain http(s) URL. Every other shape is a transport,
 // and transports live in the shell — so each rejection names the pipe (or
 // presigned URL) that replaces it.
 func validateFromSpelling(from string) error {
@@ -376,7 +373,7 @@ func normalize(cmd *Command) error {
 			return errors.New("fork cannot be combined with --full (with --into it seeds the unclamped transcript)")
 		}
 	}
-	// --from replaces the provider store as the session source (D6): the
+	// --from replaces the provider store as the session source: the
 	// artifact is the selection, so the store selectors can never apply; and
 	// until catchup parses artifacts back into a Thread, neither can the
 	// trims — those errors navigate to trimming at render time instead.

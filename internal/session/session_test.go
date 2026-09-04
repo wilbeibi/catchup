@@ -24,13 +24,14 @@ func TestFailurePreservesStructuredInput(t *testing.T) {
 	}
 }
 
-// InputText is what the text formats show; the structured value above is what
-// JSON keeps. Both readings come from the same stored field.
-func TestInputText(t *testing.T) {
+// Text output keeps object keys and argv intact so a receiving agent can
+// reconstruct the failed call. A scalar JSON string needs no JSON quotes.
+func TestInputTextPreservesCallShape(t *testing.T) {
 	cases := []struct{ raw, want string }{
-		{`{"command": "go test ./..."}`, "go test ./..."},
-		{`{"url": "https://example.com"}`, "https://example.com"},
-		{`["/bin/zsh","-lc","go test ./..."]`, "go test ./..."},
+		{`{"command": "go test ./..."}`, `{"command":"go test ./..."}`},
+		{`{"url": "https://example.com"}`, `{"url":"https://example.com"}`},
+		{`["/bin/zsh","-lc","go test ./..."]`, `["/bin/zsh","-lc","go test ./..."]`},
+		{`["python","-c","print('x')"]`, `["python","-c","print('x')"]`},
 		{`["git","status"]`, `["git","status"]`},
 		{`{"file_path": "/a/b.go", "old_string": "x"}`, `{"file_path":"/a/b.go","old_string":"x"}`},
 		{`{"count": 3}`, `{"count":3}`},

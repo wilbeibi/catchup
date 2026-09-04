@@ -160,31 +160,15 @@ func compactInput(raw json.RawMessage) string {
 	return buf.String()
 }
 
-// InputText is the one-line reading of Input for text output: an input that is
-// a single string field — the command, the URL, the path — is that string, a
-// `[shell, -c, script]` argv is the script, and anything else stays compact
-// JSON. Nothing here knows about particular tools; JSON output keeps the
-// structure this flattens.
+// InputText is the faithful reading of Input for text output. Objects and
+// arrays stay compact JSON so a receiving agent keeps field names, argv, and
+// other structure; a scalar JSON string is shown without its encoding quotes.
 func (e Entry) InputText() string {
 	if e.Input == "" {
 		return ""
 	}
-	raw := json.RawMessage(e.Input)
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(raw, &fields) == nil && len(fields) == 1 {
-		for _, v := range fields {
-			var s string
-			if json.Unmarshal(v, &s) == nil {
-				return s
-			}
-		}
-	}
-	var argv []string
-	if json.Unmarshal(raw, &argv) == nil && len(argv) == 3 && (argv[1] == "-lc" || argv[1] == "-c") {
-		return argv[2]
-	}
 	var s string
-	if json.Unmarshal(raw, &s) == nil {
+	if json.Unmarshal([]byte(e.Input), &s) == nil {
 		return s
 	}
 	return e.Input

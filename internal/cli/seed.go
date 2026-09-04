@@ -1,21 +1,18 @@
 package cli
 
 import (
-	"errors"
+	"crypto/sha256"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
-	"time"
 )
 
 // seed is one prepared handoff: the instruction that opens the launched
 // agent's session, and the transcript that instruction refers to.
 //
 // The two are kept apart because the channel between catchup and the agent
-// is platform-owned (docs/DESIGN.md, D6b). argv inlines the body after
-// inlineLead; a file writes the body out and fileLead names where it went.
+// is platform-owned. argv inlines the body after inlineLead; a file writes
+// the body out and fileLead names where it went.
 // Each caller supplies both wordings, so the copy for one kind of fork stays
 // in one place.
 type seed struct {
@@ -32,9 +29,6 @@ type seed struct {
 	// store read re-runs with --last/--since-compact, an artifact is
 	// re-rendered at its source.
 	trimHint string
-	// label names the source in the seed file's name, so a directory of kept
-	// seeds stays browsable.
-	label string
 	// dir is the directory the agent starts in, and so where a file channel
 	// writes: inside the agent's own workspace, which is the only place its
 	// sandbox defaults let it read without a prompt.
@@ -47,13 +41,13 @@ const seedDirName = ".catchup"
 
 // writeSeedFile writes a seed body next to the agent that will read it and
 // returns the path to name in the prompt — relative, because that is where
-// the agent starts.
+// the agent starts. The body digest makes the file immutable and lets
+// identical handoffs share one retained copy.
 //
 // The file is kept, not cleaned up: the launched session's history names this
 // path instead of carrying the transcript, so removing it would leave that
-// session unreadable and a later native resume with nothing to find
-// (docs/DESIGN.md, D6b).
-func writeSeedFile(dir, label, body string) (string, error) {
+// session unreadable and a later native resume with nothing to find.
+func writeSeedFile(dir, body string) (string, error) {
 	out := filepath.Join(dir, seedDirName)
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return "", fmt.Errorf("cannot write the seed file: %w; render the transcript yourself and seed from it: catchup <agent> --agent > s.md && catchup fork --into <agent> --from s.md", err)
@@ -71,61 +65,36 @@ func writeSeedFile(dir, label, body string) (string, error) {
 	_ = os.WriteFile(filepath.Join(out, ".gitignore"), []byte("*\n"), 0o644)
 	hideDir(out)
 
-	stem := "seed-" + seedNow().Format("20060102-150405")
-	if s := slug(label); s != "" {
-		stem += "-" + s
-	}
-	// The stamp is one second wide, so two forks of the same source can want
-	// the same name; a truncating write would leave the first agent — already
-	// running, and on Windows holding no other copy of its transcript —
-	// reading the second agent's briefing. O_EXCL makes that collision visible
-	// and a counter steps past it, so the readable name stays the common case
-	// and only a genuine clash grows a suffix.
-	for n := 1; n <= 1000; n++ {
-		name := stem + ".md"
-		if n > 1 {
-			name = fmt.Sprintf("%s-%d.md", stem, n)
-		}
-		f, err := os.OpenFile(filepath.Join(out, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-		if errors.Is(err, fs.ErrExist) {
-			continue
-		}
-		if err != nil {
-			return "", fmt.Errorf("cannot write the seed file: %w", err)
-		}
-		_, werr := f.WriteString(body)
-		if cerr := f.Close(); werr == nil {
-			werr = cerr
-		}
-		if werr != nil {
-			return "", fmt.Errorf("cannot write the seed file: %w", werr)
-		}
-		return filepath.Join(seedDirName, name), nil
-	}
-	return "", fmt.Errorf("cannot write the seed file: %s.md and 999 numbered variants already exist in %s", stem, out)
-}
+	digest := sha256.Sum256([]byte(body))
+	name := fmt.Sprintf("seed-%x.md", digest)
+	rel := filepath.Join(seedDirName, name)
+	path := filepath.Join(dir, rel)
 
-// seedNow is the clock the seed file name is stamped from, replaced in tests
-// that need two seeds to land on the same second.
-var seedNow = time.Now
-
-// slug reduces a label to filename-safe characters so that a session id, a
-// file path, and a URL can all name the seed they produced. Long labels are
-// cut rather than rejected: two cuts that collide are the writer's problem,
-// and it refuses to overwrite an existing seed.
-func slug(label string) string {
-	const max = 48
-	var b strings.Builder
-	for _, r := range strings.ToLower(label) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-		case b.Len() > 0 && !strings.HasSuffix(b.String(), "-"):
-			b.WriteByte('-')
-		}
-		if b.Len() >= max {
-			break
-		}
+	// Publish a complete file in one rename so another simultaneous launch can
+	// never observe a partial transcript. Platforms differ on whether Rename
+	// replaces an existing destination; either result is safe because the full
+	// digest means both writers have the same body.
+	f, err := os.CreateTemp(out, ".seed-*.tmp")
+	if err != nil {
+		return "", fmt.Errorf("cannot write the seed file: %w", err)
 	}
-	return strings.Trim(b.String(), "-")
+	tmp := f.Name()
+	defer os.Remove(tmp)
+	_, werr := f.WriteString(body)
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		return "", fmt.Errorf("cannot write the seed file: %w", werr)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		// Windows refuses to replace the identical file another launch may have
+		// published first. Reuse it only after confirming its content.
+		existing, readErr := os.ReadFile(path)
+		if readErr == nil && string(existing) == body {
+			return rel, nil
+		}
+		return "", fmt.Errorf("cannot write the seed file: %w", err)
+	}
+	return rel, nil
 }

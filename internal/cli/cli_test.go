@@ -50,9 +50,9 @@ func fxBody(s string) string {
 }
 
 // seedText is what the launched agent effectively receives. On Windows the
-// transcript travels in a file beside it rather than in argv (docs/DESIGN.md,
-// D6b), so assertions about what was handed over read both through here and
-// stay channel-blind; TestSeedPromptChannel covers the channel itself.
+// transcript travels in a file beside it rather than in argv, so assertions
+// about what was handed over read both through here and stay channel-blind;
+// TestSeedPromptChannel covers the channel itself.
 func seedText(t *testing.T, dir, prompt string) string {
 	t.Helper()
 	if runtime.GOOS != "windows" {

@@ -197,16 +197,6 @@ func TestParse(t *testing.T) {
 			args: []string{"fork", "claude", "--dir", "../proj"},
 			want: Command{Action: "fork", Dir: "../proj", Target: session.Target{Provider: "claude"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
 		},
-		{
-			name: "--dir takes a Windows drive path, not scp syntax",
-			args: []string{"claude", "--dir", `C:\Users\u\proj`},
-			want: Command{Dir: `C:\Users\u\proj`, Target: session.Target{Provider: "claude"}, Format: session.FormatMarkdown, Limit: DefaultLimit},
-		},
-		{
-			name: "--from takes a Windows drive path",
-			args: []string{"fork", "--into", "claude", "--from", `c:/Users/u/handoff.md`},
-			want: Command{Action: "fork", Into: "claude", From: `c:/Users/u/handoff.md`, Format: session.FormatMarkdown, Limit: DefaultLimit},
-		},
 	}
 
 	for _, tt := range tests {
