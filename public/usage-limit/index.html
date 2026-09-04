@@ -48,7 +48,7 @@
     {
       "@type": "Question",
       "name": "Does this get around the usage limit?",
-      "acceptedAnswer": { "@type": "Answer", "text": "No, and nothing does. The limited agent stays limited until it resets. What moves is the conversation, so a different agent — one you already pay for separately — can carry on without you re-explaining the task." }
+      "acceptedAnswer": { "@type": "Answer", "text": "No, and nothing does. The limited agent stays limited until it resets. What moves is the handoff context, so a different agent you already use can carry on without you re-explaining the task." }
     },
     {
       "@type": "Question",
@@ -58,7 +58,7 @@
     {
       "@type": "Question",
       "name": "How do I stop losing context to this in the first place?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Run catchup install-skill once. It writes catchup's SKILL.md for every detected agent, so the next agent can recover the previous session on its own when you ask it to catch up, without you remembering any flags." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Run catchup install-skill once. It writes catchup's SKILL.md for every supported agent, so the next agent can recover the previous session on its own when you ask it to catch up, without you remembering any flags." }
     }
   ]
 }
@@ -79,16 +79,16 @@
 
   <header class="q">
     <h1>How to keep working after a coding agent hits its usage limit</h1>
-    <p class="lead">Hand the conversation to an agent that still has quota: <code>catchup fork claude --into codex</code>. It reads the stalled session from local history, strips the tool calls and reasoning traces, and starts the other agent with the conversation as its opening prompt — so you continue the task instead of re-explaining it.</p>
+    <p class="lead">Hand the work to an agent that still has quota: <code>catchup fork claude --into codex</code>. It starts the other agent with the conversation and source-marked failed tool calls, so you can continue the task without re-explaining it.</p>
   </header>
 
   <main>
     <div class="cmd"><span class="p">$</span><span class="t">catchup fork claude --into codex</span></div>
 
-    <p>Substitute whichever pair you have. The source is the agent that stopped, the target is the one that hasn't: <code>catchup fork codex --into claude</code>, <code>catchup fork cursor --into opencode</code>, and so on across Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity (<code>agy</code>), OpenCode, Pi Agent, ZCode, and DeepSeek Harness.</p>
+    <p>Substitute the source agent that stopped and a target that still runs. All eleven supported agents can supply a session. Claude Code, Codex, Copilot CLI, Cursor, Cline, Antigravity (<code>agy</code>), OpenCode, and Pi Agent can be launched as interactive targets.</p>
 
     <div class="limit">
-      <p><strong>This does not raise or bypass any limit.</strong> The limited agent stays limited until it resets. What moves is the conversation. This only helps if you already have a second agent you can run — it buys continuity, not quota.</p>
+      <p><strong>This does not raise or bypass any limit.</strong> The limited agent stays limited until it resets. What moves is the handoff context. This only helps if you already have a second agent you can run.</p>
     </div>
 
     <h2>Send only the part that matters</h2>
@@ -109,13 +109,13 @@
     <h2>Questions</h2>
 
     <h3>Does this get around the usage limit?</h3>
-    <p>No, and nothing does. The limited agent stays limited until it resets. What moves is the conversation, so a different agent — one you already pay for separately — can carry on without you re-explaining the task.</p>
+    <p>No, and nothing does. The limited agent stays limited until it resets. What moves is the handoff context, so a different agent you already use can carry on without you re-explaining the task.</p>
 
     <h3>What if I would rather wait for the limit to reset?</h3>
     <p>Then wait, and resume the same agent later with <code>catchup fork &lt;agent&gt;</code>. That path uses the agent's own resume mechanism and keeps real session state, which crossing agents cannot do.</p>
 
     <h3>How do I stop losing context to this in the first place?</h3>
-    <p>Run <code>catchup install-skill</code> once. It writes catchup's SKILL.md for every detected agent, so the next agent can recover the previous session on its own when you ask it to catch up, without you remembering any flags.</p>
+    <p>Run <code>catchup install-skill</code> once. It writes catchup's SKILL.md for every supported agent, so the next agent can recover the previous session on its own when you ask it to catch up, without you remembering any flags.</p>
 
     <div class="related">
       <h2>Related</h2>

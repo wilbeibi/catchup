@@ -104,7 +104,7 @@
     <p>To continue the work rather than read it, hand the same selection to <code>fork</code>: <code>catchup fork --id &lt;id&gt;</code> resumes through the agent's native path, and adding <code>--into &lt;agent&gt;</code> continues it in a different agent instead.</p>
 
     <div class="limit">
-      <p><strong>What you will not find here.</strong> catchup reads conversation, not execution. Tool calls, command output, and reasoning traces are deliberately stripped, so it is the wrong tool for auditing what a command actually returned — grep the agent's raw <code>.jsonl</code>/<code>.db</code> files for that.</p>
+      <p><strong>What you will not find here.</strong> The default view is conversation, not execution. Agent handoffs can include source-marked failures, but catchup never reproduces a complete command log. Inspect the raw <code>.jsonl</code>/<code>.db</code> files when exact command output matters.</p>
     </div>
 
     <h2>Questions</h2>

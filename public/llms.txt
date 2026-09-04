@@ -1,6 +1,6 @@
 # catchup
 
-> catchup is an open-source command-line tool (written in Go, MIT-licensed) that lets your next coding agent catch itself up. It reads local Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, and DeepSeek Harness session history and prints clean, handoff-ready Markdown containing just the user/assistant conversation, with tool calls, reasoning traces, and token noise removed.
+> catchup is an open-source command-line tool (written in Go, MIT-licensed) that lets your next coding agent catch itself up. It reads local Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, and DeepSeek Harness session history. Human Markdown contains the user/assistant conversation; agent handoffs also retain source-marked failed tool calls.
 
 catchup solves a concrete problem: developers jump between coding agents, and each stores its history in a different place and format. When one agent hits a usage limit or you want a second opinion, the next agent has no context. catchup gives the agent a simple command it can run itself to recover prior work without you re-explaining the project state.
 
@@ -13,21 +13,22 @@ Every catchup command is one of three jobs with a session: **recap** it (pull it
 - Repository: https://github.com/wilbeibi/catchup
 - Package: github.com/wilbeibi/catchup
 - Install: `brew install wilbeibi/tap/catchup`, `curl -fsSL https://catchup.pages.dev/install.sh | sh`, or `go install github.com/wilbeibi/catchup@latest`
+- Windows install: download a release ZIP from https://github.com/wilbeibi/catchup/releases
 - License: MIT
 - Supported agents: Claude Code (`claude`), Codex (`codex`), Copilot CLI (`copilot`), Cursor (`cursor`), Cline (`cline`), Kimi (`kimi`), Antigravity (`agy`), OpenCode (`opencode`), Pi Agent (`pi-agent`), ZCode (`zcode`), DeepSeek Harness (`deepseek`)
 
 Key facts:
-- Agent handoff command: `catchup <agent>` for `claude`, `codex`, `copilot`, `cursor`, `cline`, `kimi`, `agy`, `opencode`, `pi-agent`, `zcode`, or `deepseek` — clean Markdown regardless of source. Add `--since-compact` to pick up from the last compaction.
+- Default read: `catchup <agent>` prints clean Markdown for people. Add `--agent` for an LLM-ready transcript with source-marked failed tool calls, and `--since-compact` to pick up from the last compaction.
 - The agent is optional: bare `catchup` reads the newest session in the current directory, whichever agent wrote it.
 - Human browsing starts with `catchup <agent> --list`, for example `catchup codex --list`.
-- Output is Markdown by default; `--html` and `--json` are also available.
+- Output is clean Markdown by default; `--agent`, `--html`, and `--json` are also available.
 - Native same-agent fork: `catchup fork [agent]` resumes the newest session through that agent's real fork command, preserving native session state where the agent supports it (`codex fork`, `claude --resume --fork-session`, `cursor-agent --resume`, `cline -i --id`, `kimi --session`, `agy --conversation`, `opencode --session --fork`, `pi --fork`).
-- Cross-agent fork / fork into another agent: `catchup fork <source-agent> --into <target-agent>` continues a session in a different agent by rendering the source transcript and launching the target agent with that transcript as the opening prompt, for example `catchup fork claude --into codex` or `catchup fork codex --into claude`.
+- Cross-agent fork / fork into another agent: `catchup fork <source-agent> --into <target-agent>` launches the target with the conversation and source-marked failed tool calls, for example `catchup fork claude --into codex` or `catchup fork codex --into claude`.
 - Install: `brew install wilbeibi/tap/catchup`, `curl -fsSL https://catchup.pages.dev/install.sh | sh`, or `go install github.com/wilbeibi/catchup@latest`, then `catchup install-skill`.
-- `install-skill` writes catchup's SKILL.md for every detected agent (or one: `catchup install-skill codex`), so an agent can run it itself to "catch up on the last session".
+- `install-skill` writes catchup's SKILL.md for every supported agent (or one: `catchup install-skill codex`), so an agent can run it itself to "catch up on the last session".
 
 ## AI agent quickstart
-- Need to recover context from the current directory: run `catchup` or `catchup <agent> --since-compact`.
+- Need to recover context from the current directory inside an agent: run `catchup --agent --since-compact` or `catchup <agent> --agent --since-compact`.
 - Need to inspect available sessions: run `catchup <agent> --list`, optionally with `-q "keyword"`.
 - Need to resume the same agent with real session state: run `catchup fork <agent>`.
 - Need to hand work from one agent to another: run `catchup fork <source-agent> --into <target-agent>`; use `--last <N>` or `--since-compact` to limit the transcript seeded into the target.
@@ -58,7 +59,7 @@ Key facts:
 - Pick a session: `catchup <agent>/N` reads the N-th most recent; `--id <id>` selects an exact session id.
 - Find a session: `catchup <agent> --list` lists sessions; `-q, --query <text>` filters by keyword.
 - Trim output: `--last <N>` keeps the last N exchanges; `--since-compact` keeps the final compaction segment; `-i, --info` shows metadata only.
-- Change format: `--md` (default), `--html`, `--json`.
+- Change format: `--md` (clean default), `--agent` (failed calls included), `--html`, `--json`.
 - Fork back in: `catchup fork [agent]` resumes the newest matching session using that agent's own native fork command; `catchup fork codex --into claude` continues a Codex session in Claude, seeded with the transcript.
 - Common cross-agent examples: `catchup fork claude --into codex`, `catchup fork codex --into claude`, `catchup fork copilot --into claude`, `catchup fork opencode --into codex`, `catchup fork pi-agent --into codex`.
 
@@ -77,7 +78,7 @@ Key facts:
 
 ## Scope
 - No cross-agent mixing: one agent is selected at a time; sessions are not merged.
-- No raw replay: tool calls, results, and reasoning steps are intentionally stripped — grep the raw `.jsonl`/`.db` files for that.
+- No raw replay: successful tool activity and reasoning are stripped. Agent output retains only source-marked failed calls; inspect the raw `.jsonl`/`.db` files for a complete execution log.
 - Not a hosted service: catchup reads local agent history files on the developer's machine.
 - Not a replacement for git, issue trackers, or project docs: catchup only recovers conversation context.
 

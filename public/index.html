@@ -52,7 +52,7 @@
   "softwareHelp": "https://github.com/wilbeibi/catchup#usage",
   "license": "https://opensource.org/licenses/MIT",
   "programmingLanguage": "Go",
-  "softwareVersion": "0.5.1",
+  "softwareVersion": "1.0.0",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "sameAs": [
     "https://github.com/wilbeibi/catchup",
@@ -83,7 +83,7 @@
       "name": "What does catchup hand over?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The conversation, and only that: your messages and the agent's replies. Tool calls, command output, and reasoning traces get stripped, so the next agent reads what happened, not a log of it."
+        "text": "The conversation, plus tool calls the source log marked failed. Successful tool activity and reasoning traces stay out. Cross-agent handoffs never carry native session state."
       }
     },
     {
@@ -176,6 +176,8 @@
   .hero-install { margin-bottom: 22px; }
   .hero-install .t { display: flex; flex-wrap: wrap; gap: 0 .65em; white-space: normal; }
   .hero-install .part { white-space: nowrap; }
+  .windows-install { margin: -10px 0 22px; color: #5a554c; font-size: 14px; }
+  .windows-install a { color: #9c5310; }
 
   /* the white stage */
   figure { margin: 0; padding: clamp(36px, 6vh, 72px) 0 0; }
@@ -313,6 +315,7 @@
       <span class="t"><span class="part">curl -fsSL</span><span class="part">https://catchup.pages.dev/install</span><span class="part">| sh</span></span>
       <span class="copy">click to copy</span>
     </button>
+    <p class="windows-install">Windows: <a href="https://github.com/wilbeibi/catchup/releases">download the release ZIP</a>.</p>
     <div class="monologue">
       <p>Then hand the session to the next agent:</p>
     </div>
@@ -338,7 +341,7 @@
         <li>ZCode</li>
         <li>DeepSeek Harness</li>
       </ul>
-      <p class="agents-tag">Any of them, either end.</p>
+      <p class="agents-tag">Any agent, either end.</p>
     </div>
   </div>
 </header>
@@ -402,7 +405,7 @@
 
     <div class="qa-item">
       <h3>What does catchup hand over?</h3>
-      <p>The conversation, and only that: your messages and the agent's replies. Tool calls, command output, and reasoning traces get stripped, so the next agent reads what happened, not a log of it.</p>
+      <p>The conversation, plus tool calls the source log marked failed. Successful tool activity and reasoning traces stay out. Cross-agent handoffs never carry native session state.</p>
     </div>
 
     <div class="qa-item">

@@ -3,8 +3,9 @@
 ## What this is
 
 Marketing site for `catchup`, an open-source Go CLI that reads a coding agent's
-local session history (Claude Code, Codex, Cursor, Cline, Kimi, Antigravity,
-OpenCode, Pi Agent) and hands the conversation to the next agent. Static HTML
+local session history (Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi,
+Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness) and hands the
+conversation to the next agent. Static HTML
 on Cloudflare Pages; the `site` branch is the deploy source (`just deploy`).
 
 `/` is the spot — one page, one job (see Register). Everything under
@@ -84,8 +85,8 @@ question in the first paragraph and get out of the way.
 - Anti-lane: SEO doorway pages. If a page has nothing to say that the README
   does not already say better, delete it rather than pad it.
 
-**One page per job, not per agent pair.** Eight agents is 56 directional
-pairs; if direction justified a page, the honest version of that is 56 pages,
+**One page per job, not per agent pair.** Eleven agents is 110 directional
+pairs; if direction justified a page, the honest version of that is 110 pages,
 which is a doorway farm. `/handoff/claude-to-codex/` exists because that pair
 is the product's actual cold open — the hero scene, the demo GIF, the README's
 lead example — not because a template generated it. The reverse direction is

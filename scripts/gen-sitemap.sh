@@ -17,6 +17,10 @@ OUT="public/sitemap.xml"
 # record of it (new, uncommitted, or shallow clone).
 lastmod() {
   local d
+  if ! git diff --quiet -- "$1"; then
+    date -u +%F
+    return
+  fi
   d="$(git log -1 --format=%cs -- "$1" 2>/dev/null || true)"
   [ -n "$d" ] && printf '%s' "$d" || date -u +%F
 }

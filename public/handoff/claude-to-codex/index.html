@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>How to continue a Claude Code session in Codex</title>
-<meta name="description" content="Run catchup fork claude --into codex to continue a Claude Code session in Codex. It reads the local Claude session, strips tool calls and reasoning, and starts Codex with the conversation as its opening prompt.">
+<meta name="description" content="Run catchup fork claude --into codex to continue a Claude Code session in Codex. It starts Codex with the conversation and source-marked failed tool calls.">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <link rel="canonical" href="https://catchup.pages.dev/handoff/claude-to-codex/">
 <meta property="og:type" content="article">
@@ -48,7 +48,7 @@
     {
       "@type": "Question",
       "name": "Does Codex get the real Claude Code session state?",
-      "acceptedAnswer": { "@type": "Answer", "text": "No. Crossing agents carries the transcript, not native session state — Codex starts a fresh session whose opening prompt is the Claude Code conversation. Native state is preserved only when you resume the same agent, with catchup fork claude." }
+      "acceptedAnswer": { "@type": "Answer", "text": "No. Codex starts a fresh session with the handoff transcript: the conversation plus source-marked failed tool calls. Native state is preserved only when you resume the same agent with catchup fork claude." }
     },
     {
       "@type": "Question",
@@ -79,14 +79,14 @@
 
   <header class="q">
     <h1>How to continue a Claude Code session in Codex</h1>
-    <p class="lead">Run <code>catchup fork claude --into codex</code>. It reads the newest Claude Code session in the current directory, strips the tool calls and reasoning traces, and starts Codex with the remaining conversation as its opening prompt. Codex picks up knowing what was already decided.</p>
+    <p class="lead">Run <code>catchup fork claude --into codex</code>. It reads the newest Claude Code session in the current directory and starts Codex with the conversation and source-marked failed tool calls. Codex sees what was decided and what already failed.</p>
   </header>
 
   <main>
     <div class="cmd"><span class="p">$</span><span class="t">catchup fork claude --into codex</span></div>
 
     <div class="limit">
-      <p><strong>What crosses, and what doesn't.</strong> Going from one agent to another carries the <em>conversation</em>, not native session state. Codex opens a new session seeded with the Claude Code transcript. Nothing recreates Claude Code's internal state inside Codex, and no tool ever could — the two store different things in different formats.</p>
+      <p><strong>What crosses, and what doesn't.</strong> Going from one agent to another carries a handoff transcript, not native session state or a raw execution log. Codex opens a new session with the conversation and source-marked failed tool calls.</p>
     </div>
 
     <h2>Keeping the prompt small</h2>
@@ -111,7 +111,7 @@
     <h2>Going the other way, and every other pair</h2>
     <p>The direction is symmetric — swap the two agent names:</p>
     <div class="cmd"><span class="p">$</span><span class="t">catchup fork codex --into claude</span></div>
-    <p>Any supported agent can be either end: Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity (<code>agy</code>), OpenCode, Pi Agent, ZCode, and DeepSeek Harness. Every flag on this page works the same regardless of which pair you use.</p>
+    <p>Any supported agent can supply the session. Claude Code, Codex, Copilot CLI, Cursor, Cline, Antigravity (<code>agy</code>), OpenCode, and Pi Agent can be launched as the target. Kimi, ZCode, and DeepSeek Harness need a saved transcript because their CLIs cannot open an interactive session with a seed prompt.</p>
 
     <h2>Restarting the same agent cleanly</h2>
     <p>If the context is spent but the work isn't, and you want Claude Code itself to carry on with a fresh, smaller context rather than its accumulated one, point <code>--into</code> back at the same agent:</p>
@@ -121,7 +121,7 @@
     <h2>Questions</h2>
 
     <h3>Does Codex get the real Claude Code session state?</h3>
-    <p>No. Crossing agents carries the transcript, not native session state — Codex starts a fresh session whose opening prompt is the Claude Code conversation. Native state is preserved only when you resume the same agent, with <code>catchup fork claude</code>.</p>
+    <p>No. Codex starts a fresh session with the handoff transcript: the conversation plus source-marked failed tool calls. Native state is preserved only when you resume the same agent with <code>catchup fork claude</code>.</p>
 
     <h3>What if the Claude Code session is too long to paste into Codex?</h3>
     <p>Trim it before it is sent. <code>--since-compact</code> keeps only the tail after the last compaction, and <code>--last &lt;N&gt;</code> keeps the last N exchanges. Both work with <code>--into</code>.</p>

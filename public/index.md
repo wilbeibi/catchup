@@ -12,17 +12,19 @@ curl -fsSL https://catchup.pages.dev/install | sh
 
 Homebrew: `brew install wilbeibi/tap/catchup`
 
+Windows: [download the release ZIP](https://github.com/wilbeibi/catchup/releases)
+
 ## What it does
 
-catchup reads the local session history of an AI coding agent and prints a clean Markdown transcript of only the user/assistant conversation. Tool calls, reasoning traces, and token noise are removed, so the next agent can recover what happened without you re-explaining the project state.
+catchup reads the local session history of an AI coding agent. Human-facing Markdown contains the user/assistant conversation without tool activity, reasoning traces, or token noise. Agent handoffs also retain tool calls the source log marked failed, so the next agent sees known dead ends.
 
 Every command is one of three jobs with a session:
 
 - **Recap.** Pull a past session back into context. `catchup <agent> --since-compact` for `claude`, `codex`, `copilot`, `cursor`, `cline`, `kimi`, `agy`, `opencode`, `pi-agent`, `zcode`, or `deepseek` reads the tail after the last compaction; drop the flag for the whole thing.
 - **Find.** Locate the right session first. `catchup <agent> --list` lists what ran here, `-q "keyword"` searches by keyword, and `catchup <agent>/N` or `--id <id>` opens an exact one.
-- **Hand off.** Continue the work. `catchup fork <agent>` resumes through the agent's own native fork command with real state; crossing agents, `catchup fork codex --into claude` starts Claude seeded with the Codex transcript.
+- **Hand off.** Continue the work. `catchup fork <agent>` resumes through the agent's own native fork command with real state; crossing agents, `catchup fork codex --into claude` starts Claude with the Codex handoff transcript.
 
-The output is just the conversation: user and assistant messages only, with tool calls, reasoning, and token accounting stripped. Browsing manually? Bare `catchup` reads the newest session in the directory, whichever agent wrote it.
+The default output is the conversation. `--agent` adds source-marked failed tool calls for an agent that is picking up the work. Bare `catchup` reads the newest session in the directory, whichever agent wrote it.
 
 ## Supported agents
 

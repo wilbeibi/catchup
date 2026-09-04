@@ -58,7 +58,7 @@
     {
       "@type": "Question",
       "name": "Which agents can actually fork a session rather than resume it?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Claude Code, Codex, OpenCode, and Pi Agent have a fork of their own, so continuing leaves the original session untouched. Copilot CLI, Cursor, Cline, Kimi, Antigravity, and DeepSeek Harness have no fork upstream — catchup delegates to their resume, which picks the original session back up instead of branching from it. ZCode is a desktop app with no CLI to resume from, so its work continues inside ZCode or moves to a CLI agent. All eleven can be either end of a cross-agent fork --into handoff." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Claude Code, Codex, OpenCode, and Pi Agent have a fork of their own, so continuing leaves the original session untouched. Copilot CLI, Cursor, Cline, Kimi, Antigravity, and DeepSeek Harness resume in place. ZCode has no CLI resume. All eleven can supply a handoff; Claude Code, Codex, Copilot CLI, Cursor, Cline, Antigravity, OpenCode, and Pi Agent can be launched as interactive targets." }
     },
     {
       "@type": "Question",
@@ -84,7 +84,7 @@
 
   <header class="q">
     <h1>Native resume vs. HANDOFF.md vs. cross-agent handoff</h1>
-    <p class="lead">Three ways to carry a coding-agent session forward. <strong>Native resume</strong> keeps real session state but only within the same agent. <strong>A hand-written HANDOFF.md</strong> works anywhere but costs you the writing and forgets what you left out. <strong>A transcript handoff</strong> costs nothing to produce and crosses agents, but carries conversation only — never native state.</p>
+    <p class="lead">Three ways to carry a coding-agent session forward. <strong>Native resume</strong> keeps real session state but only within the same agent. <strong>A hand-written HANDOFF.md</strong> works anywhere but costs you the writing and forgets what you left out. <strong>A transcript handoff</strong> crosses agents with the conversation and source-marked failures, but never native state.</p>
   </header>
 
   <main>
@@ -103,7 +103,7 @@
     </table>
 
     <h2>Native resume — the default you should reach for first</h2>
-    <p>Every CLI agent catchup reads has its own resume path, and catchup delegates to it rather than reimplementing it:</p>
+    <p>When an agent has a CLI resume path, catchup delegates to it rather than reimplementing it:</p>
     <div class="cmd"><span class="p">$</span><span class="t">catchup fork claude</span></div>
     <p>Without <code>--into</code>, this is the agent's real resume, and what that means differs by agent. Only four have a fork of their own; most of the rest resume the original session in place rather than branching from it, and one has no CLI to resume from at all:</p>
 
@@ -126,7 +126,7 @@
       </tbody>
     </table>
 
-    <p>catchup delegates to each agent's real command rather than reimplementing it, so this table tracks upstream: if an agent ships a fork, catchup gets it. Every agent can be read, searched, and used as either end of a <code>fork --into</code> handoff regardless of what its own resume can do — the column above only describes the same-agent path.</p>
+    <p>catchup delegates to each agent's real command rather than reimplementing it, so this table tracks upstream. Every agent can be read, searched, and used as the source of a handoff. Claude Code, Codex, Copilot CLI, Cursor, Cline, Antigravity, OpenCode, and Pi Agent can be launched as interactive <code>--into</code> targets.</p>
 
     <div class="limit">
       <p><strong>If you are staying in one agent and it is still running, you do not need a tool.</strong> Use the agent's own resume. catchup is worth installing for the cases below — crossing agents, crossing machines, or not remembering which session held the work.</p>
@@ -139,7 +139,7 @@
     <h2>Transcript handoff — what catchup does</h2>
     <p>The conversation already exists on disk. Rendering it costs nothing:</p>
     <div class="cmd"><span class="p">$</span><span class="t">catchup fork claude --into codex --since-compact</span></div>
-    <p>Tool calls, command output, and reasoning traces are stripped, so what reaches the next agent is the discussion rather than a log of it. Because stdout is the wire format, the same transcript also crosses machines:</p>
+    <p>A direct handoff includes the conversation and source-marked failed tool calls. Successful tool activity and reasoning traces stay out, so it is a briefing rather than a raw execution log. Because stdout is the wire format, a clean transcript can also cross machines:</p>
     <div class="cmd"><span class="p">$</span><span class="t">ssh box catchup codex | catchup fork --into claude --from -</span></div>
     <p>The tradeoff is length. A transcript is bigger than a summary you would have written, which is why <code>--since-compact</code> and <code>--last &lt;N&gt;</code> exist.</p>
 
@@ -152,7 +152,7 @@
     <p>Not worse, different. A summary you wrote is shorter and reflects your judgment about what mattered; a transcript is complete but longer and includes detail nobody needs. The transcript's advantage is that it costs nothing to produce and cannot forget something you did not think to write down.</p>
 
     <h3>Which agents can actually fork a session rather than resume it?</h3>
-    <p>Claude Code, Codex, OpenCode, and Pi Agent have a fork of their own, so continuing leaves the original session untouched. Copilot CLI, Cursor, Cline, Kimi, Antigravity, and DeepSeek Harness have no fork upstream — catchup delegates to their resume, which picks the original session back up instead of branching from it. ZCode is a desktop app with no CLI to resume from, so its work continues inside ZCode or moves to a CLI agent. All eleven can be either end of a cross-agent <code>fork --into</code> handoff.</p>
+    <p>Claude Code, Codex, OpenCode, and Pi Agent have a fork of their own, so continuing leaves the original session untouched. Copilot CLI, Cursor, Cline, Kimi, Antigravity, and DeepSeek Harness resume in place. ZCode has no CLI resume. All eleven can supply a handoff; Claude Code, Codex, Copilot CLI, Cursor, Cline, Antigravity, OpenCode, and Pi Agent can be launched as interactive targets.</p>
 
     <h3>Can any tool move native session state between two different agents?</h3>
     <p>No. Agents store different things in incompatible formats, so nothing can reconstruct one agent's internal state inside another. Anything crossing agents carries a transcript. Only same-agent resume preserves real state.</p>
