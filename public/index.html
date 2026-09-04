@@ -268,6 +268,9 @@
     .enter > *:nth-child(3) { animation-delay: .12s; }
     .enter > *:nth-child(4) { animation-delay: .18s; }
     .enter > *:nth-child(5) { animation-delay: .24s; }
+    /* the agent chips arrive one at a time, so the block must not also fade as a unit */
+    .enter > .agents-block { animation: none; }
+    .agents li, .agents-tag { animation: rise .45s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: calc(.3s + var(--i, 11) * 40ms); }
     h1 .failure .quota { animation: quota 8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
     h1 .failure .outage { animation: outage 8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
     figure .frame { animation: lift both; animation-timeline: view(); animation-range: entry 5% cover 22%; }
@@ -329,17 +332,17 @@
     </div>
     <div class="agents-block">
       <ul class="agents" aria-label="Supported agents">
-        <li>Claude Code</li>
-        <li>Codex</li>
-        <li>Copilot CLI</li>
-        <li>Cursor</li>
-        <li>Cline</li>
-        <li>Kimi</li>
-        <li>Antigravity</li>
-        <li>OpenCode</li>
-        <li>Pi Agent</li>
-        <li>ZCode</li>
-        <li>DeepSeek Harness</li>
+        <li style="--i: 0">Claude Code</li>
+        <li style="--i: 1">Codex</li>
+        <li style="--i: 2">Copilot CLI</li>
+        <li style="--i: 3">Cursor</li>
+        <li style="--i: 4">Cline</li>
+        <li style="--i: 5">Kimi</li>
+        <li style="--i: 6">Antigravity</li>
+        <li style="--i: 7">OpenCode</li>
+        <li style="--i: 8">Pi Agent</li>
+        <li style="--i: 9">ZCode</li>
+        <li style="--i: 10">DeepSeek Harness</li>
       </ul>
       <p class="agents-tag">Any agent, either end.</p>
     </div>
