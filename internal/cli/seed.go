@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,20 +71,48 @@ func writeSeedFile(dir, label, body string) (string, error) {
 	_ = os.WriteFile(filepath.Join(out, ".gitignore"), []byte("*\n"), 0o644)
 	hideDir(out)
 
-	name := "seed-" + time.Now().Format("20060102-150405")
+	stem := "seed-" + seedNow().Format("20060102-150405")
 	if s := slug(label); s != "" {
-		name += "-" + s
+		stem += "-" + s
 	}
-	name += ".md"
-	if err := os.WriteFile(filepath.Join(out, name), []byte(body), 0o644); err != nil {
-		return "", fmt.Errorf("cannot write the seed file: %w", err)
+	// The stamp is one second wide, so two forks of the same source can want
+	// the same name; a truncating write would leave the first agent — already
+	// running, and on Windows holding no other copy of its transcript —
+	// reading the second agent's briefing. O_EXCL makes that collision visible
+	// and a counter steps past it, so the readable name stays the common case
+	// and only a genuine clash grows a suffix.
+	for n := 1; n <= 1000; n++ {
+		name := stem + ".md"
+		if n > 1 {
+			name = fmt.Sprintf("%s-%d.md", stem, n)
+		}
+		f, err := os.OpenFile(filepath.Join(out, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("cannot write the seed file: %w", err)
+		}
+		_, werr := f.WriteString(body)
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		if werr != nil {
+			return "", fmt.Errorf("cannot write the seed file: %w", werr)
+		}
+		return filepath.Join(seedDirName, name), nil
 	}
-	return filepath.Join(seedDirName, name), nil
+	return "", fmt.Errorf("cannot write the seed file: %s.md and 999 numbered variants already exist in %s", stem, out)
 }
+
+// seedNow is the clock the seed file name is stamped from, replaced in tests
+// that need two seeds to land on the same second.
+var seedNow = time.Now
 
 // slug reduces a label to filename-safe characters so that a session id, a
 // file path, and a URL can all name the seed they produced. Long labels are
-// cut rather than rejected: the timestamp already makes the name unique.
+// cut rather than rejected: two cuts that collide are the writer's problem,
+// and it refuses to overwrite an existing seed.
 func slug(label string) string {
 	const max = 48
 	var b strings.Builder

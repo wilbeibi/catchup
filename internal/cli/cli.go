@@ -578,11 +578,13 @@ func resolveRank(ctx context.Context, prov session.Provider, name string, roots 
 func execFork(ctx context.Context, src session.Source, model string, stdin io.Reader, stdout, stderr io.Writer) error {
 	// Kimi refuses to resume a session from any directory but the one it was
 	// created in (verified against kimi-code 0.26), so catching the mismatch
-	// here gives a plain answer instead of kimi's failed-launch error.
+	// here gives a plain answer instead of kimi's failed-launch error. The
+	// directory is quoted by hand rather than with %q, which would escape the
+	// backslashes of a Windows path into a command that pastes back wrong.
 	if src.Ref.Provider == session.ProviderKimi {
 		if cwd, err := os.Getwd(); err == nil {
 			if home := src.Metadata["cwd"]; home != "" && !session.SameDir(home, cwd) {
-				return fmt.Errorf("fork kimi: kimi only resumes a session inside its own directory; run: cd %q && catchup fork kimi --id %s, or seed another agent here with --into", home, src.Ref.SessionID)
+				return fmt.Errorf("fork kimi: kimi only resumes a session inside its own directory; run: cd \"%s\" && catchup fork kimi --id %s, or seed another agent here with --into", home, src.Ref.SessionID)
 			}
 		}
 	}
