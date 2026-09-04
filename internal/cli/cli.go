@@ -596,7 +596,7 @@ func execFork(ctx context.Context, src session.Source, model string, stdin io.Re
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	return launchError(cmd.Run())
+	return launchError(name, cmd.Run(), stderr)
 }
 
 type intoRunner func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error
@@ -608,7 +608,7 @@ func execInto(ctx context.Context, name string, args []string, stdin io.Reader, 
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	return launchError(cmd.Run())
+	return launchError(name, cmd.Run(), stderr)
 }
 
 // ExitError is a launched agent's own exit status on its way out to main,
@@ -624,16 +624,27 @@ type ExitError struct{ Code int }
 
 func (e *ExitError) Error() string { return fmt.Sprintf("exit status %d", e.Code) }
 
-// launchError converts the result of running a launched agent. Only a clean
-// non-zero exit becomes an ExitError; a failure to start it at all — a binary
-// that is not on PATH, an argv the OS refuses — is catchup's own error and
-// keeps its message. A signal leaves no code to pass on, so it stays a plain
-// failure.
-func launchError(err error) error {
+// launchError converts the result of running a launched agent. Only the agent's
+// own ending becomes an ExitError; a failure to start it at all — a binary that
+// is not on PATH, an argv the OS refuses — is catchup's own error and keeps its
+// message.
+//
+// A signal leaves no exit code, so it takes the shell's answer for the same
+// question: 128 plus the number, which is what a wrapper reading $? would have
+// seen had it run the agent itself. That death is worth a line, because the
+// agent had no chance to explain itself and the kernel says nothing to the
+// terminal — but the line names the agent, since catchup is reporting a death
+// it witnessed rather than one of its own.
+func launchError(name string, err error, stderr io.Writer) error {
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
 		if code := exit.ExitCode(); code > 0 {
 			return &ExitError{Code: code}
+		}
+		if status, ok := exit.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+			sig := status.Signal()
+			fmt.Fprintf(stderr, "catchup: %s died: %v\n", name, sig)
+			return &ExitError{Code: 128 + int(sig)}
 		}
 	}
 	return err
