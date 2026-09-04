@@ -596,7 +596,7 @@ func execFork(ctx context.Context, src session.Source, model string, stdin io.Re
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	return cmd.Run()
+	return launchError(cmd.Run())
 }
 
 type intoRunner func(ctx context.Context, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error
@@ -608,7 +608,35 @@ func execInto(ctx context.Context, name string, args []string, stdin io.Reader, 
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	return cmd.Run()
+	return launchError(cmd.Run())
+}
+
+// ExitError is a launched agent's own exit status on its way out to main,
+// which exits with the same number.
+//
+// A fork hands the terminal to another program, so that program's failure is
+// not catchup's: it has already printed whatever it wanted to say, and the
+// only thing left to carry is the code a caller's script reads. Reporting it
+// as a catchup error instead — the "exit status 3" line this replaces, on top
+// of a flattened exit 1 — both hid which program failed and told a wrapper
+// that catchup had.
+type ExitError struct{ Code int }
+
+func (e *ExitError) Error() string { return fmt.Sprintf("exit status %d", e.Code) }
+
+// launchError converts the result of running a launched agent. Only a clean
+// non-zero exit becomes an ExitError; a failure to start it at all — a binary
+// that is not on PATH, an argv the OS refuses — is catchup's own error and
+// keeps its message. A signal leaves no code to pass on, so it stays a plain
+// failure.
+func launchError(err error) error {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if code := exit.ExitCode(); code > 0 {
+			return &ExitError{Code: code}
+		}
+	}
+	return err
 }
 
 // forkInto is the cross-agent half of fork: it cannot transplant one agent's

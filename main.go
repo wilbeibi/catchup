@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 
@@ -40,6 +41,14 @@ func main() {
 	skillDirs := session.ResolveSkillDirs(roots, home)
 
 	if err := cli.Run(ctx, os.Args[1:], roots, current, skillDirs, skillMD, version, cwd, os.Stdin, os.Stdout, os.Stderr); err != nil {
+		// A fork replaces this terminal's occupant with another agent, so
+		// that agent's exit status is the run's answer and is passed through
+		// unannounced: it has already reported itself, and a wrapper reading
+		// the code needs the number it actually returned.
+		var exit *cli.ExitError
+		if errors.As(err, &exit) {
+			os.Exit(exit.Code)
+		}
 		fmt.Fprintln(os.Stderr, "catchup:", err)
 		os.Exit(1)
 	}
