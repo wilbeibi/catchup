@@ -173,6 +173,9 @@
   .cmd .p { color: #8fbf5f; flex-shrink: 0; }
   .cmd .t { overflow-x: auto; white-space: nowrap; scrollbar-width: none; user-select: text; -webkit-user-select: text; }
   .cmd .copy { color: #a49c8b; font-size: 11px; white-space: nowrap; flex-shrink: 0; border-left: 1px solid #4a4639; padding-left: 12px; }
+  .hero-install { margin-bottom: 22px; }
+  .hero-install .t { display: flex; flex-wrap: wrap; gap: 0 .65em; white-space: normal; }
+  .hero-install .part { white-space: nowrap; }
 
   /* the white stage */
   figure { margin: 0; padding: clamp(36px, 6vh, 72px) 0 0; }
@@ -273,6 +276,8 @@
   }
   @media (max-width: 560px) {
     .cmd { width: 100%; }
+    .cmd .copy { display: none; }
+    .hero-install { gap: 8px; padding-left: 12px; padding-right: 12px; font-size: 13px; }
     .endcard .actions { width: 100%; }
   }
 </style>
@@ -301,7 +306,15 @@
     </h1>
     <div class="monologue">
       <p>It's 4:50 on a Friday. The fix is half done. Claude Code stops. Maybe it says <span class="mono">5-hour limit reached &#8729; resets 10pm</span>.</p>
-      <p>You could open another agent and retype everything the two of you figured out. Or you could type this:</p>
+      <p>You could open another agent and retype everything the two of you figured out. Or install catchup:</p>
+    </div>
+    <button class="cmd hero-install" onclick="copyCmd(this, 'curl -fsSL https://catchup.pages.dev/install | sh', '/_events/installer-copy')" aria-label="Copy the curl install command">
+      <span class="p">$</span>
+      <span class="t"><span class="part">curl -fsSL</span><span class="part">https://catchup.pages.dev/install</span><span class="part">| sh</span></span>
+      <span class="copy">click to copy</span>
+    </button>
+    <div class="monologue">
+      <p>Then hand the session to the next agent:</p>
     </div>
     <button class="cmd" onclick="copyCmd(this, 'catchup fork claude --into codex')" aria-label="Copy the command: catchup fork claude --into codex">
       <span class="p">$</span>
@@ -416,21 +429,15 @@
 
 <section class="install">
   <div class="col">
-    <h2>Install it before you need it.</h2>
-    <p>One binary, no config, MIT-licensed. Works on macOS, Linux, and Windows. Everything runs locally: catchup reads agent history on your machine and makes no network or model calls.</p>
+    <h2>Prefer Homebrew?</h2>
+    <p>Everything runs locally: catchup reads agent history on your machine and makes no network or model calls.</p>
     <div class="cmds">
       <button class="cmd" onclick="copyCmd(this, 'brew install wilbeibi/tap/catchup')" aria-label="Copy the Homebrew install command">
         <span class="p">$</span>
         <span class="t">brew install wilbeibi/tap/catchup</span>
         <span class="copy">click to copy</span>
       </button>
-      <button class="cmd" onclick="copyCmd(this, 'curl -fsSL https://catchup.pages.dev/install.sh | sh', '/_events/installer-copy')" aria-label="Copy the install script command">
-        <span class="p">$</span>
-        <span class="t">curl -fsSL https://catchup.pages.dev/install.sh | sh</span>
-        <span class="copy">click to copy</span>
-      </button>
     </div>
-    <p class="alt">On Windows, grab the zip from <a href="https://github.com/wilbeibi/catchup/releases/latest" style="color: inherit;">the latest release</a>. Then, optionally: <code>catchup install-skill</code> so your agents know it exists.</p>
   </div>
 </section>
 

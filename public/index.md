@@ -2,7 +2,15 @@
 
 > Let your next coding agent catch itself up. catchup is a small CLI your agents can run to read prior Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, and DeepSeek Harness sessions and print clean, handoff-ready Markdown.
 
-Open-source CLI · Go · MIT · https://catchup.pages.dev/
+Open-source CLI · Go · https://catchup.pages.dev/
+
+## Install
+
+```
+curl -fsSL https://catchup.pages.dev/install | sh
+```
+
+Homebrew: `brew install wilbeibi/tap/catchup`
 
 ## What it does
 
@@ -15,23 +23,6 @@ Every command is one of three jobs with a session:
 - **Hand off.** Continue the work. `catchup fork <agent>` resumes through the agent's own native fork command with real state; crossing agents, `catchup fork codex --into claude` starts Claude seeded with the Codex transcript.
 
 The output is just the conversation: user and assistant messages only, with tool calls, reasoning, and token accounting stripped. Browsing manually? Bare `catchup` reads the newest session in the directory, whichever agent wrote it.
-
-## Install
-
-```
-# Homebrew
-brew install wilbeibi/tap/catchup
-
-# or prebuilt binary
-curl -fsSL https://catchup.pages.dev/install.sh | sh
-
-# or with Go
-go install github.com/wilbeibi/catchup@latest
-
-catchup install-skill
-```
-
-MIT-licensed, no config. `install-skill` teaches every detected agent to run catchup itself.
 
 ## Supported agents
 
