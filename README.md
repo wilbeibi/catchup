@@ -86,15 +86,18 @@ catchup <agent> --json                   # render JSON; also --html
 
 Use `fork` to continue with the same agent and keep native session state. Use `fork --into` to start another agent with the transcript — or the same agent with `--last`/`--since-compact`, which restarts it clean on a trimmed transcript when the context is spent but the work isn't. Use read commands when you want old work in a clean context.
 
+Every supported agent can supply a handoff. Kimi, ZCode, and DeepSeek Harness cannot be launched as interactive `--into` targets; save the transcript and open it in those tools instead.
+
 ## Boundaries
 
 - One agent at a time. It does not merge histories.
-- Conversation only. It strips successful tool calls, command output, and reasoning traces.
-- `--agent` and `--json` add back the tool calls the source log itself marked failed; `--md` and `--html` never show them.
+- Human Markdown and HTML contain the conversation only.
+- `--agent`, `--json`, and `fork --into` also retain tool calls the source log marked failed. Successful tool activity and reasoning traces remain stripped.
 - Read-only, except `fork`.
 - Same-agent `fork` uses the agent's native resume path, so it keeps real session state.
 - Same-agent `fork --into` is the opposite trade: native state is dropped for a clean context.
 - Cross-agent `fork --into` seeds the new agent with a transcript, not native state.
+- `fork` returns the launched agent's exit status, so shell scripts and CI can handle its failure normally.
 - On Windows, `fork --into` passes the transcript in a content-addressed file under `.catchup/` — the command line there truncates multi-line prompts. Identical transcripts share one file; files remain for native resumes and can be removed when no launched session needs them.
 
 ## License

@@ -497,12 +497,17 @@ func installSkill(provider string, skillDirs map[string]string, skillMD []byte, 
 		names = []string{provider}
 	}
 
+	installed := make(map[string]bool)
 	for _, name := range names {
 		dir, ok := skillDirs[name]
 		if !ok {
 			continue
 		}
 		path := filepath.Join(dir, "catchup", "SKILL.md")
+		if installed[path] {
+			continue
+		}
+		installed[path] = true
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return fmt.Errorf("install-skill %s: %w", name, err)
 		}
@@ -734,25 +739,34 @@ func forkFrom(ctx context.Context, cmd Command, launchDir string, stdin io.Reade
 	}
 	return seedInto(ctx, cmd.Into, cmd.Model, seed{
 		inlineLead: "Continue the work described in this document — a prior agent session's transcript or handoff notes. Pick up where it left off." + provenance,
-		fileLead:   "Continue the work described in %s — a copy of " + label + ", a prior agent session's transcript or handoff notes. Read that file first, then pick up where it left off.",
-		body:       string(body),
-		trimHint:   "trim when rendering the artifact: catchup <agent> --agent --last 20 > s.md",
-		dir:        launchDir,
+		// fileLead is a format string on Windows. Keep percent signs in the
+		// user-controlled label literal instead of treating them as directives.
+		fileLead: "Continue the work described in %s — a copy of " + strings.ReplaceAll(label, "%", "%%") + ", a prior agent session's transcript or handoff notes. Read that file first, then pick up where it left off.",
+		body:     string(body),
+		trimHint: "trim when rendering the artifact: catchup <agent> --agent --last 20 > s.md",
+		dir:      launchDir,
 	}, stdin, stdout, stderr)
 }
 
 // fromLabel renders a --from value for prompts and error text: stdin gets a
-// name, and a URL drops its query string — presigned links carry their auth
-// there, and the label persists in the seeded agent's own session store.
+// name, and a URL drops every place credentials can live. The original URL
+// still reaches the request; only this persisted label is redacted.
 func fromLabel(from string) string {
 	switch {
 	case from == "-":
 		return "stdin"
 	case isHTTPURL(from):
-		if u, err := url.Parse(from); err == nil && u.RawQuery != "" {
+		if u, err := url.Parse(from); err == nil {
+			u.User = nil
 			u.RawQuery = ""
+			u.ForceQuery = false
+			u.Fragment = ""
+			u.RawFragment = ""
 			return u.String()
 		}
+		// A malformed URL cannot be safely echoed because credentials may be
+		// anywhere in the unparsed text.
+		return "remote URL"
 	}
 	return from
 }
@@ -794,10 +808,18 @@ func fetchArtifact(ctx context.Context, rawURL string) ([]byte, error) {
 	label := fromLabel(rawURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("--from %s: %w", label, err)
+		// net/url includes the original, potentially credential-bearing URL in
+		// parse errors. The redacted label carries all safe context we need.
+		return nil, fmt.Errorf("--from %s: invalid URL", label)
 	}
 	resp, err := artifactClient.Do(req)
 	if err != nil {
+		// url.Error repeats the request URL. Keep its underlying cause without
+		// persisting credentials from the raw URL in CLI output.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
 		return nil, fmt.Errorf("--from %s: %w", label, err)
 	}
 	defer resp.Body.Close()

@@ -661,8 +661,10 @@ func TestRunInstallSkillProvider(t *testing.T) {
 }
 
 func TestRunInstallSkillAllProviders(t *testing.T) {
+	shared := t.TempDir()
 	skillDirs := map[string]string{
-		session.ProviderCodex:    t.TempDir(),
+		session.ProviderCodex:    shared,
+		session.ProviderZCode:    shared,
 		session.ProviderClaude:   t.TempDir(),
 		session.ProviderAgy:      t.TempDir(),
 		session.ProviderOpenCode: t.TempDir(),
@@ -678,6 +680,10 @@ func TestRunInstallSkillAllProviders(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, "catchup", "SKILL.md")); err != nil {
 			t.Errorf("%s: SKILL.md not written: %v", name, err)
 		}
+	}
+	sharedPath := filepath.Join(shared, "catchup", "SKILL.md")
+	if got := strings.Count(out.String(), "installed "+sharedPath+"\n"); got != 1 {
+		t.Errorf("shared Codex/ZCode skill path reported %d times, want once:\n%s", got, out.String())
 	}
 }
 
@@ -1179,6 +1185,20 @@ func TestRunForkFromFile(t *testing.T) {
 	}
 }
 
+func TestRunForkFromFileKeepsPercentSignsInSource(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "100%done.md")
+	if err := os.WriteFile(path, []byte("prior session"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, prompt, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", path)
+	if err != nil {
+		t.Fatalf("fork --from percent path error: %v", err)
+	}
+	if !strings.Contains(prompt, namesSource(path)) {
+		t.Errorf("seed prompt changed the source path %q:\n%.300s", path, prompt)
+	}
+}
+
 func TestRunForkFromStdin(t *testing.T) {
 	fakeTTY := io.NopCloser(strings.NewReader("user typing"))
 	withTTY(t, func() (io.ReadCloser, error) { return fakeTTY, nil })
@@ -1210,24 +1230,48 @@ func TestRunForkFromURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// The query string stands in for presigned auth: it must reach the
-	// server but never the seeded prompt, which persists in the receiving
-	// agent's own session store.
-	_, prompt, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", srv.URL+"/s.md?X-Sig=secret")
+	// Credentials can live in userinfo, a query, or a fragment. They must
+	// reach the request where applicable but never the seeded prompt, which
+	// persists in the receiving agent's own session store. The escaped path
+	// stays literal in the source label, including on Windows.
+	withCredentials := strings.Replace(srv.URL, "http://", "http://label-user:label-password@", 1) +
+		"/s%20file.md?X-Sig=query-secret#fragment-secret"
+	_, prompt, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", withCredentials)
 	if err != nil {
 		t.Fatalf("fork --from url error: %v", err)
 	}
-	if !strings.Contains(prompt, "remote transcript body") || !strings.Contains(prompt, namesSource(srv.URL+"/s.md")) {
+	if !strings.Contains(prompt, "remote transcript body") || !strings.Contains(prompt, namesSource(srv.URL+"/s%20file.md")) {
 		t.Errorf("seed prompt wrong:\n%.300s", prompt)
 	}
-	if strings.Contains(prompt, "secret") {
-		t.Error("presigned query leaked into the seeded prompt")
+	for _, secret := range []string{"label-user", "label-password", "query-secret", "fragment-secret"} {
+		if strings.Contains(prompt, secret) {
+			t.Errorf("URL credential %q leaked into the seeded prompt", secret)
+		}
 	}
 
 	bad := httptest.NewServer(http.NotFoundHandler())
 	defer bad.Close()
-	if _, _, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", bad.URL); err == nil || !strings.Contains(err.Error(), "404") {
+	badURL := strings.Replace(bad.URL, "http://", "http://error-user:error-password@", 1) +
+		"/private?token=error-query#token=error-fragment"
+	if _, _, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", badURL); err == nil || !strings.Contains(err.Error(), "404") {
 		t.Fatalf("want status error for non-200, got %v", err)
+	} else {
+		for _, secret := range []string{"error-user", "error-password", "error-query", "error-fragment"} {
+			if strings.Contains(err.Error(), secret) {
+				t.Errorf("URL credential %q leaked into the error: %v", secret, err)
+			}
+		}
+	}
+
+	malformed := "http://parse-user:parse-password@example.invalid/%zz?token=parse-query#parse-fragment"
+	if _, _, _, err := forkFromRun(t, nil, "fork", "--into", "claude", "--from", malformed); err == nil {
+		t.Fatal("want error for malformed URL")
+	} else {
+		for _, secret := range []string{"parse-user", "parse-password", "parse-query", "parse-fragment"} {
+			if strings.Contains(err.Error(), secret) {
+				t.Errorf("malformed URL credential %q leaked into the error: %v", secret, err)
+			}
+		}
 	}
 }
 
