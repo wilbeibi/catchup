@@ -269,9 +269,19 @@ func applyTarget(cmd *Command, spec string) error {
 // (host:path). A colon before any path anchor is far more likely a
 // transcription of ssh habits than a real directory name; anchor the path
 // (/, ./, ~/) to use a local directory that genuinely contains ':'.
+//
+// A drive prefix is the one anchor that is not a leading character: C:\src
+// is an absolute path on Windows, and rejecting it made every native Windows
+// path unusable. The exemption is unconditional rather than GOOS-gated so
+// that one parse behaves the same everywhere and its tests run everywhere;
+// the trade is that a one-letter host (a:path) now reads as local, which no
+// real ssh config uses.
 func looksLikeRemoteDir(dir string) bool {
 	i := strings.IndexByte(dir, ':')
 	if i <= 0 {
+		return false
+	}
+	if i == 1 && isDriveLetter(dir[0]) {
 		return false
 	}
 	switch dir[0] {
@@ -279,6 +289,11 @@ func looksLikeRemoteDir(dir string) bool {
 		return false
 	}
 	return true
+}
+
+// isDriveLetter reports whether c can open a Windows drive prefix.
+func isDriveLetter(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
 // validateFromSpelling enforces the closed set of --from shapes

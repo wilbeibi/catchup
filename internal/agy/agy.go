@@ -291,7 +291,7 @@ func listSessions(root, query, cwd string, limit int) ([]session.Summary, error)
 		}
 		src := sourceOf(fi, h)
 		applyStart(&src, entries, h)
-		if cwd != "" && src.Metadata["cwd"] != cwd {
+		if cwd != "" && !session.SameDir(src.Metadata["cwd"], cwd) {
 			continue
 		}
 		t := session.Thread{Source: src, Entries: entries}

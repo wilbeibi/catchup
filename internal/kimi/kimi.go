@@ -93,7 +93,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 			break
 		}
 		// state.json answers the cwd filter without opening the wire log.
-		if opts.Cwd != "" && d.meta.WorkDir != opts.Cwd {
+		if opts.Cwd != "" && !session.SameDir(d.meta.WorkDir, opts.Cwd) {
 			continue
 		}
 		t, err := readThread(newSource(d))
