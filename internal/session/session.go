@@ -132,6 +132,13 @@ type Entry struct {
 	// renderers choose their own human-readable projection.
 	Tool  string
 	Input string
+
+	// Retained marks an entry that sits before a compaction seam and that the
+	// agent's own log says survived it: the model still held this turn verbatim
+	// afterwards. Only the providers whose logs record the replaced context set
+	// it, and only for the last compaction in a session. It carries no meaning
+	// on its own — --since-compact reads it, and no renderer shows it.
+	Retained bool
 }
 
 // Failure builds the entry for a tool result the provider marked failed. All

@@ -262,6 +262,7 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 	defer rows.Close()
 
 	var entries []session.Entry
+	var unknown session.UnknownTypes
 	var curID, curRole string
 	var curTime time.Time
 	var curText []string
@@ -291,7 +292,8 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 			curTime = msToTime(mtime)
 		}
 
-		switch partType(pdata) {
+		ptype := partType(pdata)
+		switch ptype {
 		case "text":
 			if txt := partText(pdata); txt != "" {
 				curText = append(curText, txt)
@@ -304,13 +306,17 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 				flush()
 				entries = append(entries, failure)
 			}
+		case "reasoning", "step-start", "step-finish", "patch", "file", "snapshot":
+			// The model's own scratch work and the turn frames around it.
+		default:
+			unknown.Add(ptype)
 		}
 	}
 	flush()
 	if err := rows.Err(); err != nil {
 		return session.Thread{}, err
 	}
-	return session.Thread{Source: src, Entries: entries}, nil
+	return session.Thread{Source: src, Entries: entries, Warnings: unknown.AppendTo(nil)}, nil
 }
 
 // --- small decoders ---------------------------------------------------------

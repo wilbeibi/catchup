@@ -448,7 +448,31 @@ func TestSinceCompact(t *testing.T) {
 		t.Errorf("marker with summary: unexpected warnings %q", got.Warnings)
 	}
 
-	// A marker with no summary text still cuts, but appends the --last warning.
+	// Entries the log marks Retained survived the compaction verbatim, so they
+	// belong to what the agent resumed with even though they sit before the
+	// marker. Everything else before it does not.
+	kept := u("q1")
+	kept.Retained = true
+	carried := session.Thread{Entries: []session.Entry{
+		kept, a("a1"), u("dropped"),
+		{Kind: session.KindCompact},
+		u("q2"),
+	}}
+	got = sinceCompact(carried)
+	want = []string{"q1", "", "q2"}
+	if len(got.Entries) != len(want) {
+		t.Fatalf("retained: got %d entries, want %d: %+v", len(got.Entries), len(want), got.Entries)
+	}
+	for i, e := range got.Entries {
+		if e.Text != want[i] {
+			t.Errorf("retained entry %d = %q, want %q", i, e.Text, want[i])
+		}
+	}
+	if len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], "no readable summary") {
+		t.Errorf("retained: warnings = %q, want the provider-neutral summary warning", got.Warnings)
+	}
+
+	// A marker with no summary text still cuts, but says how to include earlier turns.
 	bare := session.Thread{Entries: []session.Entry{
 		u("q1"), a("a1"),
 		{Kind: session.KindCompact},

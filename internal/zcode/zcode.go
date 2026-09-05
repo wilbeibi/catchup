@@ -265,6 +265,7 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 	defer rows.Close()
 
 	var entries []session.Entry
+	var unknown session.UnknownTypes
 	var curID, curRole string
 	var curTime time.Time
 	var curText []string
@@ -311,7 +312,8 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 			}
 		}
 
-		switch partType(pdata) {
+		ptype := partType(pdata)
+		switch ptype {
 		case "text":
 			if txt := partText(pdata); txt != "" {
 				curText = append(curText, txt)
@@ -319,6 +321,10 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 		case "compaction":
 			flush()
 			entries = append(entries, session.Entry{Kind: session.KindCompact, Text: compactSummary(pdata), Time: msToTime(mtime)})
+		case "reasoning", "tool", "step-start", "step-finish", "file", "timeline", "snapshot":
+			// The model's own scratch work, its tools, and the turn frames.
+		default:
+			unknown.Add(ptype)
 		}
 	}
 	flush()
@@ -332,7 +338,7 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 	if providerID != "" {
 		src.Metadata["model_provider"] = providerID
 	}
-	return session.Thread{Source: src, Entries: entries}, nil
+	return session.Thread{Source: src, Entries: entries, Warnings: unknown.AppendTo(nil)}, nil
 }
 
 // --- small decoders ---------------------------------------------------------

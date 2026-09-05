@@ -46,6 +46,8 @@ Windows binaries are on the [releases page](https://github.com/wilbeibi/catchup/
 
 Restart the agent, then ask it to catch up on the last session.
 
+For advance notice before quota handoffs, enable [quota visibility in your statusline](recipes/quota-visibility.md).
+
 I use `catchup` with [herdr](https://herdr.dev) day to day. The [wilbeibi/herdr-catchup](https://github.com/wilbeibi/herdr-catchup) plugin adds pane actions for summary, fork, and handoff:
 
 ```bash

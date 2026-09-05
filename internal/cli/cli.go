@@ -48,7 +48,7 @@ prints that session in full, as Markdown. The flags refine three things:
 which session, how much of it, and as what.
 
 RECAP — how much of the session (default: all of it)
-  --since-compact     just the tail after the last compaction
+  --since-compact     what the agent resumed with after compacting
   --last <N>          just the last N exchanges
   --full              oversized messages whole, not clamped
   -i, --info          metadata only, no messages
@@ -515,6 +515,10 @@ func installSkill(provider string, skillDirs map[string]string, skillMD []byte, 
 			return fmt.Errorf("install-skill %s: %w", name, err)
 		}
 		fmt.Fprintf(stdout, "installed %s\n", path)
+	}
+	if len(installed) > 0 {
+		fmt.Fprintln(stdout, "Tip: enable quota visibility before your next handoff (Claude Code / Codex CLI).")
+		fmt.Fprintln(stdout, "Setup: https://github.com/wilbeibi/catchup/blob/main/recipes/quota-visibility.md")
 	}
 	return nil
 }
@@ -1069,24 +1073,35 @@ func lastTurns(t session.Thread, n int) session.Thread {
 	return t
 }
 
-// sinceCompact trims a thread to its final compaction segment: the last
-// KindCompact entry and everything after it. On Claude that entry carries the
-// summary of the pre-compaction context, so the result leads with a recap and
-// continues with the live tail; on Codex and OpenCode the marker is empty, so
-// it is a plain cut, and a warning says to rerun with --last — nothing else
-// in the output shows a summary existed and wasn't kept. When the thread has
-// no compaction marker at all the whole thread is returned unchanged, which
-// is what lets a caller (e.g. a skill) apply this unconditionally.
+// sinceCompact trims a thread to what the agent itself resumed with: the last
+// KindCompact entry, everything after it, and the earlier entries the log
+// marks Retained — the turns the model still held once the compaction had
+// replaced the rest. Agents disagree about what a compaction keeps (Claude
+// puts a summary on the marker and keeps nothing else; Codex keeps every user
+// turn verbatim and hides only its own side; Pi keeps a tail of turns below
+// the summary), so the shape of the cut belongs to each provider, which
+// records it as the marker's position and its Retained marks. Here there is
+// one rule over both.
+//
+// A thread with no compaction marker is returned unchanged, which is what lets
+// a caller (e.g. a skill) apply this unconditionally.
 func sinceCompact(t session.Thread) session.Thread {
 	for i := len(t.Entries) - 1; i >= 0; i-- {
-		if t.Entries[i].Kind == session.KindCompact {
-			if strings.TrimSpace(t.Entries[i].Text) == "" {
-				t.Warnings = append(t.Warnings,
-					"this agent's log marks the compaction but keeps no summary; rerun with --last N to see the turns before it")
-			}
-			t.Entries = t.Entries[i:]
-			return t
+		if t.Entries[i].Kind != session.KindCompact {
+			continue
 		}
+		kept := make([]session.Entry, 0, len(t.Entries)-i)
+		for _, e := range t.Entries[:i] {
+			if e.Retained {
+				kept = append(kept, e)
+			}
+		}
+		if strings.TrimSpace(t.Entries[i].Text) == "" {
+			t.Warnings = append(t.Warnings,
+				"this agent's log marks the compaction but keeps no readable summary; use --last N if you also need earlier turns")
+		}
+		t.Entries = append(kept, t.Entries[i:]...)
+		return t
 	}
 	return t
 }

@@ -223,18 +223,32 @@ func readThread(fi fileInfo) (session.Thread, error) {
 	src := newSource(fi)
 	var entries []session.Entry
 	var warnings []string
+	var unknown session.UnknownTypes
 	calls := map[string]toolCall{} // tool_use id → call, until its result arrives
 
 	dec := json.NewDecoder(f)
 	for dec.More() {
 		var line claudeLine
-		if dec.Decode(&line) != nil {
-			warnings = append(warnings, "stopped reading at a malformed record")
+		if err := dec.Decode(&line); err != nil {
+			warnings = append(warnings, session.ReadStopWarning(err))
 			break
 		}
 		applyMeta(&src, line)
 
-		if line.Type != "user" && line.Type != "assistant" {
+		switch line.Type {
+		case "user", "assistant":
+			// The conversation; read below.
+		case "system", "mode", "permission-mode", "queue-operation", "last-prompt",
+			"cost-state", "started", "result", "summary", "ai-title", "agent-name":
+			continue // session bookkeeping, UI state, and names
+		case "attachment", "file-history-snapshot", "file-history-delta":
+			continue // context handed to the model, and the edits it made
+		case "bridge-session", "fork-context-ref", "pr-link", "frame-link":
+			continue // pointers to other sessions and surfaces
+		case "atis-latch", "artifact-comment-monitor", "artifact-autoreact-ledger":
+			continue // ledgers for host features that outlive one turn
+		default:
+			unknown.Add(line.Type)
 			continue
 		}
 		if line.IsSidechain || line.Message == nil {
@@ -276,7 +290,7 @@ func readThread(fi fileInfo) (session.Thread, error) {
 	}
 
 	finalizeMeta(&src)
-	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
+	return session.Thread{Source: src, Entries: entries, Warnings: unknown.AppendTo(warnings)}, nil
 }
 
 func newSource(fi fileInfo) session.Source {

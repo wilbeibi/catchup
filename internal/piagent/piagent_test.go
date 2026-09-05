@@ -18,7 +18,7 @@ const transcript = `{"type":"session","version":3,"id":"019f-pi","timestamp":"20
 {"type":"message","id":"m3","parentId":"m2","timestamp":"2026-06-28T02:50:26.266Z","message":{"role":"toolResult","toolCallId":"tc1","toolName":"read","content":[{"type":"text","text":"tool output"}]}}
 {"type":"message","id":"m3a","parentId":"m3","timestamp":"2026-06-28T02:50:27.000Z","message":{"role":"assistant","timestamp":1793155827000,"content":[{"type":"toolCall","id":"tc2","name":"bash","arguments":{"command":"go test ./..."}}]}}
 {"type":"message","id":"m3b","parentId":"m3a","timestamp":"2026-06-28T02:50:28.000Z","message":{"role":"toolResult","toolCallId":"tc2","toolName":"bash","content":[{"type":"text","text":"FAIL\tproj\n\nCommand exited with code 1"}],"isError":true,"timestamp":1793155828000}}
-{"type":"compaction","id":"c1","parentId":"m3b","timestamp":"2026-06-28T02:51:00.000Z","summary":"summary so far","firstKeptEntryId":"m1"}
+{"type":"compaction","id":"c1","parentId":"m3b","timestamp":"2026-06-28T02:51:00.000Z","summary":"summary so far","firstKeptEntryId":"m3a"}
 {"type":"branch_summary","id":"b0","parentId":"c1","timestamp":"2026-06-28T02:51:00.500Z","fromId":"x0"}
 {"type":"session_info","id":"n1","parentId":"b0","timestamp":"2026-06-28T02:51:01.000Z","name":"Pi support"}
 {"type":"branch_summary","id":"b1","parentId":"n1","timestamp":"2026-06-28T02:51:01.500Z","fromId":"x1","summary":"tried approach A; abandoned for B"}
@@ -83,8 +83,10 @@ func TestReadPiAgentSession(t *testing.T) {
 	}{
 		{session.KindMessage, session.RoleUser, "support pi agent"},
 		{session.KindMessage, session.RoleAssistant, "I will inspect the format."},
-		{session.KindFailure, session.RoleTool, "FAIL\tproj\n\nCommand exited with code 1"},
+		// The marker sits at firstKeptEntryId (m3a), not where the record was
+		// written: the failed command below it is what pi went on holding.
 		{session.KindCompact, "", "summary so far"},
+		{session.KindFailure, session.RoleTool, "FAIL\tproj\n\nCommand exited with code 1"},
 		// b0 has no summary text and must not surface; b1 does and must.
 		{session.KindBranch, "", "tried approach A; abandoned for B"},
 		{session.KindMessage, session.RoleUser, "finish it"},
@@ -98,7 +100,7 @@ func TestReadPiAgentSession(t *testing.T) {
 			t.Errorf("entry %d = %+v, want %+v", i, got[i], want[i])
 		}
 	}
-	if f := thread.Entries[2]; f.Tool != "bash" || f.Input != `{"command":"go test ./..."}` || !f.Time.Equal(time.UnixMilli(1793155828000)) {
+	if f := thread.Entries[3]; f.Tool != "bash" || f.Input != `{"command":"go test ./..."}` || !f.Time.Equal(time.UnixMilli(1793155828000)) {
 		t.Errorf("failure = %+v, want Tool bash, Input go test ./..., the result's own time", f)
 	}
 	for _, e := range thread.Entries {
@@ -161,5 +163,45 @@ func TestReadFollowsCurrentBranch(t *testing.T) {
 		if strings.Contains(e.Text, "abandoned") {
 			t.Fatalf("abandoned branch leaked: %+v", thread.Entries)
 		}
+	}
+}
+
+func TestCompactionSeamFallsBack(t *testing.T) {
+	// A firstKeptEntryId naming nothing on this branch (an entry pi wrote on a
+	// branch since abandoned) leaves the marker where the record sits.
+	body := strings.Replace(transcript, `"firstKeptEntryId":"m3a"`, `"firstKeptEntryId":"gone"`, 1)
+	root := t.TempDir()
+	writeTranscript(t, root, "proj", "s.jsonl", body, time.Now())
+
+	p := New()
+	src, err := p.Resolve(context.Background(), session.Roots{PiAgent: root}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	th, err := p.Read(context.Background(), src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(th.Entries) < 4 || th.Entries[3].Kind != session.KindCompact {
+		t.Fatalf("marker not at the record's own place: %+v", th.Entries)
+	}
+}
+
+func TestUnrecognizedRecordType(t *testing.T) {
+	body := transcript + `{"type":"tool_budget","id":"z1","parentId":"m5","timestamp":"2026-06-28T02:51:04.000Z"}` + "\n"
+	root := t.TempDir()
+	writeTranscript(t, root, "proj", "s.jsonl", body, time.Now())
+
+	p := New()
+	src, err := p.Resolve(context.Background(), session.Roots{PiAgent: root}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	th, err := p.Read(context.Background(), src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(th.Warnings) != 1 || !strings.Contains(th.Warnings[0], "tool_budget") {
+		t.Fatalf("warnings = %q, want one naming the unrecognized record type", th.Warnings)
 	}
 }

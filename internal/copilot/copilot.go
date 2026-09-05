@@ -24,7 +24,9 @@
 // error.message, or result.content when no error is recorded. Everything
 // else — system.message, the rest of tool.*, assistant.turn_*,
 // session.usage_checkpoint, and the session lifecycle events — is
-// bookkeeping.
+// bookkeeping. The schema names over a hundred event types and grows every
+// release, so only an unrecognized name inside the families read here earns a
+// warning; see watchedFamily.
 //
 // Sub-agent traffic reuses those same two types and is told apart by the
 // envelope's agentId, which the schema documents as "absent for events from
@@ -309,23 +311,24 @@ func readThread(d dirInfo, meta map[string]string) (session.Thread, error) {
 	var entries []session.Entry
 	var warnings []string
 	calls := map[string]toolCall{} // toolCallId → call, until its result arrives
+	var unknown session.UnknownTypes
 	dec := json.NewDecoder(f)
 	for dec.More() {
 		var ev cpEvent
 		if err := dec.Decode(&ev); err != nil {
 			// A killed writer can leave a torn final line; keep the prefix.
-			warnings = append(warnings, "stopped reading at a malformed record")
+			warnings = append(warnings, session.ReadStopWarning(err))
 			break
 		}
-		applyEvent(&src, &entries, calls, ev)
+		applyEvent(&src, &entries, calls, &unknown, ev)
 	}
-	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
+	return session.Thread{Source: src, Entries: entries, Warnings: unknown.AppendTo(warnings)}, nil
 }
 
 // applyEvent folds one event into the source metadata or the timeline. An
 // unparseable or empty payload makes the event contribute nothing rather than
 // fail the read.
-func applyEvent(src *session.Source, entries *[]session.Entry, calls map[string]toolCall, ev cpEvent) {
+func applyEvent(src *session.Source, entries *[]session.Entry, calls map[string]toolCall, unknown *session.UnknownTypes, ev cpEvent) {
 	if ev.AgentID != "" {
 		return // a sub-agent's own turns: the parent's tool plumbing
 	}
@@ -382,7 +385,30 @@ func applyEvent(src *session.Source, entries *[]session.Entry, calls map[string]
 			text = stringField(d.Result, "content")
 		}
 		*entries = append(*entries, session.Failure(call.name, call.args, text, parseTime(ev.Timestamp)))
+	case "assistant.turn_start", "assistant.turn_end", "assistant.idle", "assistant.intent",
+		"assistant.message_start", "assistant.message_delta", "assistant.streaming_delta",
+		"assistant.reasoning", "assistant.reasoning_delta", "assistant.tool_call_delta",
+		"assistant.server_tool_progress", "assistant.turn_retry", "assistant.usage",
+		"tool.execution_progress", "tool.execution_partial_result", "tool.user_requested",
+		"session.compaction_start":
+		// Bookkeeping inside the families read above: the streamed halves of
+		// those same messages, tool progress, and the frames around a turn.
+	default:
+		if watchedFamily(ev.Type) {
+			unknown.Add(ev.Type)
+		}
 	}
+}
+
+// watchedFamily reports whether an unrecognized event is worth a warning.
+// Copilot's shipped schema defines over a hundred event types across two dozen
+// namespaces and gains more with each release, so a name catchup has not seen
+// is only news inside the families it actually reads: there, a rename is
+// catchup going quiet on the conversation. A new mcp./hook./skill. event is
+// Copilot growing a feature that was never going to be on the timeline.
+func watchedFamily(t string) bool {
+	return strings.HasPrefix(t, "user.") || strings.HasPrefix(t, "assistant.") ||
+		strings.HasPrefix(t, "tool.") || strings.HasPrefix(t, "session.compaction_")
 }
 
 // stringField is the string at key in a JSON object, or "" for anything else.

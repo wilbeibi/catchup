@@ -299,11 +299,12 @@ func readThread(src session.Source) (session.Thread, error) {
 	var entries []session.Entry
 	var warnings []string
 	calls := map[string]toolCall{} // toolCallId → call, until its result arrives
+	var unknown session.UnknownTypes
 	dec := json.NewDecoder(f)
 	for dec.More() {
 		var rec wireRecord
-		if dec.Decode(&rec) != nil {
-			warnings = append(warnings, "stopped reading at a malformed record")
+		if err := dec.Decode(&rec); err != nil {
+			warnings = append(warnings, session.ReadStopWarning(err))
 			break
 		}
 		switch rec.Type {
@@ -321,9 +322,14 @@ func readThread(src session.Source) (session.Thread, error) {
 			if rec.ModelAlias != "" {
 				src.Metadata["model"] = rec.ModelAlias
 			}
+		case "metadata", "turn.prompt", "usage.record", "llm.request", "llm.tools_snapshot",
+			"tools.set_active_tools", "permission.set_mode", "permission.record_approval_result":
+			// The run's own bookkeeping: what it sent, spent, and was allowed to do.
+		default:
+			unknown.Add(rec.Type)
 		}
 	}
-	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
+	return session.Thread{Source: src, Entries: entries, Warnings: unknown.AppendTo(warnings)}, nil
 }
 
 // messageEntry converts a context.append_message record. User records with

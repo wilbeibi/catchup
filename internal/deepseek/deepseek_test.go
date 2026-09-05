@@ -158,7 +158,7 @@ func TestReadTornTail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(thread.Warnings) != 1 || !strings.Contains(thread.Warnings[0], "malformed record") {
+	if len(thread.Warnings) != 1 || !strings.Contains(thread.Warnings[0], "the last record is incomplete") {
 		t.Fatalf("warnings = %+v", thread.Warnings)
 	}
 	if len(thread.Entries) != len(wantEntries) {

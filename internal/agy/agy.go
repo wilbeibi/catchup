@@ -324,11 +324,12 @@ func readEntries(fi fileInfo) ([]session.Entry, []string, error) {
 
 	var entries []session.Entry
 	var warnings []string
+	var unknown session.UnknownTypes
 	dec := json.NewDecoder(f)
 	for dec.More() {
 		var step agyStep
-		if dec.Decode(&step) != nil {
-			warnings = append(warnings, "stopped reading at a malformed record")
+		if err := dec.Decode(&step); err != nil {
+			warnings = append(warnings, session.ReadStopWarning(err))
 			break
 		}
 		ts := parseTime(step.CreatedAt)
@@ -345,9 +346,16 @@ func readEntries(fi fileInfo) ([]session.Entry, []string, error) {
 			if step.Content != "" {
 				entries = append(entries, session.Entry{Kind: session.KindCompact, Text: step.Content, Time: ts})
 			}
+		case "RUN_COMMAND", "VIEW_FILE", "LIST_DIRECTORY", "GREP_SEARCH", "SEARCH_WEB",
+			"CODE_ACTION", "GENERATE_IMAGE", "INVOKE_SUBAGENT", "ASK_QUESTION":
+			// The steps the agent took: its own tool plumbing.
+		case "EPHEMERAL_MESSAGE", "SYSTEM_MESSAGE", "ERROR_MESSAGE", "GENERIC", "CONVERSATION_HISTORY":
+			// Status lines, injected context, and the CLI's own replay.
+		default:
+			unknown.Add(step.Type)
 		}
 	}
-	return entries, warnings, nil
+	return entries, unknown.AppendTo(warnings), nil
 }
 
 // userRequest extracts what the user actually typed from a USER_INPUT step:

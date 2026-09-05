@@ -8,8 +8,10 @@
 // model_change.{provider,modelId} and assistant message provider/model on the
 // current parent chain for model metadata; session_info.name for title;
 // message.role user/assistant with text content for the timeline;
-// compaction.summary as a compaction marker; branch_summary.summary as an
-// abandoned-branch recap.
+// compaction.summary as a compaction marker, placed at the entry named by
+// compaction.firstKeptEntryId — the tail pi went on holding sits below it, so
+// the marker is where the agent's own resumed context begins;
+// branch_summary.summary as an abandoned-branch recap.
 //
 // A toolResult message with isError set becomes a failure entry, paired
 // through toolCallId with the assistant's toolCall block for the arguments;
@@ -164,6 +166,10 @@ type piLine struct {
 	ModelID   string    `json:"modelId"`
 	Summary   string    `json:"summary"`
 	Message   piMessage `json:"message"`
+
+	// FirstKeptEntryID is set on a compaction record: the first entry pi went
+	// on holding verbatim once the summary had replaced everything above it.
+	FirstKeptEntryID string `json:"firstKeptEntryId"`
 }
 
 type piMessage struct {
@@ -202,14 +208,23 @@ func readThread(fi fileInfo) (session.Thread, error) {
 
 	src := newSource(fi)
 	var warnings []string
+	var unknown session.UnknownTypes
 	var lines []piLine
 
 	dec := json.NewDecoder(f)
 	for dec.More() {
 		var line piLine
-		if dec.Decode(&line) != nil {
-			warnings = append(warnings, "stopped reading at a malformed record")
+		if err := dec.Decode(&line); err != nil {
+			warnings = append(warnings, session.ReadStopWarning(err))
 			break
+		}
+		switch line.Type {
+		case "session", "session_info", "message", "compaction", "branch_summary":
+			// The header, the timeline, and the seams: read below.
+		case "model_change", "thinking_level_change", "custom", "custom_message", "label":
+			// Session bookkeeping — settings changes, extension state, labels.
+		default:
+			unknown.Add(line.Type)
 		}
 		lines = append(lines, line)
 	}
@@ -218,7 +233,7 @@ func readThread(fi fileInfo) (session.Thread, error) {
 	applyFileMeta(&src, lines)
 	applyPathModelMeta(&src, path)
 	finalizeMeta(&src)
-	return session.Thread{Source: src, Entries: pathEntries(path), Warnings: warnings}, nil
+	return session.Thread{Source: src, Entries: pathEntries(path), Warnings: unknown.AppendTo(warnings)}, nil
 }
 
 func newSource(fi fileInfo) session.Source {
@@ -316,8 +331,13 @@ func currentPath(lines []piLine) []piLine {
 
 func pathEntries(path []piLine) []session.Entry {
 	var entries []session.Entry
+	var marks []piCompaction
+	at := map[string]int{}        // record id → where that record's entries begin
 	calls := map[string]piBlock{} // toolCall id → block, until its result arrives
 	for _, line := range path {
+		if line.ID != "" {
+			at[line.ID] = len(entries)
+		}
 		switch line.Type {
 		case "message":
 			if line.Message.Role == "toolResult" {
@@ -337,7 +357,7 @@ func pathEntries(path []piLine) []session.Entry {
 				entries = append(entries, e)
 			}
 		case "compaction":
-			entries = append(entries, compactEntry(line))
+			marks = append(marks, piCompaction{line: line, pos: len(entries)})
 		case "branch_summary":
 			// The branch left behind via /tree. Not KindCompact — see the kind
 			// docs in session.go.
@@ -346,7 +366,42 @@ func pathEntries(path []piLine) []session.Entry {
 			}
 		}
 	}
-	return entries
+	return withCompactions(entries, marks, at)
+}
+
+// piCompaction is a compaction record held back until its seam is known: line
+// names the entry it kept first, pos is where the record itself sits.
+type piCompaction struct {
+	line piLine
+	pos  int
+}
+
+// withCompactions places each compaction marker at the seam its record names
+// rather than where the record happens to sit in the file. Pi replaces the
+// context above the seam with the summary and keeps everything from the seam
+// down, so the marker belongs there: that is where "the turns the agent still
+// had" begins, which is what --since-compact is asking. A seam that names no
+// entry on this branch falls back to the record's own place.
+func withCompactions(entries []session.Entry, marks []piCompaction, at map[string]int) []session.Entry {
+	if len(marks) == 0 {
+		return entries
+	}
+	inserts := make(map[int][]session.Entry, len(marks))
+	for _, m := range marks {
+		i, ok := at[m.line.FirstKeptEntryID]
+		if !ok || i > m.pos {
+			i = m.pos
+		}
+		inserts[i] = append(inserts[i], compactEntry(m.line))
+	}
+	out := make([]session.Entry, 0, len(entries)+len(marks))
+	for i := 0; i <= len(entries); i++ {
+		out = append(out, inserts[i]...)
+		if i < len(entries) {
+			out = append(out, entries[i])
+		}
+	}
+	return out
 }
 
 func messageEntry(line piLine) (session.Entry, bool) {

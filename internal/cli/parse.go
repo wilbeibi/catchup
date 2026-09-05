@@ -28,7 +28,7 @@ type Command struct {
 	MetaOnly     bool // -i: render metadata/frontmatter only
 	Full         bool // --full: render oversized entries whole instead of clamped
 	LastN        int  // --last N: keep only the last N exchanges/turns (0 = all)
-	SinceCompact bool // --since-compact: keep only the final compaction segment
+	SinceCompact bool // --since-compact: keep what the agent resumed with after its last compaction
 	List         bool // --list: print the ranked listing and exit
 	Limit        int  // -n N: cap listing rows (defaults to DefaultLimit)
 	Help         bool // --help, -h: print usage and exit

@@ -8,8 +8,11 @@
 // Useful records: session_meta.payload.{id,cwd,timestamp,cli_version,
 // model_provider} for metadata; response_item.payload with type=message and
 // role user/assistant, content types input_text and output_text, for the
-// timeline; type=compacted and event_msg.payload.type=context_compacted as
-// compaction markers.
+// timeline; top-level type=compacted and event_msg.payload.type=context_compacted
+// as compaction markers — Codex writes both, in that order, for one compaction,
+// so the latter is suppressed. The compacted record's replacement_history is
+// the context it handed the model afterwards; the turns it names are marked
+// Retained so --since-compact can keep them.
 //
 // A command that exited non-zero becomes a failure entry, read from the
 // event_msg.item_completed record whose item.type is CommandExecution
@@ -181,6 +184,19 @@ type codexMessage struct {
 	} `json:"content"`
 }
 
+// codexCompaction is the payload of a top-level compacted record: the history
+// Codex gave the model in place of the session so far. Items are ordinary
+// message items plus one opaque encrypted item holding the model's summary.
+type codexCompaction struct {
+	Message            string             `json:"message"`
+	ReplacementHistory []codexReplacement `json:"replacement_history"`
+}
+
+type codexReplacement struct {
+	Type string `json:"type"`
+	codexMessage
+}
+
 type codexEvent struct {
 	Message string `json:"message"`
 	Text    string `json:"text"`
@@ -223,13 +239,15 @@ func readThread(fi fileInfo) (session.Thread, error) {
 	src := newSource(fi)
 	var entries, fallback []session.Entry
 	var warnings []string
+	var unknown session.UnknownTypes
+	pendingCompactEvents := 0
 	haveMessage := false
 
 	dec := json.NewDecoder(f)
 	for dec.More() {
 		var line codexLine
-		if dec.Decode(&line) != nil {
-			warnings = append(warnings, "stopped reading at a malformed record")
+		if err := dec.Decode(&line); err != nil {
+			warnings = append(warnings, session.ReadStopWarning(err))
 			break
 		}
 		ts := parseTime(line.Timestamp)
@@ -241,8 +259,15 @@ func readThread(fi fileInfo) (session.Thread, error) {
 				applyMeta(&src, m)
 			}
 
+		case "compacted":
+			marker, kept := compaction(line.Payload, ts)
+			entries = append(entries, marker)
+			pendingCompactEvents++
+			markRetained(entries, kept)
+
 		case "response_item":
-			switch payloadType(line.Payload) {
+			ptype := payloadType(line.Payload)
+			switch ptype {
 			case "message":
 				var m codexMessage
 				if json.Unmarshal(line.Payload, &m) != nil {
@@ -261,14 +286,22 @@ func readThread(fi fileInfo) (session.Thread, error) {
 				}
 				entries = append(entries, session.Entry{Kind: session.KindMessage, Role: role, Text: text, Time: ts})
 				haveMessage = true
-			case "compacted":
-				entries = append(entries, session.Entry{Kind: session.KindCompact, Time: ts})
+			case "agent_message", "custom_tool_call", "custom_tool_call_output", "function_call", "function_call_output",
+				"reasoning", "tool_search_call", "tool_search_output", "web_search_call":
+				// Model scratch work and tool plumbing represented elsewhere.
+			default:
+				unknown.Add("response_item/" + ptype)
 			}
 
 		case "event_msg":
-			switch payloadType(line.Payload) {
+			ptype := payloadType(line.Payload)
+			switch ptype {
 			case "context_compacted":
-				entries = append(entries, session.Entry{Kind: session.KindCompact, Time: ts})
+				if pendingCompactEvents > 0 {
+					pendingCompactEvents--
+				} else {
+					entries = append(entries, session.Entry{Kind: session.KindCompact, Time: ts})
+				}
 			case "user_message":
 				if e := decodeEvent(line.Payload); e != "" {
 					fallback = append(fallback, session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: e, Time: ts})
@@ -281,14 +314,79 @@ func readThread(fi fileInfo) (session.Thread, error) {
 				if e, ok := failedCommand(line.Payload, ts); ok {
 					entries = append(entries, e)
 				}
+			case "agent_reasoning", "entered_review_mode", "exec_command_end", "exited_review_mode", "image_generation_end",
+				"mcp_tool_call_end", "patch_apply_end", "sub_agent_activity", "task_complete", "task_started",
+				"thread_rolled_back", "thread_settings_applied", "token_count", "turn_aborted", "web_search_end":
+				// UI state, progress, and duplicate projections of response items.
+			default:
+				unknown.Add("event_msg/" + ptype)
 			}
+
+		case "turn_context", "world_state", "inter_agent_communication_metadata":
+			// Per-turn settings, the workspace snapshot, and sub-agent routing:
+			// written beside the conversation, never part of it.
+
+		default:
+			unknown.Add(line.Type)
 		}
 	}
 
 	if !haveMessage {
 		entries = fallback // older sessions only recorded event_msg messages
 	}
-	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
+	return session.Thread{Source: src, Entries: entries, Warnings: unknown.AppendTo(warnings)}, nil
+}
+
+// compaction reads a rollout compaction record: the summary Codex kept, and
+// the history it handed the model in place of everything before the seam. The
+// summary field is there but has always been empty in practice — the model's
+// own recap travels inside the encrypted item that closes the replacement
+// history — so those replaced turns are the only readable account of what
+// survived, which is why they are worth recovering.
+func compaction(raw json.RawMessage, ts time.Time) (session.Entry, []session.Entry) {
+	var c codexCompaction
+	if json.Unmarshal(raw, &c) != nil {
+		return session.Entry{Kind: session.KindCompact, Time: ts}, nil
+	}
+	var kept []session.Entry
+	for _, item := range c.ReplacementHistory {
+		if item.Type != "message" {
+			continue // the encrypted compaction item, and anything new
+		}
+		role := normalizeRole(item.Role)
+		if role == "" {
+			continue // developer-role scaffolding, as on the timeline itself
+		}
+		text := joinContent(item.codexMessage)
+		if text == "" || (role == session.RoleUser && isInjectedUserText(text)) {
+			continue
+		}
+		kept = append(kept, session.Entry{Kind: session.KindMessage, Role: role, Text: text})
+	}
+	return session.Entry{Kind: session.KindCompact, Text: c.Message, Time: ts}, kept
+}
+
+// markRetained flags the entries a compaction handed back to the model, so
+// --since-compact keeps them. The replacement history repeats them verbatim
+// and in order, so one forward walk pairs them off; a repeat that matches
+// nothing is skipped rather than resynchronizing onto the wrong turn. Marks
+// from an earlier compaction are cleared first: each record lists everything
+// kept from every window before it, so the last one is the whole truth.
+func markRetained(entries []session.Entry, kept []session.Entry) {
+	for i := range entries {
+		entries[i].Retained = false
+	}
+	at := 0
+	for _, k := range kept {
+		for i := at; i < len(entries); i++ {
+			e := entries[i]
+			if e.Kind == session.KindMessage && e.Role == k.Role && e.Text == k.Text {
+				entries[i].Retained = true
+				at = i + 1
+				break
+			}
+		}
+	}
 }
 
 func newSource(fi fileInfo) session.Source {

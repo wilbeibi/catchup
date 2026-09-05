@@ -234,12 +234,13 @@ func readThread(fi fileInfo) (session.Thread, error) {
 
 	var entries []session.Entry
 	var warnings []string
+	var unknown session.UnknownTypes
 	dec := json.NewDecoder(r)
 	first := true
 	for dec.More() {
 		var line dshLine
 		if err := dec.Decode(&line); err != nil {
-			warnings = append(warnings, "stopped reading at a malformed record")
+			warnings = append(warnings, session.ReadStopWarning(err))
 			break
 		}
 		if first {
@@ -254,14 +255,14 @@ func readThread(fi fileInfo) (session.Thread, error) {
 				continue
 			}
 		}
-		applyLine(&src, &entries, line)
+		applyLine(&src, &entries, &unknown, line)
 	}
 	if src.Metadata["title"] == "" {
 		if cwd := src.Metadata["cwd"]; cwd != "" {
 			src.Metadata["title"] = filepath.Base(cwd)
 		}
 	}
-	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
+	return session.Thread{Source: src, Entries: entries, Warnings: unknown.AppendTo(warnings)}, nil
 }
 
 // applyLine folds one event into the source metadata or the timeline. Events
@@ -269,7 +270,7 @@ func readThread(fi fileInfo) (session.Thread, error) {
 // land on the final value naturally. Each data shape is decoded
 // independently; an unparseable or absent shape makes that event contribute
 // nothing rather than fail the line.
-func applyLine(src *session.Source, entries *[]session.Entry, line dshLine) {
+func applyLine(src *session.Source, entries *[]session.Entry, unknown *session.UnknownTypes, line dshLine) {
 	switch {
 	case line.Type == "user/message":
 		// Human turns only; injected context and unverified compaction
@@ -330,7 +331,31 @@ func applyLine(src *session.Source, entries *[]session.Entry, line dshLine) {
 		*entries = append(*entries, session.Entry{
 			Kind: session.KindCompact, Text: d.Summary, Time: msToTime(line.Time),
 		})
+	case dshIgnored[line.Type]:
+	default:
+		unknown.Add(line.Type)
 	}
+}
+
+// dshIgnored names every other event dsh writes: the streamed halves of the
+// messages already read, the tools and commands the agent ran, the turn and
+// step frames around them, the session's own settings and approvals, and the
+// model requests the CLI makes for itself. Nothing here is conversation, and
+// naming them is what lets an event dsh grows later announce itself.
+var dshIgnored = map[string]bool{
+	"assistant/chunk": true, "text-chunks": true, "reasoning-chunks": true, "tool-call-chunks": true,
+
+	"tool/call": true, "tool/result": true, "tool/code-dispatch": true,
+	"tool/code-dispatch-start": true, "command/run": true, "command/done": true, "todo/write": true,
+
+	"turn/start": true, "turn/end": true, "step/start": true, "step/end": true,
+
+	"session": true, "session/end-seed": true, "sandbox/mode": true, "approval/policy": true,
+	"approval/asked": true, "approval/decided": true, "permission/preset": true,
+	"agent-preset/selected": true, "subagent/descriptor": true, "agent/inbox/spliced": true,
+
+	"request/context": true, "llm/retry": true, "llm/retry-started": true,
+	"session/title-llm-request": true, "web/deepseek-search-llm-request": true,
 }
 
 // isAppend reports whether an event joined the surface as a plain append.

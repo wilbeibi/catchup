@@ -156,3 +156,74 @@ func TestIsInjectedUserText(t *testing.T) {
 		}
 	}
 }
+
+// rolloutCompacted exercises the two records Codex writes for one compaction:
+// the rollout item carrying the history it handed the model, and the event
+// that announces it. Two more compactions follow, keeping a later turn; the
+// final pair has no visible entry before it and must remain a distinct seam.
+const rolloutCompacted = `{"timestamp":"2026-07-26T21:00:00.0Z","type":"session_meta","payload":{"id":"sess-2","cwd":"/home/u/src/proj"}}
+{"timestamp":"2026-07-26T21:01:00.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"first question"}]}}
+{"timestamp":"2026-07-26T21:02:00.0Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"first answer"}]}}
+{"timestamp":"2026-07-26T21:03:00.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"second question"}]}}
+{"timestamp":"2026-07-26T21:04:00.0Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"second answer"}]}}
+{"timestamp":"2026-07-26T21:05:00.0Z","type":"compacted","payload":{"message":"","replacement_history":[{"type":"message","role":"developer","content":[{"type":"input_text","text":"<permissions>"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions for /home/u/src/proj\n\n<INSTRUCTIONS>\nbe nice\n</INSTRUCTIONS>"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"second question"}]},{"type":"compaction","encrypted_content":"opaque"}]}}
+{"timestamp":"2026-07-26T21:05:01.0Z","type":"turn_context","payload":{"cwd":"/home/u/src/proj"}}
+{"timestamp":"2026-07-26T21:05:02.0Z","type":"event_msg","payload":{"type":"context_compacted"}}
+{"timestamp":"2026-07-26T21:06:00.0Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"third question"}]}}
+{"timestamp":"2026-07-26T21:07:00.0Z","type":"compacted","payload":{"message":"","replacement_history":[{"type":"message","role":"user","content":[{"type":"input_text","text":"third question"}]}]}}
+{"timestamp":"2026-07-26T21:07:01.0Z","type":"event_msg","payload":{"type":"context_compacted"}}
+{"timestamp":"2026-07-26T21:07:02.0Z","type":"compacted","payload":{"message":"","replacement_history":[{"type":"message","role":"user","content":[{"type":"input_text","text":"third question"}]}]}}
+{"timestamp":"2026-07-26T21:07:03.0Z","type":"event_msg","payload":{"type":"context_compacted"}}
+{"timestamp":"2026-07-26T21:07:30.0Z","type":"response_item","payload":{"type":"chat_message"}}
+{"timestamp":"2026-07-26T21:07:45.0Z","type":"event_msg","payload":{"type":"user_post"}}
+{"timestamp":"2026-07-26T21:08:00.0Z","type":"telemetry_probe","payload":{"beacon":1}}
+`
+
+func TestReadCompaction(t *testing.T) {
+	root := t.TempDir()
+	writeRollout(t, root, "rollout-2026-07-26T21-00-00-sess-2.jsonl", rolloutCompacted, time.Now())
+
+	p := New()
+	src, err := p.Resolve(context.Background(), session.Roots{Codex: root}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	th, err := p.Read(context.Background(), src)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The compacted record and the context_compacted event that follows it are
+	// one seam, so they fold into one marker. Each record lists everything kept
+	// from every window before it, so the last one is the whole truth: only the
+	// turn it names is Retained, and the earlier mark is gone.
+	want := []struct {
+		kind, text string
+		retained   bool
+	}{
+		{session.KindMessage, "first question", false},
+		{session.KindMessage, "first answer", false},
+		{session.KindMessage, "second question", false},
+		{session.KindMessage, "second answer", false},
+		{session.KindCompact, "", false},
+		{session.KindMessage, "third question", true},
+		{session.KindCompact, "", false},
+		{session.KindCompact, "", false},
+	}
+	if len(th.Entries) != len(want) {
+		t.Fatalf("got %d entries, want %d: %+v", len(th.Entries), len(want), th.Entries)
+	}
+	for i, w := range want {
+		got := th.Entries[i]
+		if got.Kind != w.kind || got.Text != w.text || got.Retained != w.retained {
+			t.Errorf("entry %d = {%s %q retained:%v}, want {%s %q retained:%v}",
+				i, got.Kind, got.Text, got.Retained, w.kind, w.text, w.retained)
+		}
+	}
+
+	if len(th.Warnings) != 1 || !strings.Contains(th.Warnings[0], "telemetry_probe") ||
+		!strings.Contains(th.Warnings[0], "response_item/chat_message") ||
+		!strings.Contains(th.Warnings[0], "event_msg/user_post") {
+		t.Errorf("warnings = %q, want one naming the unrecognized outer and nested record types", th.Warnings)
+	}
+}
