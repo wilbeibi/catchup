@@ -86,21 +86,20 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 		return nil, err
 	}
 	limit := opts.EffectiveLimit()
-	q := strings.ToLower(opts.Query)
 	out := make([]session.Summary, 0, limit)
 	for _, d := range dirs {
 		if len(out) >= limit {
 			break
 		}
 		// state.json answers the cwd filter without opening the wire log.
-		if opts.Cwd != "" && !session.SameDir(d.meta.WorkDir, opts.Cwd) {
+		if !opts.MatchesCwd(d.meta.WorkDir) {
 			continue
 		}
 		t, err := readThread(newSource(d))
 		if err != nil || len(t.Entries) == 0 {
 			continue
 		}
-		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {
+		if !opts.MatchesQuery(t) {
 			continue
 		}
 		out = append(out, t.Summary())

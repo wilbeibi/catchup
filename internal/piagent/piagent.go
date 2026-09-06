@@ -77,7 +77,7 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 }
 
 func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
-	return listSessions(roots.PiAgent, opts.Query, opts.Cwd, opts.EffectiveLimit())
+	return listSessions(roots.PiAgent, opts)
 }
 
 // --- file enumeration -------------------------------------------------------
@@ -123,25 +123,28 @@ func findByID(files []fileInfo, id string, requireNameHit bool) (session.Source,
 
 // --- listing ----------------------------------------------------------------
 
-func listSessions(root, query, cwd string, limit int) ([]session.Summary, error) {
+func listSessions(root string, opts session.ListOptions) ([]session.Summary, error) {
 	files, err := sessionFiles(root)
 	if err != nil {
 		return nil, err
 	}
-	q := strings.ToLower(query)
+	limit := opts.EffectiveLimit()
 	out := make([]session.Summary, 0, limit)
 	for _, fi := range files {
 		if len(out) >= limit {
 			break
 		}
+		if opts.Query != "" || opts.Cwd != "" {
+			raw, err := os.ReadFile(fi.path)
+			if err != nil || !opts.MayMatch(raw) {
+				continue
+			}
+		}
 		t, err := readThread(fi)
 		if err != nil || len(t.Entries) == 0 {
 			continue
 		}
-		if cwd != "" && !session.SameDir(t.Source.Metadata["cwd"], cwd) {
-			continue
-		}
-		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {
+		if !opts.Matches(t) {
 			continue
 		}
 		out = append(out, t.Summary())

@@ -84,7 +84,7 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 }
 
 func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
-	return listSessions(roots.Codex, opts.Query, opts.Cwd, opts.EffectiveLimit())
+	return listSessions(roots.Codex, opts)
 }
 
 // --- file enumeration -------------------------------------------------------
@@ -132,25 +132,31 @@ func findByID(files []fileInfo, id string, requireNameHit bool) (session.Source,
 // listSessions walks files newest-first and collects up to limit summaries.
 // When cwd is set, only sessions whose working directory matches exactly are
 // included.
-func listSessions(root, query, cwd string, limit int) ([]session.Summary, error) {
+func listSessions(root string, opts session.ListOptions) ([]session.Summary, error) {
 	files, err := sessionFiles(root)
 	if err != nil {
 		return nil, err
 	}
-	q := strings.ToLower(query)
+	limit := opts.EffectiveLimit()
 	out := make([]session.Summary, 0, limit)
 	for _, fi := range files {
 		if len(out) >= limit {
 			break
 		}
+		if opts.Query != "" || opts.Cwd != "" {
+			raw, err := os.ReadFile(fi.path)
+			if err != nil || !opts.MayMatchCwd(raw) {
+				continue
+			}
+			if !opts.MayMatchQuery(raw) && !mayDeriveMatch(opts.Query) {
+				continue
+			}
+		}
 		t, err := readThread(fi)
 		if err != nil || len(t.Entries) == 0 {
 			continue
 		}
-		if cwd != "" && !session.SameDir(t.Source.Metadata["cwd"], cwd) {
-			continue
-		}
-		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {
+		if !opts.Matches(t) {
 			continue
 		}
 		out = append(out, t.Summary())
@@ -448,6 +454,23 @@ func failedCommand(raw json.RawMessage, ts time.Time) (session.Entry, bool) {
 	}
 	text += fmt.Sprintf("exit status %d", *p.Item.ExitCode)
 	return session.Failure(p.Item.Type, p.Item.Command, text, ts), true
+}
+
+// exitStatus prefixes the suffix failedCommand appends to a failed command. It
+// is the only visible text this package writes rather than decodes, so it is the
+// only text a listing query can match that the session file does not contain.
+const exitStatus = "exit status "
+
+// mayDeriveMatch reports whether q could be found inside a synthesized
+// "exit status N" suffix, which the raw-bytes prefilter cannot see. failedCommand
+// joins that suffix to the decoded output with a newline and the prefilter never
+// decides a query containing a control byte, so a query that reaches here matches
+// either wholly inside the decoded output, which the file does contain, or wholly
+// inside this suffix. Trailing digits stand in for the unknown status, which at
+// worst makes an all-digit query undecidable.
+func mayDeriveMatch(q string) bool {
+	q = strings.TrimRight(strings.ToLower(q), "0123456789")
+	return strings.Contains(exitStatus, q)
 }
 
 func decodeEvent(raw json.RawMessage) string {

@@ -227,3 +227,39 @@ func TestReadCompaction(t *testing.T) {
 		t.Errorf("warnings = %q, want one naming the unrecognized outer and nested record types", th.Warnings)
 	}
 }
+
+// failedCommand appends an exit status that appears nowhere in the session file,
+// so the raw-bytes prefilter must not be allowed to reject a query that could
+// land inside it.
+func TestMayDeriveMatch(t *testing.T) {
+	undecidable := []string{"exit status 1", "exit status", "status 1", "t status ", "exit", "1"}
+	for _, q := range undecidable {
+		if !mayDeriveMatch(q) {
+			t.Errorf("mayDeriveMatch(%q) = false, want true: a failed command's text can contain this", q)
+		}
+	}
+	decidable := []string{"deploy", "exit statuses", "exit status 1 and then", "rollback"}
+	for _, q := range decidable {
+		if mayDeriveMatch(q) {
+			t.Errorf("mayDeriveMatch(%q) = true, want false: no synthesized text contains this", q)
+		}
+	}
+}
+
+// The listing prefilter reads a session's bytes, but "exit status 1" is written
+// during parsing and appears nowhere in the file. This is the case the byte
+// prefilter has to defer on rather than reject.
+func TestListFindsSynthesizedExitStatus(t *testing.T) {
+	root := t.TempDir()
+	writeRollout(t, root, "rollout-1.jsonl", rolloutOne, time.Now())
+	if strings.Contains(rolloutOne, "exit status 1") {
+		t.Fatal("fixture already contains the synthesized text; this test proves nothing")
+	}
+	got, err := listSessions(root, session.ListOptions{Query: "exit status 1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("listSessions(-q %q) returned %d sessions, want 1", "exit status 1", len(got))
+	}
+}

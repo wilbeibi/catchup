@@ -80,7 +80,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 		return nil, err
 	}
 	defer db.Close()
-	return listSessions(ctx, db, path, opts.Query, opts.Cwd, opts.EffectiveLimit())
+	return listSessions(ctx, db, path, opts)
 }
 
 // --- database access --------------------------------------------------------
@@ -172,14 +172,15 @@ func loadSession(ctx context.Context, db *sql.DB, path, id string) (session.Sour
 
 // --- listing ----------------------------------------------------------------
 
-func listSessions(ctx context.Context, db *sql.DB, path, query, cwd string, limit int) ([]session.Summary, error) {
+func listSessions(ctx context.Context, db *sql.DB, path string, opts session.ListOptions) ([]session.Summary, error) {
 	rows, err := db.QueryContext(ctx, `SELECT `+sessionColumns+` FROM session WHERE time_archived IS NULL ORDER BY time_updated DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	q := strings.ToLower(query)
+	q := strings.ToLower(opts.Query)
+	limit := opts.EffectiveLimit()
 	out := make([]session.Summary, 0, limit)
 	for rows.Next() {
 		if len(out) >= limit {
@@ -189,7 +190,7 @@ func listSessions(ctx context.Context, db *sql.DB, path, query, cwd string, limi
 		if err != nil {
 			return nil, err
 		}
-		if cwd != "" && !session.SameDir(src.Metadata["cwd"], cwd) {
+		if !opts.MatchesCwd(src.Metadata["cwd"]) {
 			continue
 		}
 		if q != "" {

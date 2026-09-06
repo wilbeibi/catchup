@@ -121,7 +121,6 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 	if err != nil {
 		return nil, err
 	}
-	q := strings.ToLower(opts.Query)
 	limit := opts.EffectiveLimit()
 	out := make([]session.Summary, 0, limit)
 	for _, d := range dirs {
@@ -131,14 +130,14 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 		// The directory filter is answered from workspace.yaml alone, so a
 		// session in another directory never costs an event-log parse.
 		meta := readWorkspace(d.path)
-		if opts.Cwd != "" && !session.SameDir(meta["cwd"], opts.Cwd) {
+		if !opts.MatchesCwd(meta["cwd"]) {
 			continue
 		}
 		t, err := readThread(d, meta)
 		if err != nil || len(t.Entries) == 0 {
 			continue
 		}
-		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {
+		if !opts.MatchesQuery(t) {
 			continue
 		}
 		out = append(out, t.Summary())

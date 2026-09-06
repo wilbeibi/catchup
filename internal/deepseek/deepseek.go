@@ -97,7 +97,6 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 	if err != nil {
 		return nil, err
 	}
-	q := strings.ToLower(opts.Query)
 	limit := opts.EffectiveLimit()
 	out := make([]session.Summary, 0, limit)
 	for _, fi := range files {
@@ -108,10 +107,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 		if err != nil || len(t.Entries) == 0 {
 			continue
 		}
-		if opts.Cwd != "" && !session.SameDir(t.Source.Metadata["cwd"], opts.Cwd) {
-			continue
-		}
-		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {
+		if !opts.Matches(t) {
 			continue
 		}
 		out = append(out, t.Summary())

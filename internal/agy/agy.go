@@ -100,7 +100,7 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 }
 
 func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
-	return listSessions(roots.Agy, opts.Query, opts.Cwd, opts.EffectiveLimit())
+	return listSessions(roots.Agy, opts)
 }
 
 // --- file enumeration -------------------------------------------------------
@@ -273,29 +273,38 @@ func sourceOf(fi fileInfo, h history) session.Source {
 // summaries. When cwd is set, only conversations located in that directory by
 // history.jsonl (by id, or by matchStart for single-prompt conversations) are
 // included.
-func listSessions(root, query, cwd string, limit int) ([]session.Summary, error) {
+func listSessions(root string, opts session.ListOptions) ([]session.Summary, error) {
 	files, err := sessionFiles(root)
 	if err != nil {
 		return nil, err
 	}
 	h := loadHistory(root)
-	q := strings.ToLower(query)
+	limit := opts.EffectiveLimit()
 	out := make([]session.Summary, 0, limit)
 	for _, fi := range files {
 		if len(out) >= limit {
 			break
 		}
+		src := sourceOf(fi, h)
+		// history.jsonl locates most conversations by id. When it does, applyStart
+		// below is a no-op, so the directory is already final and rejects here,
+		// before the transcript is parsed.
+		if src.Metadata["cwd"] != "" && !opts.MatchesCwd(src.Metadata["cwd"]) {
+			continue
+		}
+		if opts.Query != "" {
+			raw, err := os.ReadFile(fi.path)
+			if err != nil || !opts.MayMatchQuery(raw) {
+				continue
+			}
+		}
 		entries, _, err := readEntries(fi)
 		if err != nil || len(entries) == 0 {
 			continue
 		}
-		src := sourceOf(fi, h)
 		applyStart(&src, entries, h)
-		if cwd != "" && !session.SameDir(src.Metadata["cwd"], cwd) {
-			continue
-		}
 		t := session.Thread{Source: src, Entries: entries}
-		if q != "" && !strings.Contains(strings.ToLower(t.VisibleText()), q) {
+		if !opts.Matches(t) {
 			continue
 		}
 		out = append(out, t.Summary())
