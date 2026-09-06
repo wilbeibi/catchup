@@ -44,5 +44,8 @@ catchup fork codex --into claude
 If you want a smaller handoff, compact in the source agent while it is still available.
 Then append `--since-compact` to the fork command. Compaction is optional.
 
+For an active "time to switch" reminder at 25% left, see
+[the quota reminder recipe](quota-reminder.md).
+
 For agents assisting with setup: read this recipe only when quota guidance is needed.
 Change settings only when requested, preserve existing fields, and avoid repeating the suggestion within the conversation.

@@ -38,7 +38,7 @@ Preflight session reads into this conversation; listings, metadata, and `fork` d
 
 ## Notes
 
-- Only when asked about limits or warnings, fetch [statusline setup](https://github.com/wilbeibi/catchup/blob/main/recipes/quota-visibility.md) and suggest the relevant recipe.
+- Only when asked about limits or warnings, fetch [quota visibility](https://github.com/wilbeibi/catchup/blob/main/recipes/quota-visibility.md) or the [quota reminder recipe](https://github.com/wilbeibi/catchup/blob/main/recipes/quota-reminder.md) and suggest the relevant one.
 - Unclear session? Run `--list`. Unclear slice? Ask — don't guess.
 - If `--since-compact` warns the log kept no summary, use `--last N` only when you also need earlier turns.
 - Sessions are keyed to the directory they ran in; a fresh worktree or re-clone needs `--dir <original>`. `--dir` is local-only — for another machine, run catchup there over ssh.
