@@ -193,14 +193,18 @@ func listSessions(ctx context.Context, db *sql.DB, path string, opts session.Lis
 		if !opts.MatchesCwd(src.Metadata["cwd"]) {
 			continue
 		}
+		// The query decides before the preview is fetched: a session the query
+		// rejects should cost one statement, not two.
+		var match *session.Match
 		if q != "" {
-			match, err := matchesText(ctx, db, src.Ref.SessionID, q)
+			role, text, ok, err := matchText(ctx, db, src.Ref.SessionID, q)
 			if err != nil {
 				return nil, err
 			}
-			if !match {
+			if !ok {
 				continue
 			}
+			match = opts.Excerpt(session.Entry{Kind: session.KindMessage, Role: role, Text: text})
 		}
 		out = append(out, session.Summary{
 			Ref:       src.Ref,
@@ -208,6 +212,7 @@ func listSessions(ctx context.Context, db *sql.DB, path string, opts session.Lis
 			Title:     src.Metadata["title"],
 			Cwd:       src.Metadata["cwd"],
 			Preview:   firstText(ctx, db, src.Ref.SessionID),
+			Match:     match,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -219,16 +224,35 @@ func listSessions(ctx context.Context, db *sql.DB, path string, opts session.Lis
 	return out, nil
 }
 
-func matchesText(ctx context.Context, db *sql.DB, sessionID, lowerQuery string) (bool, error) {
-	var n int
-	err := db.QueryRowContext(ctx,
-		`SELECT EXISTS(SELECT 1 FROM part
-		   WHERE session_id = ?
-		     AND json_extract(data,'$.type') = 'text'
-		     AND instr(lower(json_extract(data,'$.text')), ?) > 0)`,
+// matchText returns the first message text in the session that contains the
+// query, and the role that wrote it, so a listing can quote the passage instead
+// of only reporting that one exists. The ordering is readThread's, so the quoted
+// passage is the one a reader would meet first.
+//
+// The match itself stays in SQL, which keeps a queried listing from loading
+// sessions it is about to discard. SQLite's lower() folds ASCII only, so this
+// finds slightly less than the Go matcher would on a cased non-ASCII query; the
+// divergence predates excerpts and is unchanged by them.
+func matchText(ctx context.Context, db *sql.DB, sessionID, lowerQuery string) (role, text string, ok bool, err error) {
+	var mdata string
+	var txt sql.NullString
+	err = db.QueryRowContext(ctx,
+		`SELECT m.data, json_extract(p.data,'$.text')
+		   FROM part p JOIN message m ON p.message_id = m.id
+		   WHERE p.session_id = ?
+		     AND json_extract(p.data,'$.type') = 'text'
+		     AND instr(lower(json_extract(p.data,'$.text')), ?) > 0
+		   ORDER BY m.time_created, p.time_created, p.id
+		   LIMIT 1`,
 		sessionID, lowerQuery,
-	).Scan(&n)
-	return n == 1, err
+	).Scan(&mdata, &txt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	return roleOf(mdata), txt.String, true, nil
 }
 
 func firstText(ctx context.Context, db *sql.DB, sessionID string) string {

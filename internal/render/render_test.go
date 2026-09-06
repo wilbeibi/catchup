@@ -293,3 +293,72 @@ func TestListCJKAlignment(t *testing.T) {
 		}
 	}
 }
+
+// A queried listing answers "why this row" in the column an unqueried one spends
+// on the title, and says so in the header.
+func TestListShowsTheMatch(t *testing.T) {
+	sums := []session.Summary{
+		{Ref: session.Ref{Provider: "codex", SessionID: "a"}, Rank: 1, UpdatedAt: time.Now(),
+			Title: "catchup", Cwd: "/src/catchup", Preview: "opening message",
+			Match: &session.Match{Role: session.RoleAssistant, Kind: session.KindMessage,
+				Text: "the egress rule\nwas wrong", TruncatedBefore: true, TruncatedAfter: true}},
+	}
+	var b bytes.Buffer
+	if err := List(&b, "codex", sums, session.FormatMarkdown); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	if !strings.Contains(out, "MATCH") || strings.Contains(out, "TITLE") {
+		t.Errorf("queried listing should head the column MATCH, not TITLE:\n%s", out)
+	}
+	// One row stays one line: the passage's own newlines are the table's problem.
+	if !strings.Contains(out, "the egress rule was wrong") {
+		t.Errorf("match not collapsed onto the row:\n%s", out)
+	}
+	if n := strings.Count(strings.TrimSpace(out), "\n"); n != 1 {
+		t.Errorf("listing is %d lines past the header, want 1:\n%s", n, out)
+	}
+	if !strings.Contains(out, "…the egress") || !strings.Contains(out, "wrong…") {
+		t.Errorf("a windowed passage should be elided on both sides:\n%s", out)
+	}
+	if strings.Contains(out, "catchup ") && strings.Contains(out, "opening message") {
+		t.Errorf("title or preview leaked into a queried row:\n%s", out)
+	}
+}
+
+// JSON has no single column to spend, so it keeps the title and adds the match.
+func TestJSONListCarriesMatchAndTitle(t *testing.T) {
+	sums := []session.Summary{
+		{Ref: session.Ref{Provider: "codex", SessionID: "a"}, Rank: 1, UpdatedAt: time.Now(),
+			Title: "catchup", Preview: "opening message",
+			Match: &session.Match{Role: session.RoleUser, Kind: session.KindMessage,
+				Text: "the egress rule\nwas wrong", TruncatedAfter: true}},
+	}
+	var b bytes.Buffer
+	if err := List(&b, "codex", sums, session.FormatJSON); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	for _, want := range []string{
+		`"title": "catchup"`,
+		`"role": "user"`,
+		`"kind": "message"`,
+		`"the egress rule\nwas wrong"`, // newlines survive for the agent reading this
+		`"truncated_after": true`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("json listing missing %s:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "truncated_before") {
+		t.Errorf("an untruncated side should be omitted, not spelled false:\n%s", out)
+	}
+	// An unqueried listing carries no match key at all.
+	b.Reset()
+	if err := List(&b, "codex", []session.Summary{{Ref: sums[0].Ref, Rank: 1, Title: "catchup"}}, session.FormatJSON); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(b.String(), "match") {
+		t.Errorf("unqueried json listing carries a match key:\n%s", b.String())
+	}
+}

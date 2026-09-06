@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -241,5 +242,72 @@ func TestModelIsLastRecorded(t *testing.T) {
 				t.Fatalf("model = %v, want %s/%s", th.Source.Metadata, tc.wantModel, tc.wantPr)
 			}
 		})
+	}
+}
+
+// makeOutOfOrderDB builds one session whose message.sequence and time_created
+// disagree, which the schema permits: sequence is the reliable field (see the
+// package doc) and the user's message carries the later timestamp.
+func makeOutOfOrderDB(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	db, err := sql.Open("sqlite", filepath.Join(root, "db.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	stmts := []string{
+		`CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, title TEXT,
+			time_created INTEGER, time_updated INTEGER, time_compacting INTEGER,
+			time_archived INTEGER, parent_id TEXT)`,
+		`CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER,
+			time_updated INTEGER, data TEXT, sequence INTEGER)`,
+		`CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT,
+			time_created INTEGER, time_updated INTEGER, data TEXT, sequence INTEGER)`,
+		`INSERT INTO session(id,directory,title,time_created,time_updated) VALUES ('s1','/home/u/src/x','order',100,900)`,
+		`INSERT INTO message(id,session_id,time_created,sequence,data) VALUES ('ma','s1',200,0,'{"role":"user"}')`,
+		`INSERT INTO message(id,session_id,time_created,sequence,data) VALUES ('mb','s1',100,1,'{"role":"assistant"}')`,
+		`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('pa','ma','s1',200,'{"type":"text","text":"first by sequence: egress"}')`,
+		`INSERT INTO part(id,message_id,session_id,time_created,data) VALUES ('pb','mb','s1',100,'{"type":"text","text":"second by sequence: egress"}')`,
+	}
+	for _, st := range stmts {
+		if _, err := db.Exec(st); err != nil {
+			t.Fatalf("exec %q: %v", st, err)
+		}
+	}
+	return root
+}
+
+// The quoted match is found by its own SQL statement, so it can disagree with the
+// transcript about which message comes first. It must not: a row that quotes the
+// second passage sends the reader looking for text they will meet later.
+func TestMatchFollowsTranscriptOrder(t *testing.T) {
+	roots := session.Roots{ZCode: makeOutOfOrderDB(t)}
+	p := New()
+	ctx := context.Background()
+
+	sums, err := p.List(ctx, roots, session.ListOptions{Query: "egress"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sums) != 1 || sums[0].Match == nil {
+		t.Fatalf("query returned %+v, want one row carrying a match", sums)
+	}
+	if sums[0].Match.Role != session.RoleUser {
+		t.Errorf("match role = %q, want %q: sequence, not time_created, orders this schema",
+			sums[0].Match.Role, session.RoleUser)
+	}
+
+	src, err := p.Resolve(ctx, roots, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	th, err := p.Read(ctx, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(th.Entries[0].Text, sums[0].Match.Text) {
+		t.Errorf("match %q is not in the transcript's first entry %q",
+			sums[0].Match.Text, th.Entries[0].Text)
 	}
 }

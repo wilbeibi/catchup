@@ -238,6 +238,12 @@ type Summary struct {
 	Title     string
 	Cwd       string
 	Preview   string
+
+	// Match is the passage that satisfied the listing's keyword query, and is nil
+	// for a listing that carried none. It stands beside Preview rather than
+	// replacing it: Preview is always the session's opening message, whether or
+	// not anything was searched for.
+	Match *Match
 }
 
 // DefaultListLimit is the row cap a listing falls back to when the caller sets

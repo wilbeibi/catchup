@@ -73,6 +73,37 @@ type summaryDoc struct {
 	Title     string `json:"title,omitempty"`
 	Cwd       string `json:"cwd,omitempty"`
 	Preview   string `json:"preview,omitempty"`
+
+	// Match is present only for a queried listing. Title stays beside it: the
+	// human table trades one for the other because it has one column, and a
+	// consumer of this has no such constraint.
+	Match *matchDoc `json:"match,omitempty"`
+}
+
+// matchDoc is the passage that satisfied a listing's query. Text keeps the
+// newlines it has in the session; the truncation flags say whether it is a
+// window into a longer message, which is what a reader needs before quoting it
+// as if it were whole.
+type matchDoc struct {
+	Role            string `json:"role,omitempty"`
+	Kind            string `json:"kind,omitempty"`
+	Text            string `json:"text"`
+	TruncatedBefore bool   `json:"truncated_before,omitempty"`
+	TruncatedAfter  bool   `json:"truncated_after,omitempty"`
+}
+
+// makeMatchDoc projects a match, or nothing for a listing that carried no query.
+func makeMatchDoc(m *session.Match) *matchDoc {
+	if m == nil {
+		return nil
+	}
+	return &matchDoc{
+		Role:            m.Role,
+		Kind:            m.Kind,
+		Text:            m.Text,
+		TruncatedBefore: m.TruncatedBefore,
+		TruncatedAfter:  m.TruncatedAfter,
+	}
 }
 
 // jsonList encodes a listing as a JSON array. An empty listing is [], not an
@@ -88,6 +119,7 @@ func jsonList(w io.Writer, summaries []session.Summary) error {
 			Title:     s.Title,
 			Cwd:       s.Cwd,
 			Preview:   s.Preview,
+			Match:     makeMatchDoc(s.Match),
 		}
 	}
 	return encode(w, docs)

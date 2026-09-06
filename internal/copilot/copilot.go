@@ -140,7 +140,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 		if !opts.MatchesQuery(t) {
 			continue
 		}
-		out = append(out, t.Summary())
+		out = append(out, opts.Summarize(t))
 	}
 	for i := range out {
 		out[i].Rank = i + 1

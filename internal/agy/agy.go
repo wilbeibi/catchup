@@ -307,7 +307,7 @@ func listSessions(root string, opts session.ListOptions) ([]session.Summary, err
 		if !opts.Matches(t) {
 			continue
 		}
-		out = append(out, t.Summary())
+		out = append(out, opts.Summarize(t))
 	}
 	for i := range out {
 		out[i].Rank = i + 1

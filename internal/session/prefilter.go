@@ -57,13 +57,18 @@ func (o ListOptions) MatchesCwd(dir string) bool {
 	return o.Cwd == "" || SameDir(dir, o.Cwd)
 }
 
-// MatchesQuery reports whether a thread's visible text satisfies the keyword
-// filter: a literal, case-insensitive substring match.
+// MatchesQuery reports whether a thread satisfies the keyword filter: a literal,
+// case-insensitive substring match against one entry's text.
+//
+// One entry's, not the whole transcript's: a query is answered by the passage
+// that contains it, and a listing shows that passage. The only query this
+// refuses that a match against the joined text would accept is one carrying a
+// newline, which is the only kind that can span two entries.
 func (o ListOptions) MatchesQuery(t Thread) bool {
 	if o.Query == "" {
 		return true
 	}
-	return strings.Contains(strings.ToLower(t.VisibleText()), strings.ToLower(o.Query))
+	return o.firstMatch(t) != nil
 }
 
 // containsFold reports whether raw contains needle, comparing A-Z case-blind.

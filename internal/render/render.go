@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strconv"
 
 	"github.com/mattn/go-runewidth"
@@ -86,11 +87,14 @@ func List(w io.Writer, provider string, summaries []session.Summary, f session.F
 	}
 }
 
-// tableList renders the human listing: columns are "SESSION", "UPDATED",
-// "TITLE". SESSION is the selector the reader would retype (claude/3), not the
-// session id — nobody types a UUID by hand, and the id is one --json away for
-// the scripts that want it. TITLE takes whatever width is left, since it is the
-// only column that answers "was this the one?". Columns are aligned with
+// tableList renders the human listing: columns are "SESSION", "UPDATED", and
+// either "TITLE" or, when the listing carried a query, "MATCH". SESSION is the
+// selector the reader would retype (claude/3), not the session id — nobody types
+// a UUID by hand, and the id is one --json away for the scripts that want it.
+// The last column takes whatever width is left, since it is the only one that
+// answers "was this the one?"; under a query the passage that matched answers
+// that better than a title the reader did not search for, and the title stays
+// one --json away like the id. Columns are aligned with
 // display-width-aware padding so CJK characters (2 columns each in terminals)
 // align correctly.
 func tableList(w io.Writer, provider string, summaries []session.Summary) error {
@@ -122,17 +126,27 @@ func tableList(w io.Writer, provider string, summaries []session.Summary) error 
 		titleW = 80
 	}
 
+	// Every row of a queried listing carries the passage it matched, so the rows
+	// themselves say what the listing was asked.
+	last := "TITLE"
+	if slices.ContainsFunc(summaries, func(s session.Summary) bool { return s.Match != nil }) {
+		last = "MATCH"
+	}
 	fmt.Fprintf(w, "%s %s %s\n",
 		runewidth.FillRight("SESSION", selW),
 		runewidth.FillRight("UPDATED", updW),
-		"TITLE",
+		last,
 	)
 
 	for i, s := range summaries {
+		cell := titleCell(s)
+		if s.Match != nil {
+			cell = matchCell(*s.Match)
+		}
 		fmt.Fprintf(w, "%s %s %s\n",
 			runewidth.FillRight(handles[i], selW),
 			runewidth.FillRight(ages[i], updW),
-			runewidth.Truncate(titleCell(s), titleW, "…"),
+			runewidth.Truncate(cell, titleW, "…"),
 		)
 	}
 	return nil
@@ -152,6 +166,20 @@ func titleCell(s session.Summary) string {
 		return oneLine(s.Preview)
 	}
 	return title
+}
+
+// matchCell renders a matched passage for one row: collapsed to a single line,
+// with an ellipsis on whichever side the excerpt was cut away from its message.
+// The span itself keeps its newlines for --json; only this column loses them.
+func matchCell(m session.Match) string {
+	text := oneLine(m.Text)
+	if m.TruncatedBefore {
+		text = "…" + text
+	}
+	if m.TruncatedAfter {
+		text += "…"
+	}
+	return text
 }
 
 // handle is the "<agent>/<rank>" selector that re-selects a listed row on a
