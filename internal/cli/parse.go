@@ -403,8 +403,8 @@ func normalize(cmd *Command) error {
 		return errors.New("--id cannot be combined with a /rank selector")
 	case t.SessionID != "" && cmd.List:
 		return errors.New("--id cannot be combined with --list")
-	case t.SessionID != "" && t.Query != "":
-		return errors.New("--id cannot be combined with -q")
+	case t.SessionID != "" && t.Query != "" && cmd.Action == "fork":
+		return errors.New("fork --id selects the exact session to resume; -q does not apply")
 	case t.SessionID != "" && cmd.Dir != "":
 		return errors.New("--id selects one exact session; --dir does not apply")
 	case looksLikeRemoteDir(cmd.Dir):
@@ -425,8 +425,23 @@ func normalize(cmd *Command) error {
 
 	// -q implies list mode unless a concrete row was selected by rank or id —
 	// or the action is fork, where a bare query picks the fork source instead.
+	// With a row selected, the same keyword narrows the read to the exchanges
+	// that hold it: one word, applied at whichever scope the command named.
 	if cmd.Action == "" && t.Query != "" && t.Rank == 0 && t.SessionID == "" {
 		cmd.List = true
+	}
+	// Those reads are the second scope. -q locates a point in the session and
+	// the two trims take an end of it, so pairing them asks which cut comes
+	// first; -i shows no bodies for a point to be in.
+	if cmd.Action == "" && t.Query != "" && !cmd.List {
+		switch {
+		case cmd.LastN > 0:
+			return errors.New("-q reads around the matches and --last reads the tail; they are alternative trims")
+		case cmd.SinceCompact:
+			return errors.New("-q reads around the matches and --since-compact reads after the seam; they are alternative trims")
+		case cmd.MetaOnly:
+			return errors.New("-i shows no message bodies, so there is nothing for -q to find in them")
+		}
 	}
 	// Checked after the implicit rule so -q listings are covered too. There
 	// is no HTML listing view; ignoring the flag would be a silent no-op.

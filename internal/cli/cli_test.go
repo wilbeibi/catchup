@@ -396,7 +396,7 @@ func TestClampEntriesBoundsFailures(t *testing.T) {
 		session.Failure("Write", json.RawMessage(input), output, time.Time{}),
 	}}
 
-	got := clampEntries(thread)
+	got := clampEntries(thread, "")
 	if got.Entries[0] != thread.Entries[0] {
 		t.Errorf("message entry changed: %+v", got.Entries[0])
 	}
@@ -1374,5 +1374,99 @@ func TestRunForkFromOversizedArtifact(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "rerun with --last") {
 		t.Errorf("hint names flags --from rejects: %v", err)
+	}
+}
+
+// TestTurnsAround covers the shape of a keyword read: whole turns, the question
+// that produced a matched answer, merged overlap, and a head that admits the
+// result is a slice.
+func TestTurnsAround(t *testing.T) {
+	u := func(s string) session.Entry {
+		return session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: s}
+	}
+	a := func(s string) session.Entry {
+		return session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: s}
+	}
+	// Turns: [1,2] [3,4] [5,6] [7,8] [9,10]. The word is in entries 4 and 6.
+	thread := session.Thread{Entries: []session.Entry{
+		u("q1"), a("a1"),
+		u("q2"), a("about DEPLOY here"),
+		u("q3"), a("deploy again"),
+		u("q4"), a("a4"),
+		u("q5"), a("a5"),
+	}}
+
+	hits := session.ListOptions{Query: "deploy"}.MatchedEntries(thread)
+	if len(hits) != 2 || hits[0] != 3 || hits[1] != 5 {
+		t.Fatalf("MatchedEntries = %v, want [3 5]", hits)
+	}
+
+	got := turnsAround(thread, hits, 1, "deploy")
+	// The two matched turns widen to turns 1-3 and 2-4; those overlap, so one
+	// window covers entries 1 through 8.
+	want := []string{"q1", "a1", "q2", "about DEPLOY here", "q3", "deploy again", "q4", "a4"}
+	if len(got.Entries) != len(want) {
+		t.Fatalf("kept %d entries, want %d", len(got.Entries), len(want))
+	}
+	for i, e := range got.Entries {
+		if e.Text != want[i] {
+			t.Errorf("entry %d = %q, want %q", i, e.Text, want[i])
+		}
+	}
+	if got.Excerpt != `"deploy" matched 2 entries; source entries 1-8 of 10` {
+		t.Errorf("excerpt = %q", got.Excerpt)
+	}
+	if len(thread.Entries) != 10 {
+		t.Error("turnsAround mutated the caller's thread")
+	}
+	// A window wide enough to keep every entry still reads as a sentence.
+	if wide := turnsAround(thread, hits, 5, "deploy"); wide.Excerpt != `"deploy" matched 2 entries; source entries 1-10 of 10` {
+		t.Errorf("excerpt = %q", wide.Excerpt)
+	}
+}
+
+// TestTurnsAroundSeparateWindows proves two distant matches stay two windows,
+// each naming its own entry span, rather than collapsing into one range that
+// claims the gap between them.
+func TestTurnsAroundSeparateWindows(t *testing.T) {
+	var entries []session.Entry
+	for i := 0; i < 6; i++ {
+		entries = append(entries,
+			session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: "q"},
+			session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: "a"})
+	}
+	entries[1].Text = "deploy"  // turn 1
+	entries[11].Text = "deploy" // turn 6
+	thread := session.Thread{Entries: entries}
+
+	got := turnsAround(thread, session.ListOptions{Query: "deploy"}.MatchedEntries(thread), 1, "deploy")
+	if got.Excerpt != `"deploy" matched 2 entries; source entries 1-4, 9-12 of 12` {
+		t.Errorf("excerpt = %q", got.Excerpt)
+	}
+	if len(got.Entries) != 8 {
+		t.Errorf("kept %d entries, want 8", len(got.Entries))
+	}
+}
+
+// TestClampKeepsTheMatch is the guarantee the clamp exists to not break: a hit
+// buried in a pasted blob survives the cut, and its surroundings come with it.
+func TestClampKeepsTheMatch(t *testing.T) {
+	blob := strings.Repeat("noise\n", 800) + "the DEPLOY line\n" + strings.Repeat("noise\n", 800)
+	thread := session.Thread{Entries: []session.Entry{
+		{Kind: session.KindMessage, Role: session.RoleUser, Text: blob},
+	}}
+
+	if got := clampEntries(thread, "").Entries[0].Text; strings.Contains(got, "DEPLOY") {
+		t.Fatal("fixture is wrong: the match survives an unqueried clamp")
+	}
+	got := clampEntries(thread, "deploy").Entries[0].Text
+	if !strings.Contains(got, "the DEPLOY line") {
+		t.Errorf("clamp elided the match:\n%s", got)
+	}
+	if len(got) > clampPastedMaxBytes+clampMatchBytes {
+		t.Errorf("clamp kept %d bytes, past its budget", len(got))
+	}
+	if strings.Count(got, "elided") != 2 {
+		t.Errorf("want a marker on each side of the kept window:\n%s", got)
 	}
 }

@@ -34,6 +34,18 @@ const (
 	clampTailBytes         = 1024
 )
 
+// A keyword read clamps the same way, with one exception: the word it was asked
+// to find is never in the elided part. Without this the clamp runs before the
+// reader ever sees the entry, so asking for a hit inside a pasted log returns a
+// page that does not contain it and says nothing about why - and the same
+// silence hides the hit from a downstream `rg`, which cannot search text that
+// was already dropped. The budget bounds the context, never the match:
+// Excerpt states the rule for a listing and this applies it to a read.
+const (
+	clampMatchBytes = 1024 // bytes of an elided middle kept around the match
+	clampMatchLead  = 256  // how many of them are spent before it
+)
+
 // clampMax picks the byte ceiling by author; the design block above says why
 // role is the only signal.
 func clampMax(e session.Entry) int {
@@ -49,11 +61,13 @@ func clampMax(e session.Entry) int {
 // renderer: --json stays faithful and --full skips it, and those are cli
 // decisions. A clamped input is re-encoded as a JSON string so Entry.Input
 // stays valid JSON; only the text formats ever see it.
-func clampEntries(t session.Thread) session.Thread {
+func clampEntries(t session.Thread, query string) session.Thread {
 	var out []session.Entry
 	for i, e := range t.Entries {
-		text, textOK := clampText(e.Text, clampMax(e))
-		input, inputOK := clampText(e.InputText(), clampPastedMaxBytes)
+		text, textOK := clampText(e.Text, query, clampMax(e))
+		// A tool call's input is not searched - MatchedEntries decides on Text
+		// alone - so nothing there is under the match guarantee.
+		input, inputOK := clampText(e.InputText(), "", clampPastedMaxBytes)
 		if !textOK && !inputOK {
 			if out != nil {
 				out = append(out, e)
@@ -82,7 +96,12 @@ func clampEntries(t session.Thread) session.Thread {
 // around a marker naming what was elided; ok is false when text is already
 // within maxBytes. Cuts land on line boundaries when the window has any, and
 // never split a UTF-8 rune.
-func clampText(text string, maxBytes int) (string, bool) {
+//
+// When query is set and its first occurrence falls in the part being elided, a
+// window around that occurrence is kept between two markers, so the reader who
+// asked for the word gets the word plus what surrounds it rather than the two
+// ends of a blob it is somewhere inside.
+func clampText(text, query string, maxBytes int) (string, bool) {
 	if len(text) <= maxBytes {
 		return "", false
 	}
@@ -101,16 +120,76 @@ func clampText(text string, maxBytes int) (string, bool) {
 		tailStart = runeStart(text, tailStart)
 	}
 
-	elided := text[headEnd:tailStart]
-	marker := fmt.Sprintf("[... %d KB / %d lines elided; rerun with --full for the full text ...]",
-		(len(elided)+1023)/1024, strings.Count(elided, "\n")+1)
-
-	head := strings.TrimRight(text[:headEnd], "\n")
-	tail := strings.TrimLeft(text[tailStart:], "\n")
-	if tail == "" {
-		return head + "\n\n" + marker, true
+	// A match that straddles a cut must live wholly on one side of it. Moving
+	// the head cut to the match's start and the tail cut to its end keeps the
+	// existing pieces independent: the separators between them can no longer
+	// be inserted through the word the reader asked to see.
+	if query != "" {
+		start, end := session.IndexFold(text, query)
+		if start >= 0 {
+			if start < headEnd && end > headEnd {
+				headEnd = start
+			}
+			if start < tailStart && end > tailStart {
+				tailStart = end
+			}
+		}
 	}
-	return head + "\n\n" + marker + "\n\n" + tail, true
+
+	head := text[:headEnd]
+	tail := text[tailStart:]
+	if query == "" {
+		head = strings.TrimRight(head, "\n")
+		tail = strings.TrimLeft(tail, "\n")
+	}
+	pieces := []string{head}
+	if from, to, ok := matchWindow(text, query, headEnd, tailStart); ok {
+		pieces = append(pieces,
+			elision(text[headEnd:from]),
+			text[from:to],
+			elision(text[to:tailStart]))
+	} else {
+		pieces = append(pieces, elision(text[headEnd:tailStart]))
+	}
+	pieces = append(pieces, tail)
+
+	kept := pieces[:0]
+	for _, p := range pieces {
+		if p != "" {
+			kept = append(kept, p)
+		}
+	}
+	return strings.Join(kept, "\n\n"), true
+}
+
+// matchWindow returns the span of text to keep around query's first occurrence,
+// or ok false when there is no occurrence or it already survives in the head or
+// the tail. The span stays inside [headEnd, tailStart) - the part about to be
+// elided - and always covers the whole match, however long the query is.
+func matchWindow(text, query string, headEnd, tailStart int) (int, int, bool) {
+	if query == "" {
+		return 0, 0, false
+	}
+	start, end := session.IndexFold(text, query)
+	if start < 0 || end <= headEnd || start >= tailStart {
+		return 0, 0, false
+	}
+	from := runeStart(text, max(start-clampMatchLead, headEnd))
+	to := min(from+clampMatchBytes, tailStart)
+	if to < len(text) {
+		to = runeStart(text, to)
+	}
+	return from, max(to, min(end, tailStart)), true
+}
+
+// elision is the marker standing in for a removed span, empty when nothing was
+// removed.
+func elision(cut string) string {
+	if cut == "" {
+		return ""
+	}
+	return fmt.Sprintf("[... %d KB / %d lines elided; rerun with --full for the full text ...]",
+		(len(cut)+1023)/1024, strings.Count(cut, "\n")+1)
 }
 
 // runeStart backs i off to the nearest UTF-8 rune boundary at or before it.

@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -55,7 +56,8 @@ RECAP — how much of the session (default: all of it)
 
 FIND — which session (default: newest here)
   --list              list recent sessions here, across every agent
-  -q, --query <text>  search by keyword (implies --list)
+  -q, --query <text>  search by keyword (implies --list); on a session you
+                      already picked, read the exchanges holding it
   <agent>/<rank>      the Nth newest, e.g. codex/3
   --id <id>           an exact session id
   --dir <path>        sessions from another directory, not the cwd
@@ -82,6 +84,7 @@ Examples:
   catchup claude --since-compact       recover a Claude session after compaction
   catchup codex -q "deploy"            find the Codex session about deploys
   catchup codex/3                      read the 3rd most recent Codex session
+  catchup codex/3 -q "deploy"          ...just its exchanges about deploys
   catchup claude --dir ~/src/proj      latest session from another directory
   catchup claude --agent --last 20     detailed context for an LLM agent
   catchup fork --into codex            hand the newest session here to Codex
@@ -230,6 +233,19 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 	if err != nil {
 		return err
 	}
+	// A query that reached a read has already picked the session; here it picks
+	// the part of it. Rank resolution filtered on the same predicate, so only
+	// --id, which bypasses the filter, can reach a session that does not hold
+	// the word.
+	query := cmd.Target.Query
+	if query != "" {
+		hits := session.ListOptions{Query: query}.MatchedEntries(thread)
+		if len(hits) == 0 {
+			return fmt.Errorf("no %q in %s %s; drop -q to read the session whole",
+				query, src.Ref.Provider, src.Ref.SessionID)
+		}
+		thread = turnsAround(thread, hits, aroundContext, query)
+	}
 	if cmd.SinceCompact {
 		thread = sinceCompact(thread)
 	}
@@ -237,7 +253,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		thread = lastTurns(thread, cmd.LastN)
 	}
 	if !cmd.Full && cmd.Format != session.FormatJSON {
-		thread = clampEntries(thread)
+		thread = clampEntries(thread, query)
 	}
 	return render.Thread(stdout, thread, cmd.Format)
 }
@@ -691,7 +707,7 @@ func forkInto(ctx context.Context, src session.Source, cmd Command, launchDir st
 		thread = lastTurns(thread, cmd.LastN)
 	}
 	if !cmd.Full {
-		thread = clampEntries(thread)
+		thread = clampEntries(thread, "")
 	}
 	var buf bytes.Buffer
 	if err := render.Thread(&buf, thread, session.FormatAgent); err != nil {
@@ -1051,6 +1067,114 @@ func locate(ctx context.Context, prov session.Provider, roots session.Roots, cmd
 	default:
 		return newestInCwd(ctx, prov, roots, cmd.Target.Provider, cwd)
 	}
+}
+
+// aroundContext is how many turns on each side of a matched turn a keyword read
+// keeps. It is fixed rather than a flag: one turn is what makes a matched answer
+// readable — it carries the question that prompted it — and a reader who wants
+// more has the whole session one command away. A tunable here would be a second
+// way to spell "how much", next to --last and --since-compact.
+const aroundContext = 1
+
+// turnsAround trims a thread to the turns holding the query, each widened by
+// context turns on either side, with overlapping windows merged. hits are entry
+// indexes from ListOptions.MatchedEntries.
+//
+// Turns, not lines, are the unit because turns are the part a pipe cannot
+// reconstruct: `catchup claude | rg -C3 memex` already answers "a few lines
+// around the hit", and it answers it better than a flag would, but rg cannot
+// know that an exchange begins at a user message, so its window drops the
+// question that produced a matched answer and keeps three lines of whatever
+// preceded it. This keeps what only the reader of the transcript knows.
+//
+// It sets Thread.Excerpt so the rendered head says the result is a slice: the
+// timeline renumbers from 1, and a reader handed six entries has no other way
+// to tell them from a six-entry session.
+func turnsAround(t session.Thread, hits []int, context int, query string) session.Thread {
+	starts := turnStarts(t.Entries)
+	if len(starts) == 0 || len(hits) == 0 {
+		return t
+	}
+
+	// Widen each hit's turn, merging into the previous window when the two
+	// touch. Adjacent windows merge too: a gap of zero turns is not a gap, and
+	// splitting one would claim an elision that never happened.
+	type span struct{ from, to int } // turn indexes, inclusive
+	var spans []span
+	for _, h := range hits {
+		c := turnOf(starts, h)
+		w := span{max(c-context, 0), min(c+context, len(starts)-1)}
+		if n := len(spans); n > 0 && w.from <= spans[n-1].to+1 {
+			spans[n-1].to = max(spans[n-1].to, w.to)
+			continue
+		}
+		spans = append(spans, w)
+	}
+
+	total := len(t.Entries)
+	var kept []session.Entry
+	var ranges []string
+	for _, w := range spans {
+		from := starts[w.from]
+		to := total
+		if w.to+1 < len(starts) {
+			to = starts[w.to+1]
+		}
+		kept = append(kept, t.Entries[from:to]...)
+		ranges = append(ranges, entryRange(from+1, to))
+	}
+	t.Entries = kept
+	t.Query = query
+	t.Excerpt = fmt.Sprintf("%q matched %s; source %s %s of %d", query, plural(len(hits), "entry", "entries"),
+		nounFor(len(kept), "entry", "entries"), strings.Join(ranges, ", "), total)
+	return t
+}
+
+// turnStarts returns the entry index each turn begins at. A turn begins at a
+// user message, exactly as lastTurns counts them; whatever precedes the first
+// one is its own leading turn rather than being dropped, because a session can
+// open with an assistant entry (a resumed thread, a compaction marker).
+func turnStarts(entries []session.Entry) []int {
+	var starts []int
+	for i, e := range entries {
+		if i == 0 || (e.Kind == session.KindMessage && e.Role == session.RoleUser) {
+			starts = append(starts, i)
+		}
+	}
+	return starts
+}
+
+// turnOf returns the index in starts of the turn containing entry i.
+func turnOf(starts []int, i int) int {
+	for n := len(starts) - 1; n > 0; n-- {
+		if starts[n] <= i {
+			return n
+		}
+	}
+	return 0
+}
+
+// entryRange names a half-open entry span in the source's 1-based numbering,
+// as "4" for one entry and "4-9" for several.
+func entryRange(first, past int) string {
+	if past-first == 0 {
+		return strconv.Itoa(first)
+	}
+	return strconv.Itoa(first) + "-" + strconv.Itoa(past)
+}
+
+// plural counts in words, as "1 entry" or "3 entries", and nounFor is its noun
+// alone, for a phrase that carries the count elsewhere. They exist so Excerpt
+// reads as a sentence.
+func plural(n int, one, many string) string {
+	return strconv.Itoa(n) + " " + nounFor(n, one, many)
+}
+
+func nounFor(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 // lastTurns trims a thread to its final n exchanges, preserving the Source. A

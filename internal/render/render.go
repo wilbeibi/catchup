@@ -41,7 +41,12 @@ func withoutFailures(t session.Thread) session.Thread {
 	var entries []session.Entry
 	removed := false
 	for i, e := range t.Entries {
-		if e.Kind != session.KindFailure {
+		matchingFailure := e.Kind == session.KindFailure && t.Query != ""
+		if matchingFailure {
+			start, _ := session.IndexFold(e.Text, t.Query)
+			matchingFailure = start >= 0
+		}
+		if e.Kind != session.KindFailure || matchingFailure {
 			if removed {
 				entries = append(entries, e)
 			}

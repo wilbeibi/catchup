@@ -15,6 +15,11 @@ import (
 func markdownThread(w io.Writer, t session.Thread) error {
 	var b strings.Builder
 	extra := []kv{{"entries", strconv.Itoa(len(t.Entries))}}
+	// The timeline renumbers from 1, so a slice is indistinguishable from a
+	// short session unless the head says otherwise.
+	if t.Excerpt != "" {
+		extra = append(extra, kv{"excerpt", t.Excerpt})
+	}
 	writeFrontmatter(&b, t.Source, allWarnings(t), extra)
 
 	b.WriteByte('\n')

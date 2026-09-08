@@ -84,6 +84,27 @@ func (o ListOptions) firstMatch(t Thread) *Match {
 	return nil
 }
 
+// MatchedEntries returns the indexes of every entry containing the query, in
+// order. It is firstMatch's whole-thread counterpart: a listing needs only the
+// first place a session says the thing, while reading that session needs every
+// place, because the reader came to find out what was said about it and the
+// conversation may return to it repeatedly.
+//
+// It decides entry by entry, exactly as MatchesQuery does, so a session the
+// listing matched always yields at least one index here.
+func (o ListOptions) MatchedEntries(t Thread) []int {
+	if o.Query == "" {
+		return nil
+	}
+	var hits []int
+	for i, e := range t.Entries {
+		if start, _ := indexFold(e.Text, o.Query); start >= 0 {
+			hits = append(hits, i)
+		}
+	}
+	return hits
+}
+
 // window widens the matched span to at most excerptBudget runes of the entry
 // around it, spending excerptLead of them ahead of the match so the reader sees
 // what led into it.
@@ -119,6 +140,16 @@ func advance(s string, off, n int) int {
 		off += size
 	}
 	return off
+}
+
+// IndexFold reports where needle first occurs in s, case-blind, as a byte range,
+// or -1 when it does not. It is exported for the one caller outside this package
+// that must not merely know whether a string matches but where: a clamp that
+// cuts an oversized entry has to keep the searched-for text, and deciding that
+// with its own comparison would let it elide a passage this package called a
+// match.
+func IndexFold(s, needle string) (int, int) {
+	return indexFold(s, needle)
 }
 
 // indexFold returns the byte range of the first case-insensitive occurrence of

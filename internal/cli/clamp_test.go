@@ -9,12 +9,12 @@ import (
 )
 
 func TestClampText(t *testing.T) {
-	if _, ok := clampText(strings.Repeat("a", clampPastedMaxBytes), clampPastedMaxBytes); ok {
+	if _, ok := clampText(strings.Repeat("a", clampPastedMaxBytes), "", clampPastedMaxBytes); ok {
 		t.Fatal("text at the threshold must not clamp")
 	}
 
 	text := "HEAD first line\n" + strings.Repeat("middle filler line\n", 400) + "TAIL last line"
-	got, ok := clampText(text, clampPastedMaxBytes)
+	got, ok := clampText(text, "", clampPastedMaxBytes)
 	if !ok {
 		t.Fatalf("%d-byte text should clamp", len(text))
 	}
@@ -34,12 +34,51 @@ func TestClampText(t *testing.T) {
 	// A single giant line (a blob with no newlines) still clamps, and the
 	// cuts never split a multi-byte rune.
 	blob := strings.Repeat("é", 4000) // 8000 bytes, zero newlines
-	got, ok = clampText(blob, clampPastedMaxBytes)
+	got, ok = clampText(blob, "", clampPastedMaxBytes)
 	if !ok {
 		t.Fatal("newline-free blob should clamp")
 	}
 	if !utf8.ValidString(got) {
 		t.Error("clamp split a UTF-8 rune")
+	}
+}
+
+func TestClampKeepsMatchAcrossCut(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		text  string
+	}{
+		{
+			name:  "head cut",
+			query: "needle",
+			text: strings.Repeat("a", clampHeadBytes-len("needle")/2) +
+				"needle" + strings.Repeat("b", clampPastedMaxBytes),
+		},
+		{
+			name:  "tail cut",
+			query: "needle",
+			text: strings.Repeat("a", clampPastedMaxBytes+clampTailBytes-len("needle")/2) +
+				"needle" + strings.Repeat("b", clampTailBytes-len("needle")/2),
+		},
+		{
+			name:  "newlines at cut",
+			query: "\n\n\nneedle",
+			text: strings.Repeat("a", clampHeadBytes-3) + "\n\n\nneedle" +
+				strings.Repeat("b", clampPastedMaxBytes),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := clampText(tt.text, tt.query, clampPastedMaxBytes)
+			if !ok {
+				t.Fatal("fixture did not exceed the clamp threshold")
+			}
+			if !strings.Contains(got, tt.query) {
+				t.Errorf("clamp split or trimmed the query across its %s", tt.name)
+			}
+		})
 	}
 }
 
@@ -71,7 +110,7 @@ func TestClampEntries(t *testing.T) {
 		{Kind: session.KindMessage, Role: session.RoleAssistant, Text: blobAsst},
 	}}
 
-	got := clampEntries(thread)
+	got := clampEntries(thread, "")
 	if got.Entries[0].Text == bigUser || !strings.Contains(got.Entries[0].Text, "elided") {
 		t.Error("oversized user entry was not clamped")
 	}

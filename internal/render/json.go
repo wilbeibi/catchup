@@ -35,12 +35,17 @@ type entryDoc struct {
 
 type threadDoc struct {
 	sourceDoc
+
+	// Excerpt is present only when the entries are a keyword-located slice of
+	// the session; index then numbers the slice, not the session.
+	Excerpt string     `json:"excerpt,omitempty"`
 	Entries []entryDoc `json:"entries"`
 }
 
 func jsonThread(w io.Writer, t session.Thread) error {
 	doc := threadDoc{
 		sourceDoc: makeSourceDoc(t.Source),
+		Excerpt:   t.Excerpt,
 		Entries:   make([]entryDoc, len(t.Entries)),
 	}
 	doc.Warnings = allWarnings(t)

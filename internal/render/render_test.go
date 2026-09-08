@@ -109,6 +109,23 @@ func TestFailureViews(t *testing.T) {
 		t.Errorf("human markdown counted a hidden failure:\n%s", b.String())
 	}
 
+	// A keyword read is the exception to the clean human projection: the
+	// failure may be the passage the user explicitly searched for, so removing
+	// it would return a result with no visible match.
+	b.Reset()
+	queried := th
+	queried.Entries = append(queried.Entries, session.Failure("webfetch", nil, "unrelated 404", ts))
+	queried.Excerpt = `"exit status 1" matched 1 entry; source entries 4-5 of 5`
+	queried.Query = "exit status 1"
+	if err := Thread(&b, queried, session.FormatMarkdown); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), "FAIL\tcatchup") ||
+		!strings.Contains(b.String(), `\"exit status 1\" matched 1 entry; source entries 4-5 of 5`) ||
+		strings.Contains(b.String(), "unrelated 404") {
+		t.Errorf("queried markdown did not isolate the matching failure:\n%s", b.String())
+	}
+
 	b.Reset()
 	if err := Thread(&b, th, session.FormatAgent); err != nil {
 		t.Fatal(err)

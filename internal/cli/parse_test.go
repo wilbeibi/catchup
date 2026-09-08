@@ -23,6 +23,14 @@ func TestParse(t *testing.T) {
 			want: Command{Format: session.FormatMarkdown, Limit: DefaultLimit},
 		},
 		{
+			name: "a query on a selected session reads it, not a listing",
+			args: []string{"codex", "--id", "sess-1", "-q", "deploy"},
+			want: Command{
+				Target: session.Target{Provider: "codex", SessionID: "sess-1", Query: "deploy"},
+				Format: session.FormatMarkdown, Limit: DefaultLimit,
+			},
+		},
+		{
 			name: "bare invocation accepts flags",
 			args: []string{"--list"},
 			want: Command{Format: session.FormatMarkdown, List: true, Limit: DefaultLimit},
@@ -221,6 +229,10 @@ func TestParseRejects(t *testing.T) {
 		{"codex?query=x"},                                                 // query-string form
 		{"codex/2", "--list"},                                             // rank + list conflict
 		{"codex", "--id", "x", "--list"},                                  // id + list conflict
+		{"fork", "codex", "--id", "x", "-q", "y"},                         // fork --id is exact; -q selects nothing
+		{"codex/2", "-q", "x", "--last", "3"},                             // -q and --last are alternative trims
+		{"codex", "--id", "x", "-q", "y", "--since-compact"},              // ...as are -q and --since-compact
+		{"codex/2", "-q", "x", "-i"},                                      // -i shows no bodies for -q to find in
 		{"codex", "extra"},                                                // two targets
 		{"codex", "--bogus"},                                              // unknown flag
 		{"codex", "-n", "0"},                                              // non-positive limit

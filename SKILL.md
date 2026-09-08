@@ -18,6 +18,7 @@ catchup <agent> --last 20          # just the last 20 exchanges
 catchup <agent> --list             # recent sessions here
 catchup <agent> -q "topic"         # implies --list: a listing, not a session read
 catchup <agent>/3                  # the 3rd newest
+catchup <agent>/3 -q "topic"       # on a session already chosen: only the exchanges about it
 catchup <agent> --id <id>          # an exact session id
 
 # HAND OFF — suggest the user run these in a terminal
@@ -33,7 +34,7 @@ Preflight session reads into this conversation; listings, metadata, and `fork` d
 
 1. Redirect the selected read to a private temp file (`mktemp`), check it succeeded, and return only the path and `wc -c` to the conversation — never `tee` the transcript in.
 2. At or below 128KiB, read the file. Above, report the slice and a rounded bytes ÷ 4 estimate — “Since the last compaction: roughly 35k tokens. Load this, or read only the last 20 exchanges?” — then wait, using the host's question UI if available. Offer a smaller N if already on `--last`. If the user already chose the big load, don't ask again.
-3. For a smaller slice, re-render the same session with `--id` (agent and session id from the frontmatter); `--last N` replaces `--since-compact`; `--id` takes no rank or `--dir`. Measure again — 20 exchanges can still be large. Never silently substitute a smaller slice.
+3. For a smaller slice, re-render the same session with `--id` (agent and session id from the frontmatter); `--last N` replaces `--since-compact`; `--id` takes no rank or `--dir`. When the user asked about one topic rather than the whole session, `-q "topic"` is the smallest honest slice: it keeps the exchanges holding the word, and the `excerpt:` line in the frontmatter says which. Measure again — 20 exchanges can still be large. Never silently substitute a smaller slice.
 4. Read the measured file, not a rerun of a moving “latest” selector. Remove temp files after reading or cancellation.
 
 ## Notes

@@ -11,9 +11,13 @@ import (
 // JavaScript. All interpolated text is escaped by html/template, so escaping is
 // guaranteed by construction rather than by hand.
 func htmlThread(w io.Writer, t session.Thread) error {
+	head := header(t.Source)
+	if t.Excerpt != "" {
+		head = append(head, kv{"excerpt", t.Excerpt})
+	}
 	return htmlTmpl.Execute(w, htmlModel{
 		Title:    docTitle(t.Source),
-		Header:   header(t.Source),
+		Header:   head,
 		Warnings: allWarnings(t),
 		Entries:  htmlEntries(t.Entries),
 	})

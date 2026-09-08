@@ -188,6 +188,18 @@ type Thread struct {
 	Source   Source
 	Entries  []Entry
 	Warnings []string
+
+	// Excerpt, when set, says the Entries are a slice of a larger session and
+	// which part: a reader that is handed turns 4-6 of 42 must not read them
+	// as the whole conversation. Only a keyword-located read sets it; every
+	// other trim (--last, --since-compact) names itself in the command, while
+	// this one's shape depends on where the matches fell.
+	Excerpt string
+
+	// Query is the literal that produced Excerpt. Renderers use it to keep a
+	// matching failure visible in otherwise-clean human output; agent and JSON
+	// output retain every failure in the selected turns regardless.
+	Query string
 }
 
 // Preview returns the thread's first user message, or failing that its first
