@@ -2,15 +2,15 @@
 
 <div align="center">
 
-### Context handoff for AI coding agents — resume a session in another agent
+### Session handoff for AI coding agents: resume your work in another agent
 
 <img src="assets/passing-coding-banner.png" alt="Coding agents pass a session transcript through a handoff machine" width="800">
 
 </div>
 
-`catchup` is a local-first CLI that hands off session context between AI coding agents. When one hits a usage limit — or you switch tools mid-task — it reads the local session into clean Markdown, and `catchup fork` resumes the work in the same agent or a different one: hand a Claude Code session to Codex, a Cursor session to OpenCode, and so on.
+`catchup` is a local-first CLI that hands off session context between AI coding agents. It reads a local session into clean Markdown, and `catchup fork` resumes the work in the same agent or a different one: hand a Claude Code session to Codex, a Cursor session to OpenCode, and so on.
 
-Use it whenever you don't want to explain the whole job again — you hit an agent's usage limit, switch tools mid-task, pick up older work, or want a clean record of what happened.
+Reach for it whenever you don't want to explain the whole job again: an agent hits its usage limit, you switch tools mid-task, you pick up older work, or you want a clean record of what happened.
 
 Works with **Claude Code**, **Codex**, **Copilot CLI**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, **Pi Agent**, **ZCode**, and **DeepSeek Harness**.
 
@@ -46,7 +46,7 @@ Windows binaries are on the [releases page](https://github.com/wilbeibi/catchup/
 
 Restart the agent, then ask it to catch up on the last session.
 
-For advance notice before quota handoffs, enable [quota visibility](recipes/quota-visibility.md) — statusline display, plus an optional Codex turn-end reminder.
+For advance notice before quota handoffs, enable [quota visibility](recipes/quota-visibility.md): statusline display, plus an optional Codex turn-end reminder.
 
 I use `catchup` with [herdr](https://herdr.dev) day to day. The [wilbeibi/herdr-catchup](https://github.com/wilbeibi/herdr-catchup) plugin adds pane actions for summary, fork, and handoff:
 
@@ -63,7 +63,7 @@ Omit `<agent>` and catchup uses whichever agent has the newest session in this d
 **For you:** run in your terminal to re-enter a session:
 
 ```bash
-catchup --list                   # where was I — recent sessions, every agent
+catchup --list                   # where was I: recent sessions, every agent
 catchup fork                     # fork the newest session across agents
 catchup fork <agent>             # fork that agent's newest session
 catchup fork codex --into claude # continue a Codex session in Claude
@@ -72,7 +72,7 @@ catchup fork claude --into claude --since-compact
 ```
 
 **For agents:** run inside a session to read prior work. `--agent` is the detailed
-form — the same transcript, with the tool calls that failed:
+form, the same transcript plus the tool calls that failed:
 
 ```bash
 catchup <agent> --agent --since-compact  # another agent's latest, since compaction
@@ -86,7 +86,7 @@ catchup <agent> -q "auth"                # search sessions
 catchup <agent> --json                   # render JSON; also --html
 ```
 
-Use `fork` to continue with the same agent and keep native session state. Use `fork --into` to start another agent with the transcript — or the same agent with `--last`/`--since-compact`, which restarts it clean on a trimmed transcript when the context is spent but the work isn't. Use read commands when you want old work in a clean context.
+Use `fork` to continue with the same agent and keep native session state. Use `fork --into` to start another agent with the transcript, or the same agent with `--last`/`--since-compact`, which restarts it clean on a trimmed transcript when the context is spent but the work isn't. Use read commands when you want old work in a clean context.
 
 Every supported agent can supply a handoff. Kimi, ZCode, and DeepSeek Harness cannot be launched as interactive `--into` targets; save the transcript and open it in those tools instead.
 
@@ -100,7 +100,7 @@ Every supported agent can supply a handoff. Kimi, ZCode, and DeepSeek Harness ca
 - Same-agent `fork --into` is the opposite trade: native state is dropped for a clean context.
 - Cross-agent `fork --into` seeds the new agent with a transcript, not native state.
 - `fork` returns the launched agent's exit status, so shell scripts and CI can handle its failure normally.
-- On Windows, `fork --into` passes the transcript in a content-addressed file under `.catchup/` — the command line there truncates multi-line prompts. Identical transcripts share one file; files remain for native resumes and can be removed when no launched session needs them.
+- On Windows, `fork --into` passes the transcript in a content-addressed file under `.catchup/`, because the command line there truncates multi-line prompts. Identical transcripts share one file; files remain for native resumes and can be removed when no launched session needs them.
 
 ## License
 
