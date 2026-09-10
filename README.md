@@ -82,6 +82,7 @@ catchup <agent>/3 --agent                # read 3rd newest session
 catchup <agent> --id <id> --agent        # read exact session
 catchup <agent> --list                   # list recent sessions
 catchup <agent> -q "auth"                # search sessions
+catchup <agent>/3 -q "auth"              # read only its auth exchanges
 
 catchup <agent> --json                   # render JSON; also --html
 ```
