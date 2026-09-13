@@ -167,10 +167,10 @@ func readManifest(dir, name string) (sessionDir, bool) {
 		mod = info.ModTime()
 	}
 	if mod.IsZero() {
-		mod = parseTime(meta.EndedAt)
+		mod = session.ParseTime(meta.EndedAt)
 	}
 	if mod.IsZero() {
-		mod = parseTime(meta.StartedAt)
+		mod = session.ParseTime(meta.StartedAt)
 	}
 	return sessionDir{path: dir, meta: meta, mod: mod}, true
 }
@@ -301,15 +301,4 @@ func extractText(raw json.RawMessage) string {
 		}
 	}
 	return strings.Join(parts, "\n")
-}
-
-func parseTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
 }

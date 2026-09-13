@@ -218,6 +218,20 @@ func (t Thread) Preview() string {
 	return ""
 }
 
+// ParseTime parses an RFC 3339 timestamp, returning the zero time for an
+// empty or malformed string. Provider files record times as RFC 3339 strings
+// and a missing one is not an error.
+func ParseTime(s string) time.Time {
+	if s == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
 // VisibleText returns every entry's text joined by newlines: the haystack a
 // listing's keyword query matches against.
 func (t Thread) VisibleText() string {

@@ -339,7 +339,7 @@ func applyEvent(src *session.Source, entries *[]session.Entry, calls map[string]
 		}
 		*entries = append(*entries, session.Entry{
 			Kind: session.KindMessage, Role: session.RoleUser,
-			Text: d.Content, Time: parseTime(ev.Timestamp),
+			Text: d.Content, Time: session.ParseTime(ev.Timestamp),
 		})
 	case "assistant.message":
 		var d cpAssistantMessage
@@ -354,7 +354,7 @@ func applyEvent(src *session.Source, entries *[]session.Entry, calls map[string]
 		}
 		*entries = append(*entries, session.Entry{
 			Kind: session.KindMessage, Role: session.RoleAssistant,
-			Text: d.Content, Time: parseTime(ev.Timestamp),
+			Text: d.Content, Time: session.ParseTime(ev.Timestamp),
 		})
 	case "session.compaction_complete":
 		var d cpCompaction
@@ -362,7 +362,7 @@ func applyEvent(src *session.Source, entries *[]session.Entry, calls map[string]
 			return // a failed compaction removed nothing: not a seam
 		}
 		*entries = append(*entries, session.Entry{
-			Kind: session.KindCompact, Text: d.Summary, Time: parseTime(ev.Timestamp),
+			Kind: session.KindCompact, Text: d.Summary, Time: session.ParseTime(ev.Timestamp),
 		})
 	case "tool.execution_start":
 		var d cpToolStart
@@ -383,7 +383,7 @@ func applyEvent(src *session.Source, entries *[]session.Entry, calls map[string]
 		if text == "" {
 			text = stringField(d.Result, "content")
 		}
-		*entries = append(*entries, session.Failure(call.name, call.args, text, parseTime(ev.Timestamp)))
+		*entries = append(*entries, session.Failure(call.name, call.args, text, session.ParseTime(ev.Timestamp)))
 	case "assistant.turn_start", "assistant.turn_end", "assistant.idle", "assistant.intent",
 		"assistant.message_start", "assistant.message_delta", "assistant.streaming_delta",
 		"assistant.reasoning", "assistant.reasoning_delta", "assistant.tool_call_delta",
@@ -419,12 +419,4 @@ func stringField(raw json.RawMessage, key string) string {
 	var s string
 	json.Unmarshal(obj[key], &s)
 	return s
-}
-
-func parseTime(s string) time.Time {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
 }
