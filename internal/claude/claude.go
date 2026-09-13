@@ -257,7 +257,7 @@ func readThread(fi fileInfo) (session.Thread, error) {
 		if line.IsSidechain || line.Message == nil {
 			continue // subagent turns live in their own thread
 		}
-		ts := parseTime(line.Timestamp)
+		ts := session.ParseTime(line.Timestamp)
 		blocks := decodeBlocks(line.Message.Content)
 		for _, b := range blocks {
 			switch b.Type {
@@ -369,15 +369,4 @@ func normalizeRole(role string) string {
 	default:
 		return ""
 	}
-}
-
-func parseTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
 }

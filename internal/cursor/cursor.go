@@ -2,8 +2,8 @@
 // directory per chat under <config>/chats/<workspace-hash>/<chatId>/ (config
 // resolving $CURSOR_CONFIG_DIR, then $XDG_CONFIG_HOME/cursor, then
 // ~/.cursor), holding a meta.json sidecar and the conversation in store.db,
-// a SQLite blob store read via modernc.org/sqlite (already this module's one
-// database dependency, shared with internal/opencode).
+// a SQLite blob store opened through internal/sqlitedb (modernc.org/sqlite,
+// already this module's one database dependency).
 //
 // Format, reverse-engineered from the cursor-agent bundle and live sessions
 // on 2026-07-17 (no public source): store.db has blobs(id, data) and
@@ -38,8 +38,7 @@ import (
 	"time"
 
 	"github.com/wilbeibi/catchup/internal/session"
-
-	_ "modernc.org/sqlite"
+	"github.com/wilbeibi/catchup/internal/sqlitedb"
 )
 
 // Provider reads Cursor CLI chat directories.
@@ -209,9 +208,9 @@ type block struct {
 }
 
 func readThread(src session.Source) (session.Thread, error) {
-	db, err := openRO(filepath.Join(src.Path, "store.db"))
+	db, err := sqlitedb.Open(filepath.Join(src.Path, "store.db"))
 	if err != nil {
-		return session.Thread{}, err
+		return session.Thread{}, fmt.Errorf("cursor: %w", err)
 	}
 	defer db.Close()
 
@@ -248,28 +247,6 @@ func readThread(src session.Source) (session.Thread, error) {
 		}
 	}
 	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
-}
-
-// openRO opens the SQLite file for reading: mode=ro first, immutable=1 as
-// fallback — see internal/opencode.openPath for why this order matters under
-// WAL.
-func openRO(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
-	if err == nil {
-		if err = db.Ping(); err == nil {
-			return db, nil
-		}
-		db.Close()
-	}
-	fallback, ferr := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
-	if ferr != nil {
-		return nil, err
-	}
-	if ferr = fallback.Ping(); ferr != nil {
-		fallback.Close()
-		return nil, err // the mode=ro error names the real obstacle
-	}
-	return fallback, nil
 }
 
 func readStoreMeta(db *sql.DB) (storeMeta, error) {

@@ -256,7 +256,7 @@ func readThread(fi fileInfo) (session.Thread, error) {
 			warnings = append(warnings, session.ReadStopWarning(err))
 			break
 		}
-		ts := parseTime(line.Timestamp)
+		ts := session.ParseTime(line.Timestamp)
 
 		switch line.Type {
 		case "session_meta":
@@ -563,15 +563,4 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
-}
-
-func parseTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
 }

@@ -43,9 +43,8 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"github.com/wilbeibi/catchup/internal/session"
+	"github.com/wilbeibi/catchup/internal/sqlitedb"
 )
 
 // Provider reads the ZCode SQLite database. It is stateless; each call opens
@@ -76,9 +75,9 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 		return session.Thread{}, errors.New("zcode: source has no session id")
 	}
 	// Path is the database file, not a per-session file.
-	db, err := openPath(src.Path)
+	db, err := sqlitedb.Open(src.Path)
 	if err != nil {
-		return session.Thread{}, err
+		return session.Thread{}, fmt.Errorf("zcode: %w", err)
 	}
 	defer db.Close()
 	return readThread(ctx, db, src)
@@ -100,30 +99,11 @@ func open(root string) (*sql.DB, string, error) {
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return nil, "", fmt.Errorf("zcode: no database at %s", path)
 	}
-	db, err := openPath(path)
-	return db, path, err
-}
-
-// openPath opens the database for reading: mode=ro first, immutable=1 as
-// fallback — see internal/opencode.openPath for why this order matters under
-// WAL.
-func openPath(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
-	if err == nil {
-		if err = db.Ping(); err == nil {
-			return db, nil
-		}
-		db.Close()
+	db, err := sqlitedb.Open(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("zcode: %w", err)
 	}
-	fallback, ferr := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
-	if ferr != nil {
-		return nil, fmt.Errorf("zcode: open %s: %w", path, err)
-	}
-	if ferr = fallback.Ping(); ferr != nil {
-		fallback.Close()
-		return nil, fmt.Errorf("zcode: open %s: %w", path, err)
-	}
-	return fallback, nil
+	return db, path, nil
 }
 
 // time_archived is filtered in the WHERE clause, not selected.

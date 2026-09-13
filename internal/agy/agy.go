@@ -341,7 +341,7 @@ func readEntries(fi fileInfo) ([]session.Entry, []string, error) {
 			warnings = append(warnings, session.ReadStopWarning(err))
 			break
 		}
-		ts := parseTime(step.CreatedAt)
+		ts := session.ParseTime(step.CreatedAt)
 		switch step.Type {
 		case "USER_INPUT":
 			if text := userRequest(step.Content); text != "" {
@@ -382,15 +382,4 @@ func userRequest(content string) string {
 		return strings.TrimSpace(rest)
 	}
 	return strings.TrimSpace(body)
-}
-
-func parseTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
 }

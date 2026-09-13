@@ -221,7 +221,7 @@ func readState(dir string) (sessionDir, bool) {
 		mod = info.ModTime()
 	}
 	if mod.IsZero() {
-		mod = parseTime(meta.UpdatedAt)
+		mod = session.ParseTime(meta.UpdatedAt)
 	}
 	if mod.IsZero() {
 		if info, err := os.Stat(path); err == nil {
@@ -416,15 +416,4 @@ func recTime(rec wireRecord) time.Time {
 		return time.Time{}
 	}
 	return time.UnixMilli(rec.Time)
-}
-
-func parseTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
 }

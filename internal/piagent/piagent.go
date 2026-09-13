@@ -438,15 +438,15 @@ func messageTime(line piLine) time.Time {
 	if line.Message.Timestamp > 0 {
 		return time.UnixMilli(line.Message.Timestamp)
 	}
-	return parseTime(line.Timestamp)
+	return session.ParseTime(line.Timestamp)
 }
 
 func compactEntry(line piLine) session.Entry {
-	return session.Entry{Kind: session.KindCompact, Text: line.Summary, Time: parseTime(line.Timestamp)}
+	return session.Entry{Kind: session.KindCompact, Text: line.Summary, Time: session.ParseTime(line.Timestamp)}
 }
 
 func branchEntry(line piLine) session.Entry {
-	return session.Entry{Kind: session.KindBranch, Text: line.Summary, Time: parseTime(line.Timestamp)}
+	return session.Entry{Kind: session.KindBranch, Text: line.Summary, Time: session.ParseTime(line.Timestamp)}
 }
 
 func finalizeMeta(src *session.Source) {
@@ -491,15 +491,4 @@ func decodeBlocks(raw json.RawMessage) []piBlock {
 		return nil
 	}
 	return blocks
-}
-
-func parseTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
 }
