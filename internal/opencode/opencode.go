@@ -33,9 +33,8 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"github.com/wilbeibi/catchup/internal/session"
+	"github.com/wilbeibi/catchup/internal/sqlitedb"
 )
 
 // Provider reads the OpenCode SQLite database. It is stateless; each call opens
@@ -66,9 +65,9 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 		return session.Thread{}, errors.New("opencode: source has no session id")
 	}
 	// Path is the database file, not a per-session file.
-	db, err := openPath(src.Path)
+	db, err := sqlitedb.Open(src.Path)
 	if err != nil {
-		return session.Thread{}, err
+		return session.Thread{}, fmt.Errorf("opencode: %w", err)
 	}
 	defer db.Close()
 	return readThread(ctx, db, src)
@@ -90,34 +89,11 @@ func open(root string) (*sql.DB, string, error) {
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return nil, "", fmt.Errorf("opencode: no database at %s", path)
 	}
-	db, err := openPath(path)
-	return db, path, err
-}
-
-// openPath opens the database for reading. Plain mode=ro comes first because
-// opencode.db runs in WAL mode and a reader must consult the -wal file to see
-// a live session's newest rows — an immutable open would silently serve the
-// last checkpoint instead. immutable=1 remains as the fallback for the one
-// state mode=ro cannot open (a crashed writer's orphaned -wal with no -shm,
-// whose recovery needs write access); there the checkpointed prefix is the
-// best available answer.
-func openPath(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
-	if err == nil {
-		if err = db.Ping(); err == nil {
-			return db, nil
-		}
-		db.Close()
+	db, err := sqlitedb.Open(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("opencode: %w", err)
 	}
-	fallback, ferr := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
-	if ferr != nil {
-		return nil, fmt.Errorf("opencode: open %s: %w", path, err)
-	}
-	if ferr = fallback.Ping(); ferr != nil {
-		fallback.Close()
-		return nil, fmt.Errorf("opencode: open %s: %w", path, err)
-	}
-	return fallback, nil
+	return db, path, nil
 }
 
 const sessionColumns = `id, title, directory, COALESCE(agent,''), COALESCE(model,''), COALESCE(parent_id,''), time_created, time_updated`
