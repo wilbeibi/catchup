@@ -314,7 +314,7 @@ func announceFork(stderr io.Writer, src session.Source, into string) {
 	// to the directory name is a provider's fallback for an unnamed session
 	// and identifies nothing; one built from a first user message can run to
 	// hundreds of characters, so it is width-truncated like a table cell.
-	title := strings.Join(strings.Fields(src.Metadata["title"]), " ")
+	title := render.StripControl(strings.Join(strings.Fields(src.Metadata["title"]), " "))
 	if title != "" && title != filepath.Base(src.Metadata["cwd"]) {
 		facts = append(facts, runewidth.Truncate(title, 60, "…"))
 	}
