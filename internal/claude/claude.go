@@ -17,8 +17,9 @@
 //
 // Ignored by default: tool_use, successful tool_result, thinking, queue/mode/
 // permission bookkeeping, file-history snapshots, last-prompt, subagent
-// (isSidechain) and injected (isMeta) entries, subagent files under
-// */subagents/*, and .claude/transcripts/ses_*.jsonl (v1).
+// (isSidechain) and injected (isMeta) entries, user records the harness wrote
+// itself (see harnessWrappers), subagent files under */subagents/*, and
+// .claude/transcripts/ses_*.jsonl (v1).
 package claude
 
 import (
@@ -289,6 +290,9 @@ func readThread(fi fileInfo) (session.Thread, error) {
 		if role == "" {
 			continue
 		}
+		if role == session.RoleUser && harnessOnly(text) {
+			continue // a user record the harness wrote itself, not a turn
+		}
 		entries = append(entries, session.Entry{Kind: session.KindMessage, Role: role, Text: text, Time: ts})
 	}
 
@@ -365,6 +369,66 @@ func joinText(blocks []claudeBlock, raw json.RawMessage) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+// harnessWrappers are the XML wrappers Claude Code writes into type:"user"
+// records that are neither the user's words nor the user's act: a background
+// task's report, what a local command printed, its caveat, and an injected
+// reminder. The wrappers that record something the user did — the
+// slash-command trio, a ! bash line — stay on the timeline, however noisy,
+// because their text is the request.
+//
+// Only these names, and only spelled in full: markup a user pasted (<div>,
+// <my-element>) is a turn they meant to send, and <system-reminder-notes> is
+// not <system-reminder>.
+var harnessWrappers = map[string]bool{
+	"local-command-caveat": true, "local-command-stdout": true,
+	"system-reminder": true, "task-notification": true,
+}
+
+// harnessOnly reports whether a user message is nothing but harness wrappers.
+// One record can carry several in a row. A wrapper with no closing tag is not
+// one the harness wrote, so the record is kept.
+//
+// Nothing but: a record that still says something once its wrappers are read
+// off is kept whole, text and wrappers together. Every injected record in the
+// corpus this was measured against is wrapper-only, so trimming a mixed one
+// would buy no quiet while risking the words of a user whose message happens to
+// open with <command-name> or a pasted reminder.
+func harnessOnly(text string) bool {
+	rest, seen := strings.TrimSpace(text), false
+	for {
+		name, ok := openTag(rest)
+		if !ok || !harnessWrappers[name] {
+			return seen && rest == ""
+		}
+		seen = true
+		_, end := session.IndexFold(rest, "</"+name+">")
+		if end < 0 {
+			return false
+		}
+		rest = strings.TrimSpace(rest[end:])
+	}
+}
+
+// openTag returns the lowercased name of a bare <name> element opening s.
+// Anything else — attributes, a closing tag, a name with punctuation — is not
+// one of the wrappers, which the harness always writes bare.
+func openTag(s string) (string, bool) {
+	if !strings.HasPrefix(s, "<") {
+		return "", false
+	}
+	end := strings.IndexByte(s, '>')
+	if end < 2 {
+		return "", false
+	}
+	name := s[1:end]
+	for _, r := range name {
+		if r != '-' && r != '_' && !('0' <= r && r <= '9') && !('a' <= r && r <= 'z') && !('A' <= r && r <= 'Z') {
+			return "", false
+		}
+	}
+	return strings.ToLower(name), true
 }
 
 func normalizeRole(role string) string {
