@@ -385,6 +385,37 @@ func TestLastTurns(t *testing.T) {
 	}
 }
 
+// A record the harness filed under role user must not spend one of the
+// exchanges --last was asked for, nor stand in for the session's last word.
+func TestLastTurnsSkipsHarnessRecords(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "projects", "proj")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"type":"user","sessionId":"sess-h","cwd":"/home/u/proj","timestamp":"2026-06-26T10:00:00Z","message":{"role":"user","content":"first question"}}
+{"type":"assistant","sessionId":"sess-h","timestamp":"2026-06-26T10:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"first answer"}]}}
+{"type":"user","sessionId":"sess-h","timestamp":"2026-06-26T10:01:00Z","message":{"role":"user","content":"second question"}}
+{"type":"assistant","sessionId":"sess-h","timestamp":"2026-06-26T10:01:05Z","message":{"role":"assistant","content":[{"type":"text","text":"second answer"}]}}
+{"type":"user","sessionId":"sess-h","timestamp":"2026-06-26T10:02:00Z","message":{"role":"user","content":"<task-notification><status>completed</status><result>a background agent reported</result></task-notification>"}}
+`
+	if err := os.WriteFile(filepath.Join(dir, "sess-h.jsonl"), []byte(fxBody(body)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := run(t, session.Roots{Claude: root}, "claude", "--last", "1")
+	for _, want := range []string{"second question", "second answer"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("--last 1 missing %q:\n%s", want, out)
+		}
+	}
+	for _, unwanted := range []string{"task-notification", "a background agent reported", "first question"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("--last 1 shows %q:\n%s", unwanted, out)
+		}
+	}
+}
+
 // TestClampEntriesBoundsFailures covers the two fields a failure carries: a
 // dumped output takes the generated ceiling, an oversized input the pasted
 // one, and the entry keeps its kind and tool either way.
