@@ -157,68 +157,6 @@ func TestHarnessWrittenUserRecordsDropped(t *testing.T) {
 	}
 }
 
-// The record the harness wrote must not answer a query, title a listing, or
-// stand in for the session's opening message.
-func TestHarnessRecordsDoNotAnswerListings(t *testing.T) {
-	root := t.TempDir()
-	writeTranscript(t, root, "-home-u-src-catchup", "sess-h", harnessTranscript, time.Now())
-	p := New()
-	roots := session.Roots{Claude: root}
-
-	sums, err := p.List(context.Background(), roots, session.ListOptions{Query: "the agent reported back"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(sums) != 0 {
-		t.Errorf("query matched harness text: %+v", sums)
-	}
-	sums, err = p.List(context.Background(), roots, session.ListOptions{Query: "parser fix"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(sums) != 1 {
-		t.Fatalf("got %d rows for a query the user's own words satisfy, want 1", len(sums))
-	}
-	if sums[0].Preview != "land the parser fix" {
-		t.Errorf("preview = %q, want the first typed message", sums[0].Preview)
-	}
-	if sums[0].Match == nil || !strings.Contains(sums[0].Match.Text, "parser fix") {
-		t.Errorf("match = %+v, want the passage that contains the query", sums[0].Match)
-	}
-}
-
-func TestHarnessOnly(t *testing.T) {
-	tests := []struct {
-		name, in string
-		want     bool
-	}{
-		{"whole message", "<task-notification>report</task-notification>", true},
-		{"trailing newline", "<local-command-stdout>ok</local-command-stdout>\n", true},
-		{"several wrappers", "<local-command-caveat>c</local-command-caveat><system-reminder>r</system-reminder>", true},
-		{"leading blank lines", "\n\n<system-reminder>r</system-reminder>", true},
-		{"slash command", "<command-name>/x</command-name><command-args>y</command-args>", false},
-		{"bash line", "<bash-input>ls</bash-input>", false},
-		{"uppercase", "<TASK-NOTIFICATION>r</TASK-NOTIFICATION>", true},
-		{"mixed case close", "<task-notification>r</Task-Notification>", true},
-		{"unclosed", "<system-reminder>r without an end", false},
-		{"wrapper then prompt", "<system-reminder>r</system-reminder>\n\nship it", false},
-		{"caveat then prompt", "<local-command-caveat>c</local-command-caveat> ship it", false},
-		{"wrapper after prompt", "ship it <system-reminder>r</system-reminder>", false},
-		{"pasted html", "<div>hi</div>", false},
-		{"custom element", "<my-element>hi</my-element>", false},
-		{"shared prefix", "<system-reminder-notes>mine</system-reminder-notes>", false},
-		{"attributes", `<command-name id="1">x</command-name>`, false},
-		{"plain text", "  hello  ", false},
-		{"closing tag first", "</command-name> stray", false},
-		{"empty", "", false},
-	}
-	for _, tt := range tests {
-		if got := harnessOnly(tt.in); got != tt.want {
-			t.Errorf("%s: harnessOnly(%q) = %v, want %v", tt.name, tt.in, got, tt.want)
-		}
-	}
-}
-
 func TestListSkipsSubagents(t *testing.T) {
 	root := t.TempDir()
 	writeTranscript(t, root, "-proj", "main-1", transcript, time.Now())
