@@ -313,7 +313,12 @@ func applyMeta(src *session.Source, line claudeLine) {
 	if line.SessionID != "" {
 		src.Ref.SessionID = line.SessionID
 	}
-	if line.Cwd != "" {
+	// First writer wins, alone among these fields: a session belongs to the
+	// directory it was started in, and Claude Code stamps every record with
+	// wherever the agent stands at the time, so a cd into a subdirectory or a
+	// worktree would otherwise move the whole session out of the listing run
+	// where the user began it.
+	if line.Cwd != "" && src.Metadata["cwd"] == "" {
 		src.Metadata["cwd"] = line.Cwd
 	}
 	if line.GitBranch != "" {

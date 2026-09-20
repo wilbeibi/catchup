@@ -119,9 +119,8 @@ var runFork forkRunner = execFork
 // session exactly rather than guessing by recency. skillDirs maps a provider
 // name to its global Agent Skills directory (see session.ResolveSkillDirs)
 // and skillMD is the SKILL.md content to install there; install-skill writes
-// them, every other action reads skillDirs to warn when an installed copy
-// drifts from this build. version is the stamped build version that --version
-// reports.
+// them, every other action reads those copies back to warn when one drifts
+// from skillMD. version is the stamped build version that --version reports.
 func Run(ctx context.Context, args []string, roots session.Roots, current map[string]string, skillDirs map[string]string, skillMD []byte, version, cwd string, stdin io.Reader, stdout, stderr io.Writer) error {
 	cmd, err := Parse(args)
 	if err != nil {
@@ -138,10 +137,11 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		return nil
 	}
 
-	// Installed skill copies ship separately from the binary; surface version
-	// drift before doing anything else. install-skill itself is the fix.
+	// Installed skill copies ship separately from the binary; surface a copy
+	// that reads differently before doing anything else. install-skill itself
+	// is the fix.
 	if cmd.Action != "install-skill" {
-		warnSkillDrift(skillDirs, version, stderr)
+		warnSkillDrift(skillDirs, skillMD, version, stderr)
 	}
 
 	// The directory a launched agent starts in, captured before --dir moves
@@ -314,7 +314,7 @@ func announceFork(stderr io.Writer, src session.Source, into string) {
 	// to the directory name is a provider's fallback for an unnamed session
 	// and identifies nothing; one built from a first user message can run to
 	// hundreds of characters, so it is width-truncated like a table cell.
-	title := strings.Join(strings.Fields(src.Metadata["title"]), " ")
+	title := render.StripControl(strings.Join(strings.Fields(src.Metadata["title"]), " "))
 	if title != "" && title != filepath.Base(src.Metadata["cwd"]) {
 		facts = append(facts, runewidth.Truncate(title, 60, "…"))
 	}

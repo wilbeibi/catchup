@@ -280,6 +280,53 @@ func TestRunCwdFiltering(t *testing.T) {
 	}
 }
 
+// A session that cd'd away mid-conversation stays selectable where it began,
+// end to end: the listing, the bare read that picks the newest agent in the
+// directory, and the fork source all follow the opening directory.
+func TestRunFindsAMovedSessionWhereItStarted(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "projects", "proj")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := fxBody(`{"type":"user","sessionId":"sess-moved","cwd":"/home/u/src/proj","timestamp":"2026-06-26T10:00:00Z","message":{"role":"user","content":"start in the repo root"}}
+{"type":"assistant","sessionId":"sess-moved","cwd":"/home/u/src/proj/internal","timestamp":"2026-06-26T10:01:00Z","message":{"role":"assistant","content":[{"type":"text","text":"moved into the subdirectory"}]}}
+`)
+	if err := os.WriteFile(filepath.Join(dir, "sess-moved.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	roots := session.Roots{Claude: root}
+
+	out := runWithCwd(t, roots, fxDir("/home/u/src/proj"), "claude", "--list", "--json")
+	if !strings.Contains(out, "sess-moved") {
+		t.Errorf("listing where the session started should find it, got:\n%s", out)
+	}
+	out = runWithCwd(t, roots, fxDir("/home/u/src/proj/internal"), "claude", "--list", "--json")
+	if strings.Contains(out, "sess-moved") {
+		t.Errorf("listing where the session only wandered should not find it, got:\n%s", out)
+	}
+
+	// The bare read names no agent, so it goes through newestAcross.
+	out = runWithCwd(t, roots, fxDir("/home/u/src/proj"), "--json")
+	if !strings.Contains(out, "sess-moved") {
+		t.Errorf("bare read in the opening directory got:\n%s", out)
+	}
+
+	var got session.Source
+	withForkRunner(t, func(ctx context.Context, src session.Source, model string, stdin io.Reader, stdout, stderr io.Writer) error {
+		got = src
+		return nil
+	})
+	var buf, errOut bytes.Buffer
+	args := []string{"fork", "claude"}
+	if err := Run(context.Background(), args, roots, nil, nil, nil, "test", fxDir("/home/u/src/proj"), nil, &buf, &errOut); err != nil {
+		t.Fatalf("Run(%v) error: %v (stderr: %s)", args, err, errOut.String())
+	}
+	if got.Ref.SessionID != "sess-moved" {
+		t.Errorf("fork dispatched %+v, want sess-moved", got.Ref)
+	}
+}
+
 // The worktree recipe: from a fresh directory, --dir points the fork source
 // back at the directory where the sessions actually live.
 func TestRunForkFromAnotherDir(t *testing.T) {
