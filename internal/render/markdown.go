@@ -66,7 +66,9 @@ func writeEntry(b *strings.Builder, n int, e session.Entry) {
 	b.WriteString("\n\n")
 
 	if e.Kind == session.KindFailure {
-		if input := e.InputText(); input != "" {
+		// InputText decodes the recorded JSON, so a \u001b in it becomes a real
+		// ESC after the entry itself was cleaned.
+		if input := StripControl(e.InputText()); input != "" {
 			b.WriteString("### Input\n\n")
 			writeCodeBlock(b, input)
 		}
