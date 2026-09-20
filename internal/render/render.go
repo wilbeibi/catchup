@@ -5,6 +5,9 @@
 // views (a full Thread, a Source's metadata, a listing). The Format is a closed
 // set, so dispatch is a switch rather than an interface — polymorphism lives at
 // the Provider boundary, not here.
+//
+// Every mode but JSON is text somebody displays, so the session's own strings
+// are stripped of terminal control sequences on the way in (see StripControl).
 package render
 
 import (
@@ -20,6 +23,9 @@ import (
 
 // Thread renders a full conversation timeline in the requested format.
 func Thread(w io.Writer, t session.Thread, f session.Format) error {
+	if f != session.FormatJSON {
+		t = stripThread(t)
+	}
 	switch f {
 	case session.FormatMarkdown:
 		return markdownThread(w, withoutFailures(t))
@@ -65,6 +71,9 @@ func withoutFailures(t session.Thread) session.Thread {
 
 // Meta renders only a session's metadata/frontmatter (the -i view).
 func Meta(w io.Writer, s session.Source, f session.Format) error {
+	if f != session.FormatJSON {
+		s = stripSource(s)
+	}
 	switch f {
 	case session.FormatMarkdown:
 		return markdownMeta(w, s)
@@ -82,6 +91,9 @@ func Meta(w io.Writer, s session.Source, f session.Format) error {
 // before it gets here. provider names the agent every row belongs to, and is
 // empty for a cross-agent listing, where each row carries its own.
 func List(w io.Writer, provider string, summaries []session.Summary, f session.Format) error {
+	if f != session.FormatJSON {
+		summaries = stripSummaries(summaries)
+	}
 	switch f {
 	case session.FormatJSON:
 		return jsonList(w, summaries)
