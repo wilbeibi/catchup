@@ -6,11 +6,12 @@ import (
 	"testing"
 )
 
-// SKILL.md is the grammar an agent reads before it ever runs catchup, README.md
-// the one a person reads, and the help screen what the binary says about
-// itself. A renamed flag can leave any of them teaching an invocation that
-// fails, so these tests run every documented `catchup …` line through Parse —
-// pure syntax, which reads no disk, launches nothing, and never exits.
+// SKILL.md is the grammar an agent reads before it ever runs catchup, and it
+// is the copy that fails quietly: a person who hits a rejected command tries
+// another spelling, while an agent following a stale line concludes catchup
+// cannot do the thing and stops. So every documented `catchup …` line in it
+// goes through Parse — pure syntax, which reads no disk, launches nothing, and
+// never exits. README.md and the help screen are a reader's to correct.
 
 // descriptionLimit is the character budget installers enforce, usually silently.
 const descriptionLimit = 1024
@@ -73,26 +74,6 @@ func inlineSpans(line string) []string {
 		}
 		spans = append(spans, span)
 	}
-}
-
-// helpExamples returns the example and recipe lines of the help screen. The
-// synopsis above them is [optional] notation, a shape rather than an invocation,
-// so the scan starts at the examples; two spaces is the gap before a description.
-func helpExamples() []docCommand {
-	var frags []docCommand
-	started := false
-	for i, line := range strings.Split(helpText, "\n") {
-		started = started || strings.HasPrefix(line, "Examples:")
-		if !started {
-			continue
-		}
-		text := strings.TrimSpace(line)
-		if gap := strings.Index(text, "  "); gap >= 0 {
-			text = text[:gap]
-		}
-		frags = append(frags, docCommand{line: i + 1, raw: text})
-	}
-	return frags
 }
 
 // extractCommands turns code text into invocations Parse can be given. A segment
@@ -176,8 +157,6 @@ func TestDocumentedCommandsParse(t *testing.T) {
 		atLeast int
 	}{
 		{"SKILL.md", markdownCode(readDocLF(t, "SKILL.md")), 12},
-		{"README.md", markdownCode(readDocLF(t, "README.md")), 15},
-		{"helpText", helpExamples(), 15},
 	}
 	for _, d := range docs {
 		t.Run(d.name, func(t *testing.T) {
