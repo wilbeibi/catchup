@@ -84,6 +84,48 @@ func TestReadThread(t *testing.T) {
 	}
 }
 
+// A session that cd's away keeps the directory it was started in: the records
+// below walk into a subdirectory, on to a sibling repo, and back, and the
+// first cwd is the one a listing must find it under. The empty cwd ahead of
+// them stands for a record that carries the field without a value.
+const wanderer = `{"type":"user","sessionId":"sess-w","cwd":"","timestamp":"2026-06-26T10:00:00Z","message":{"role":"user","content":"start here"}}
+{"type":"assistant","sessionId":"sess-w","cwd":"/home/u/src/catchup","timestamp":"2026-06-26T10:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}
+{"type":"user","sessionId":"sess-w","cwd":"/home/u/src/catchup/internal","timestamp":"2026-06-26T10:01:00Z","message":{"role":"user","content":"now the subdirectory"}}
+{"type":"user","sessionId":"sess-w","cwd":"/home/u/src/other","timestamp":"2026-06-26T10:02:00Z","message":{"role":"user","content":"now the sibling"}}
+{"type":"assistant","sessionId":"sess-w","cwd":"/home/u/src/catchup/internal","timestamp":"2026-06-26T10:03:00Z","message":{"role":"assistant","content":[{"type":"text","text":"back in the subdirectory"}]}}
+`
+
+func TestCwdIsWhereTheSessionStarted(t *testing.T) {
+	root := t.TempDir()
+	writeTranscript(t, root, "-home-u-src-catchup", "sess-w", wanderer, time.Now())
+
+	p := New()
+	roots := session.Roots{Claude: root}
+	src, err := p.Resolve(context.Background(), roots, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := src.Metadata["cwd"]; got != "/home/u/src/catchup" {
+		t.Errorf("cwd = %q, want the directory the session opened in", got)
+	}
+
+	// A listing run where the session started finds it; one run from the
+	// directory it wandered into does not.
+	for dir, want := range map[string]int{
+		"/home/u/src/catchup":          1,
+		"/home/u/src/catchup/internal": 0,
+		"/home/u/src/other":            0,
+	} {
+		sums, err := p.List(context.Background(), roots, session.ListOptions{Cwd: dir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(sums) != want {
+			t.Errorf("listing in %s returned %d sessions, want %d", dir, len(sums), want)
+		}
+	}
+}
+
 func TestListSkipsSubagents(t *testing.T) {
 	root := t.TempDir()
 	writeTranscript(t, root, "-proj", "main-1", transcript, time.Now())
