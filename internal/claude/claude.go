@@ -317,8 +317,9 @@ func applyMeta(src *session.Source, line claudeLine) {
 	// directory it was started in, and Claude Code stamps every record with
 	// wherever the agent stands at the time, so a cd into a subdirectory or a
 	// worktree would otherwise move the whole session out of the listing run
-	// where the user began it.
-	if line.Cwd != "" && src.Metadata["cwd"] == "" {
+	// where the user began it. A sidechain record is a subagent's, not the
+	// session's, so it never claims the directory.
+	if line.Cwd != "" && !line.IsSidechain && src.Metadata["cwd"] == "" {
 		src.Metadata["cwd"] = line.Cwd
 	}
 	if line.GitBranch != "" {

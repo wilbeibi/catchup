@@ -87,8 +87,10 @@ func TestReadThread(t *testing.T) {
 // A session that cd's away keeps the directory it was started in: the records
 // below walk into a subdirectory, on to a sibling repo, and back, and the
 // first cwd is the one a listing must find it under. The empty cwd ahead of
-// them stands for a record that carries the field without a value.
+// them stands for a record that carries the field without a value, and the
+// sidechain record after it for a subagent that started elsewhere.
 const wanderer = `{"type":"user","sessionId":"sess-w","cwd":"","timestamp":"2026-06-26T10:00:00Z","message":{"role":"user","content":"start here"}}
+{"type":"user","sessionId":"sess-w","cwd":"/home/u/src/catchup/internal","isSidechain":true,"timestamp":"2026-06-26T10:00:02Z","message":{"role":"user","content":"subagent task"}}
 {"type":"assistant","sessionId":"sess-w","cwd":"/home/u/src/catchup","timestamp":"2026-06-26T10:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}
 {"type":"user","sessionId":"sess-w","cwd":"/home/u/src/catchup/internal","timestamp":"2026-06-26T10:01:00Z","message":{"role":"user","content":"now the subdirectory"}}
 {"type":"user","sessionId":"sess-w","cwd":"/home/u/src/other","timestamp":"2026-06-26T10:02:00Z","message":{"role":"user","content":"now the sibling"}}
