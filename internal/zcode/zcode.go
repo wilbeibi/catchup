@@ -85,6 +85,9 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 
 func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
 	db, path, err := open(roots.ZCode)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +100,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 func open(root string) (*sql.DB, string, error) {
 	path := filepath.Join(root, "db.sqlite")
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-		return nil, "", fmt.Errorf("zcode: no database at %s", path)
+		return nil, "", fmt.Errorf("zcode: no database at %s: %w", path, fs.ErrNotExist)
 	}
 	db, err := sqlitedb.Open(path)
 	if err != nil {

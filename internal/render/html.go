@@ -53,7 +53,7 @@ func htmlEntries(entries []session.Entry) []htmlEntry {
 	for i, e := range entries {
 		ts := ""
 		if !e.Time.IsZero() {
-			ts = e.Time.UTC().Format(tsHuman)
+			ts = e.Time.Local().Format(tsHuman)
 		}
 		out[i] = htmlEntry{
 			Index: i + 1,

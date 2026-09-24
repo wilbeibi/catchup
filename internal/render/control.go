@@ -189,6 +189,7 @@ func stripThread(t session.Thread) session.Thread {
 	entries := make([]session.Entry, len(t.Entries))
 	for i, e := range t.Entries {
 		e.Tool = StripControl(e.Tool)
+		e.Reason = StripControl(e.Reason)
 		e.Text = StripControl(e.Text)
 		entries[i] = e
 	}

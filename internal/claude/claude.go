@@ -158,16 +158,18 @@ func listSessions(root string, opts session.ListOptions) ([]session.Summary, err
 // --- parsing ----------------------------------------------------------------
 
 type claudeLine struct {
-	Type             string         `json:"type"`
-	SessionID        string         `json:"sessionId"`
-	Cwd              string         `json:"cwd"`
-	GitBranch        string         `json:"gitBranch"`
-	Timestamp        string         `json:"timestamp"`
-	IsMeta           bool           `json:"isMeta"`
-	IsSidechain      bool           `json:"isSidechain"`
-	IsCompactSummary bool           `json:"isCompactSummary"`
-	AiTitle          string         `json:"aiTitle"`
-	Message          *claudeMessage `json:"message"`
+	Type              string         `json:"type"`
+	SessionID         string         `json:"sessionId"`
+	Cwd               string         `json:"cwd"`
+	GitBranch         string         `json:"gitBranch"`
+	Timestamp         string         `json:"timestamp"`
+	IsMeta            bool           `json:"isMeta"`
+	IsSidechain       bool           `json:"isSidechain"`
+	IsCompactSummary  bool           `json:"isCompactSummary"`
+	IsApiErrorMessage bool           `json:"isApiErrorMessage"`
+	Error             string         `json:"error"`
+	AiTitle           string         `json:"aiTitle"`
+	Message           *claudeMessage `json:"message"`
 }
 
 type claudeMessage struct {
@@ -275,6 +277,14 @@ func readThread(fi fileInfo) (session.Thread, error) {
 			}
 		}
 		text := joinText(blocks, line.Message.Content)
+		if line.IsApiErrorMessage {
+			reason := line.Error
+			if reason == "" {
+				reason = "api_error"
+			}
+			entries = append(entries, session.Entry{Kind: session.KindStop, Reason: reason, Text: text, Time: ts})
+			continue
+		}
 		if text == "" {
 			continue
 		}

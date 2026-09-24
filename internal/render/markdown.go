@@ -61,10 +61,16 @@ func writeEntry(b *strings.Builder, n int, e session.Entry) {
 	fmt.Fprintf(b, "## %d. %s", n, entryLabel(e))
 	if !e.Time.IsZero() {
 		b.WriteString(" | ")
-		b.WriteString(e.Time.UTC().Format(tsHuman))
+		b.WriteString(e.Time.Local().Format(tsHuman))
 	}
 	b.WriteString("\n\n")
 
+	if e.Kind == session.KindStop {
+		if e.Text != "" {
+			writeCodeBlock(b, strings.TrimRight(e.Text, "\n"))
+		}
+		return
+	}
 	if e.Kind == session.KindFailure {
 		// InputText decodes the recorded JSON, so a \u001b in it becomes a real
 		// ESC after the entry itself was cleaned.

@@ -12,11 +12,11 @@ import (
 	"golang.org/x/term"
 )
 
-// tsHuman is the compact, local-friendly timestamp used in headings and tables.
-const tsHuman = "2006-01-02 15:04"
+// tsHuman shows the viewer's local clock with an explicit UTC offset.
+const tsHuman = "2006-01-02 15:04 -07:00"
 
-// dateHuman is tsHuman without the clock: the spelling listings use once a
-// session is old enough that the time of day says nothing.
+// dateHuman is the calendar-only spelling listings use once a session is old
+// enough that the time of day says nothing.
 const dateHuman = "2006-01-02"
 
 // timeNow is the clock the relative ages are measured against; a var so tests
@@ -62,7 +62,7 @@ func header(src session.Source) []kv {
 		pairs = append(pairs, kv{"session", src.Ref.SessionID})
 	}
 	if !src.UpdatedAt.IsZero() {
-		pairs = append(pairs, kv{"updated", src.UpdatedAt.UTC().Format(time.RFC3339)})
+		pairs = append(pairs, kv{"updated", src.UpdatedAt.Local().Format(time.RFC3339)})
 	}
 	if src.Path != "" {
 		pairs = append(pairs, kv{"path", src.Path})
@@ -102,6 +102,8 @@ func entryLabel(e session.Entry) string {
 			return "failure"
 		}
 		return "failure: " + e.Tool
+	case e.Kind == session.KindStop:
+		return "stop: " + e.Reason
 	case e.Role != "":
 		return e.Role
 	default:

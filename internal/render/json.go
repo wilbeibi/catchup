@@ -21,16 +21,17 @@ type sourceDoc struct {
 	Warnings  []string          `json:"warnings,omitempty"`
 }
 
-// tool and input appear exactly when kind is "failure"; keys are added to this
-// document, never renamed.
+// Tool and input appear on failures; reason appears on provider stops. Keys
+// are added to this document, never renamed.
 type entryDoc struct {
-	Index int             `json:"index"`
-	Kind  string          `json:"kind"`
-	Role  string          `json:"role,omitempty"`
-	Time  string          `json:"time,omitempty"`
-	Tool  string          `json:"tool,omitempty"`
-	Input json.RawMessage `json:"input,omitempty"`
-	Text  string          `json:"text"`
+	Index  int             `json:"index"`
+	Kind   string          `json:"kind"`
+	Role   string          `json:"role,omitempty"`
+	Time   string          `json:"time,omitempty"`
+	Tool   string          `json:"tool,omitempty"`
+	Reason string          `json:"reason,omitempty"`
+	Input  json.RawMessage `json:"input,omitempty"`
+	Text   string          `json:"text"`
 }
 
 type threadDoc struct {
@@ -51,12 +52,13 @@ func jsonThread(w io.Writer, t session.Thread) error {
 	doc.Warnings = allWarnings(t)
 	for i, e := range t.Entries {
 		doc.Entries[i] = entryDoc{
-			Index: i + 1,
-			Kind:  e.Kind,
-			Role:  e.Role,
-			Time:  rfc3339(e.Time),
-			Tool:  e.Tool,
-			Text:  e.Text,
+			Index:  i + 1,
+			Kind:   e.Kind,
+			Role:   e.Role,
+			Time:   rfc3339(e.Time),
+			Tool:   e.Tool,
+			Reason: e.Reason,
+			Text:   e.Text,
 		}
 		if e.Input != "" {
 			doc.Entries[i].Input = json.RawMessage(e.Input)

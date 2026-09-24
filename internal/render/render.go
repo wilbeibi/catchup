@@ -28,11 +28,11 @@ func Thread(w io.Writer, t session.Thread, f session.Format) error {
 	}
 	switch f {
 	case session.FormatMarkdown:
-		return markdownThread(w, withoutFailures(t))
+		return markdownThread(w, withoutDiagnosticEntries(t))
 	case session.FormatAgent:
 		return markdownThread(w, t)
 	case session.FormatHTML:
-		return htmlThread(w, withoutFailures(t))
+		return htmlThread(w, withoutDiagnosticEntries(t))
 	case session.FormatJSON:
 		return jsonThread(w, t)
 	default:
@@ -40,19 +40,19 @@ func Thread(w io.Writer, t session.Thread, f session.Format) error {
 	}
 }
 
-// withoutFailures returns the clean human projection. Providers always retain
-// failure entries in the core Thread so agent Markdown and JSON can expose the
-// same facts without rereading the native log.
-func withoutFailures(t session.Thread) session.Thread {
+// withoutDiagnosticEntries returns the clean human projection. Provider API
+// errors and tool failures remain in agent Markdown and JSON as logged facts.
+func withoutDiagnosticEntries(t session.Thread) session.Thread {
 	var entries []session.Entry
 	removed := false
 	for i, e := range t.Entries {
-		matchingFailure := e.Kind == session.KindFailure && t.Query != ""
-		if matchingFailure {
+		diagnostic := e.Kind == session.KindFailure || e.Kind == session.KindStop
+		matchingDiagnostic := diagnostic && t.Query != ""
+		if matchingDiagnostic {
 			start, _ := session.IndexFold(e.Text, t.Query)
-			matchingFailure = start >= 0
+			matchingDiagnostic = start >= 0
 		}
-		if e.Kind != session.KindFailure || matchingFailure {
+		if !diagnostic || matchingDiagnostic {
 			if removed {
 				entries = append(entries, e)
 			}

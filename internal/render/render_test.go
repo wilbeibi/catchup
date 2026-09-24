@@ -41,7 +41,7 @@ func TestMarkdownThread(t *testing.T) {
 		"session: 019f05d8\n",
 		`title: "catchup: skeleton"` + "\n",
 		"entries: 3\n",
-		"## 1. user | 2026-06-26 14:31",
+		"## 1. user |",
 		"## 2. assistant",
 		"## 3. compact",
 		"_(context compacted)_",
@@ -67,6 +67,9 @@ func TestJSONThreadShape(t *testing.T) {
 	if len(doc.Entries) != 3 || doc.Entries[0].Index != 1 || doc.Entries[0].Role != "user" {
 		t.Errorf("bad entries: %+v", doc.Entries)
 	}
+	if doc.Entries[0].Time != "2026-06-26T14:31:00Z" || doc.UpdatedAt != "2026-06-26T14:31:00Z" {
+		t.Errorf("JSON timestamps must remain UTC: %+v", doc)
+	}
 	// Raw text must be preserved, not HTML-escaped.
 	if !strings.Contains(b.String(), "hi & welcome") {
 		t.Errorf("expected unescaped text in JSON:\n%s", b.String())
@@ -84,6 +87,30 @@ func TestHTMLEscapes(t *testing.T) {
 	}
 	if !strings.Contains(out, "hello &lt;there&gt;") {
 		t.Errorf("expected escaped user text in html:\n%s", out)
+	}
+}
+
+func TestHumanTimesUseLocalZoneAndJSONStaysUTC(t *testing.T) {
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldLocal := time.Local
+	time.Local = loc
+	t.Cleanup(func() { time.Local = oldLocal })
+
+	th := sampleThread()
+	th.Entries[1].Time = time.Date(2026, 1, 15, 14, 31, 0, 0, time.UTC)
+	for _, format := range []session.Format{session.FormatMarkdown, session.FormatHTML} {
+		var out bytes.Buffer
+		if err := Thread(&out, th, format); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"2026-06-26 07:31 -07:00", "2026-01-15 06:31 -08:00", "2026-06-26T07:31:00-07:00"} {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("%s missing local time %q", format, want)
+			}
+		}
 	}
 }
 
@@ -132,7 +159,7 @@ func TestFailureViews(t *testing.T) {
 	}
 	wantAgent := []string{
 		"entries: 4\n",
-		"## 4. failure: Bash | 2026-09-02 04:11",
+		"## 4. failure: Bash | ",
 		"### Input\n\n```text\n{\"command\":\"go test ./...\"}\n```",
 		"### Output\n\n````text\nFAIL\tcatchup/x <0.1s>\n```\nexit status 1\n````",
 	}

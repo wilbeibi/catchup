@@ -52,11 +52,13 @@ var Providers = []string{
 // KindFailure is a tool result the agent's own log marks failed — the world
 // saying no to something the assistant tried. Successful tool results never
 // become Entries: the assistant's next words already carry what they said.
+// KindStop is a provider-reported API error, not something the assistant said.
 const (
 	KindMessage = "message"
 	KindCompact = "compact"
 	KindBranch  = "branch"
 	KindFailure = "failure"
+	KindStop    = "stop"
 
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
@@ -116,10 +118,11 @@ type Source struct {
 }
 
 // Entry is one visible item on the conversation timeline. Kind is KindMessage,
-// KindCompact, KindBranch, or KindFailure; for messages, Role is RoleUser or
+// KindCompact, KindBranch, KindFailure, or KindStop; for messages, Role is RoleUser or
 // RoleAssistant. Tool calls, successful tool results, reasoning, and
 // bookkeeping never become Entries; a tool result the log marks failed does,
-// as a KindFailure whose Text is what came back.
+// as a KindFailure whose Text is what came back. Provider API errors become
+// KindStop entries so their text cannot be mistaken for assistant speech.
 type Entry struct {
 	Kind string
 	Role string
@@ -132,6 +135,8 @@ type Entry struct {
 	// renderers choose their own human-readable projection.
 	Tool  string
 	Input string
+	// Reason is the provider's error code for a KindStop entry.
+	Reason string
 
 	// Retained marks an entry that sits before a compaction seam and that the
 	// agent's own log says survived it: the model still held this turn verbatim
