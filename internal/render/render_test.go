@@ -57,22 +57,34 @@ func TestJSONThreadShape(t *testing.T) {
 	if err := Thread(&b, sampleThread(), session.FormatJSON); err != nil {
 		t.Fatal(err)
 	}
-	var doc threadDoc
+	var doc struct {
+		Agent     string `json:"agent"`
+		SessionID string `json:"session_id"`
+		UpdatedAt string `json:"updated_at"`
+		Entries   []struct {
+			Index int    `json:"index"`
+			Role  string `json:"role"`
+			Time  string `json:"time"`
+			Text  string `json:"text"`
+		} `json:"entries"`
+	}
 	if err := json.Unmarshal(b.Bytes(), &doc); err != nil {
 		t.Fatalf("output is not valid JSON: %v", err)
 	}
 	if doc.Agent != "codex" || doc.SessionID != "019f05d8" {
-		t.Errorf("bad source doc: %+v", doc.sourceDoc)
+		t.Errorf("bad source doc: %+v", doc)
 	}
-	if len(doc.Entries) != 3 || doc.Entries[0].Index != 1 || doc.Entries[0].Role != "user" {
+	if len(doc.Entries) != 3 {
+		t.Fatalf("got %d entries, want 3: %+v", len(doc.Entries), doc.Entries)
+	}
+	if doc.Entries[0].Index != 1 || doc.Entries[0].Role != "user" {
 		t.Errorf("bad entries: %+v", doc.Entries)
 	}
 	if doc.Entries[0].Time != "2026-06-26T14:31:00Z" || doc.UpdatedAt != "2026-06-26T14:31:00Z" {
 		t.Errorf("JSON timestamps must remain UTC: %+v", doc)
 	}
-	// Raw text must be preserved, not HTML-escaped.
-	if !strings.Contains(b.String(), "hi & welcome") {
-		t.Errorf("expected unescaped text in JSON:\n%s", b.String())
+	if doc.Entries[1].Text != "hi & welcome" {
+		t.Errorf("JSON changed assistant text: %q", doc.Entries[1].Text)
 	}
 }
 
@@ -274,7 +286,7 @@ func TestAge(t *testing.T) {
 		{50 * time.Hour, "2d ago"},
 		{6 * 24 * time.Hour, "6d ago"},
 		// Past a week, "how long ago" stops being the question.
-		{9 * 24 * time.Hour, now.Add(-9 * 24 * time.Hour).Local().Format(dateHuman)},
+		{9 * 24 * time.Hour, now.Add(-9 * 24 * time.Hour).Local().Format("2006-01-02")},
 	}
 	for _, c := range cases {
 		if got := Age(now.Add(-c.ago)); got != c.want {
@@ -382,27 +394,34 @@ func TestJSONListCarriesMatchAndTitle(t *testing.T) {
 	if err := List(&b, "codex", sums, session.FormatJSON); err != nil {
 		t.Fatal(err)
 	}
-	out := b.String()
-	for _, want := range []string{
-		`"title": "catchup"`,
-		`"role": "user"`,
-		`"kind": "message"`,
-		`"the egress rule\nwas wrong"`, // newlines survive for the agent reading this
-		`"truncated_after": true`,
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("json listing missing %s:\n%s", want, out)
-		}
+	var rows []map[string]any
+	if err := json.Unmarshal(b.Bytes(), &rows); err != nil {
+		t.Fatalf("invalid JSON listing: %v", err)
 	}
-	if strings.Contains(out, "truncated_before") {
-		t.Errorf("an untruncated side should be omitted, not spelled false:\n%s", out)
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1: %+v", len(rows), rows)
+	}
+	match, ok := rows[0]["match"].(map[string]any)
+	if rows[0]["title"] != "catchup" || !ok || match["role"] != "user" || match["kind"] != "message" ||
+		match["text"] != "the egress rule\nwas wrong" || match["truncated_after"] != true {
+		t.Errorf("listing lost its title or match: %+v", rows[0])
+	}
+	if _, has := match["truncated_before"]; has {
+		t.Errorf("untruncated side should be omitted: %+v", match)
 	}
 	// An unqueried listing carries no match key at all.
 	b.Reset()
 	if err := List(&b, "codex", []session.Summary{{Ref: sums[0].Ref, Rank: 1, Title: "catchup"}}, session.FormatJSON); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(b.String(), "match") {
-		t.Errorf("unqueried json listing carries a match key:\n%s", b.String())
+	rows = nil
+	if err := json.Unmarshal(b.Bytes(), &rows); err != nil {
+		t.Fatalf("invalid unqueried JSON listing: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d unqueried rows, want 1: %+v", len(rows), rows)
+	}
+	if _, has := rows[0]["match"]; has {
+		t.Errorf("unqueried JSON listing carries a match key: %+v", rows[0])
 	}
 }

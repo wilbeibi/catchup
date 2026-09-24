@@ -1120,8 +1120,17 @@ func TestClaudeAPIErrorIsStopNotAssistantSpeech(t *testing.T) {
 		t.Errorf("agent transcript misclassified API diagnostic:\n%s", agent)
 	}
 	jsonOut := runWithCwd(t, roots, cwd, "claude", "--json")
-	if !json.Valid([]byte(jsonOut)) || !strings.Contains(jsonOut, `"kind": "stop"`) || !strings.Contains(jsonOut, `"reason": "rate_limit"`) {
-		t.Errorf("JSON lost the stop reason: %s", jsonOut)
+	var doc struct {
+		Entries []struct {
+			Kind   string `json:"kind"`
+			Reason string `json:"reason"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(jsonOut), &doc); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, jsonOut)
+	}
+	if len(doc.Entries) != 2 || doc.Entries[1].Kind != "stop" || doc.Entries[1].Reason != "rate_limit" {
+		t.Errorf("JSON lost the stop reason: %+v", doc.Entries)
 	}
 }
 
