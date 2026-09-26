@@ -13,8 +13,7 @@ go.work.sum
 /docs/*
 !/docs/releases/
 
-# agent instruction files stay local
+# harness-specific instruction files stay local; AGENTS.md is shared
 CLAUDE.md
-AGENTS.md
 .claude/
 .wrangler/
