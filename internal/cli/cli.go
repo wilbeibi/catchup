@@ -30,6 +30,7 @@ import (
 	"github.com/wilbeibi/catchup/internal/copilot"
 	"github.com/wilbeibi/catchup/internal/cursor"
 	"github.com/wilbeibi/catchup/internal/deepseek"
+	"github.com/wilbeibi/catchup/internal/grok"
 	"github.com/wilbeibi/catchup/internal/kimi"
 	"github.com/wilbeibi/catchup/internal/opencode"
 	"github.com/wilbeibi/catchup/internal/piagent"
@@ -44,7 +45,7 @@ const helpText = `Usage: catchup [agent[/<rank>]] [flags]        read a past ses
        catchup install-skill [agent]
 
 Agents: amp, codex, claude, agy (Antigravity), cline, copilot, cursor, deepseek (dsh),
-kimi, opencode, pi-agent, zcode
+grok, kimi, opencode, pi-agent, zcode
 Omit the agent to use whichever has the newest session here. Bare ` + "`catchup`" + `
 prints that session in full, as Markdown. The flags refine three things:
 which session, how much of it, and as what.
@@ -385,6 +386,8 @@ func selectProvider(name string) (session.Provider, error) {
 		return cursor.New(), nil
 	case session.ProviderDeepSeek:
 		return deepseek.New(), nil
+	case session.ProviderGrok:
+		return grok.New(), nil
 	case session.ProviderKimi:
 		return kimi.New(), nil
 	case session.ProviderOpenCode:
@@ -935,6 +938,10 @@ func intoCommand(target, prompt, model string) (string, []string, error) {
 		// -i starts interactive and auto-executes the prompt; a bare -p is
 		// non-interactive and exits when the answer lands.
 		return "copilot", append(modelArgs("--model", model), "-i", prompt), nil
+	case session.ProviderGrok:
+		// The TUI takes its opening prompt as a positional argument (a bare -p
+		// runs headless and exits); options must precede it.
+		return "grok", append(modelArgs("-m", model), prompt), nil
 	case session.ProviderKimi:
 		// Kimi rejects positional arguments and its -p flag is
 		// non-interactive print mode, so there is no way to start an
@@ -1035,6 +1042,13 @@ func forkCommand(src session.Source, model string) (string, []string, error) {
 		// Copilot has no fork; --resume is its native resume, and it takes
 		// the id inline (a bare --resume opens the session picker).
 		return "copilot", append([]string{"--resume=" + src.Ref.SessionID}, modelArgs("--model", model)...), nil
+	case session.ProviderGrok:
+		if src.Ref.SessionID == "" {
+			return "", nil, fmt.Errorf("fork grok: missing session id")
+		}
+		// --fork-session branches into a new id instead of appending to the
+		// original, which is what catchup's native fork means.
+		return "grok", append([]string{"--resume", src.Ref.SessionID, "--fork-session"}, modelArgs("-m", model)...), nil
 	case session.ProviderCursor:
 		if src.Ref.SessionID == "" {
 			return "", nil, fmt.Errorf("fork cursor: missing session id")

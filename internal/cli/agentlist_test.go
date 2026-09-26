@@ -127,6 +127,7 @@ func TestProseNamesEveryAgent(t *testing.T) {
 		session.ProviderCopilot:  "Copilot CLI",
 		session.ProviderCursor:   "Cursor",
 		session.ProviderDeepSeek: "DeepSeek Harness",
+		session.ProviderGrok:     "Grok Build",
 		session.ProviderKimi:     "Kimi",
 		session.ProviderOpenCode: "OpenCode",
 		session.ProviderPiAgent:  "Pi Agent",

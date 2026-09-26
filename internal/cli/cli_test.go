@@ -146,6 +146,39 @@ func piAgentRoot(t *testing.T) session.Roots {
 	return session.Roots{PiAgent: root}
 }
 
+// grokRoot writes one Grok session under a percent-encoded cwd group and
+// returns a Roots pointing at it. summary.json is the index entry; the
+// transcript is chat_history.jsonl.
+func grokRoot(t *testing.T) session.Roots {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "sessions", "%2Fhome%2Fu%2Fsrc%2Fproj", "gr-1")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	summary := `{"info":{"id":"gr-1","cwd":"/home/u/src/proj"},"generated_title":"grok session","last_active_at":"2026-07-18T15:20:00Z"}`
+	chat := `{"type":"user","content":[{"type":"text","text":"hello grok"}]}
+{"type":"assistant","content":"hi from grok","model_id":"grok-4.7"}
+`
+	if err := os.WriteFile(filepath.Join(dir, "summary.json"), []byte(summary), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "chat_history.jsonl"), []byte(chat), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return session.Roots{Grok: root}
+}
+
+func TestRunReadsGrokSession(t *testing.T) {
+	roots := grokRoot(t)
+	out := run(t, roots, "grok", "--id", "gr-1")
+	for _, want := range []string{"agent: grok", "session: gr-1", "title: grok session", "hello grok", "hi from grok"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("grok read missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func runWithCwd(t *testing.T, roots session.Roots, cwd string, args ...string) string {
 	t.Helper()
 	var out, errOut bytes.Buffer
@@ -732,6 +765,8 @@ func TestForkCommand(t *testing.T) {
 		// which would swallow a separated id as an unrelated argument.
 		{"copilot", session.Source{Ref: session.Ref{Provider: session.ProviderCopilot, SessionID: "gh1"}}, "", "copilot --resume=gh1"},
 		{"copilot with model", session.Source{Ref: session.Ref{Provider: session.ProviderCopilot, SessionID: "gh1"}}, "gpt-5.4", "copilot --resume=gh1 --model gpt-5.4"},
+		{"grok", session.Source{Ref: session.Ref{Provider: session.ProviderGrok, SessionID: "gr1"}}, "", "grok --resume gr1 --fork-session"},
+		{"grok with model", session.Source{Ref: session.Ref{Provider: session.ProviderGrok, SessionID: "gr1"}}, "grok-4.7", "grok --resume gr1 --fork-session -m grok-4.7"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -811,9 +846,10 @@ func runBoth(t *testing.T, roots session.Roots, cwd string, args ...string) (str
 func TestRunListAcrossAgents(t *testing.T) {
 	roots := codexRoot(t)
 	roots.Claude = claudeRoot(t).Claude
+	roots.Grok = grokRoot(t).Grok
 
 	out, _ := runBoth(t, roots, "", "--list")
-	for _, want := range []string{"codex/1", "claude/1", "claude/2"} {
+	for _, want := range []string{"codex/1", "claude/1", "claude/2", "grok/1"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("cross-agent listing missing %q:\n%s", want, out)
 		}
@@ -1004,6 +1040,7 @@ func TestIntoCommandModelPlacement(t *testing.T) {
 		{session.ProviderAgy, "--model M -i PROMPT"},
 		{session.ProviderOpenCode, "--model M --prompt PROMPT"},
 		{session.ProviderCopilot, "--model M -i PROMPT"},
+		{session.ProviderGrok, "-m M PROMPT"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.target, func(t *testing.T) {
