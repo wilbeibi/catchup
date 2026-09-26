@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>catchup - pick up a coding agent session without starting over</title>
-<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, or DeepSeek Harness session and hands it to the next agent. When an agent stops mid-task, catchup fork --into keeps the work moving.">
+<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness, or Amp session and hands it to the next agent. When an agent stops mid-task, catchup fork --into keeps the work moving.">
 <meta name="keywords" content="catchup, AI coding agent, Claude Code, Codex, Copilot CLI, Cursor CLI, Cline, Kimi Code, Antigravity, agy, OpenCode, Pi Agent, ZCode, DeepSeek Harness, usage limit, session handoff, context handoff, CLI, Go">
 <!--
   max-snippet:-1 removes the length cap on the text snippet a generative answer
@@ -46,7 +46,7 @@
   "applicationCategory": "DeveloperApplication",
   "applicationSubCategory": "Command-line tool",
   "operatingSystem": "macOS, Linux, Windows",
-  "description": "CLI that reads Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode & DeepSeek Harness session history so you can recap a session, find the right one, and hand it to the next agent as clean Markdown.",
+  "description": "CLI that reads Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness & Amp session history so you can recap a session, find the right one, and hand it to the next agent as clean Markdown.",
   "url": "https://catchup.pages.dev/",
   "downloadUrl": "https://github.com/wilbeibi/catchup",
   "softwareHelp": "https://github.com/wilbeibi/catchup#usage",
@@ -91,7 +91,7 @@
       "name": "Do I have to switch agents, or can the same one resume?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The same agent picks up right where it left off: catchup fork resumes through its own native path, real session state and all. Crossing to another agent is there when you want it, catchup fork claude --into codex seeds it with the transcript."
+        "text": "For agents that support native resume, the same agent picks up where it left off: catchup fork resumes through its own native path, real session state and all. Crossing to another agent is there when you want it, catchup fork claude --into codex seeds it with the transcript."
       }
     },
     {
@@ -99,7 +99,7 @@
       "name": "How do I find a session from last week?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "It's still on disk. catchup claude -q \"rate limit\" searches by keyword, lists what matches, and opens the exact one you meant."
+        "text": "It's still on disk. catchup --all-dirs -q \"rate limit\" lists matching sessions across projects and agents. Open one with catchup <agent> --id <id>."
       }
     },
     {
@@ -115,7 +115,7 @@
       "name": "Does it merge histories across agents?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. One agent at a time. It's a handoff, not a blender."
+        "text": "No. Search can span agents and projects, but each read or handoff selects one session."
       }
     }
   ]
@@ -343,8 +343,9 @@
         <li style="--i: 8">Pi Agent</li>
         <li style="--i: 9">ZCode</li>
         <li style="--i: 10">DeepSeek Harness</li>
+        <li style="--i: 11">Amp</li>
       </ul>
-      <p class="agents-tag">Any agent, either end.</p>
+      <p class="agents-tag">Read any supported agent. Hand off to a supported target.</p>
     </div>
   </div>
 </header>
@@ -382,10 +383,10 @@
 
     <div class="act">
       <h3>Find</h3>
-      <p>You know the one. List what ran here, or search by keyword; the session you meant opens.</p>
-      <button class="cmd" onclick="copyCmd(this, 'catchup claude -q &quot;rate limit&quot;')" aria-label="Copy the command: catchup claude -q rate limit">
+      <p>Remember the topic, not the project? Search across directories and agents, then open the matching session.</p>
+      <button class="cmd" onclick="copyCmd(this, 'catchup --all-dirs -q &quot;rate limit&quot;')" aria-label="Copy the command: catchup --all-dirs -q rate limit">
         <span class="p">$</span>
-        <span class="t">catchup claude -q "rate limit"</span>
+        <span class="t">catchup --all-dirs -q "rate limit"</span>
         <span class="copy">copy</span>
       </button>
     </div>
@@ -413,12 +414,12 @@
 
     <div class="qa-item">
       <h3>Do I have to switch agents, or can the same one resume?</h3>
-      <p>The same agent picks up right where it left off: <code>catchup fork</code> resumes through its own native path, real session state and all. Crossing to another agent is there when you want it, <code>catchup fork claude --into codex</code> seeds it with the transcript.</p>
+      <p>For agents that support native resume, the same agent picks up where it left off: <code>catchup fork</code> resumes through its own native path, real session state and all. Crossing to another agent is there when you want it, <code>catchup fork claude --into codex</code> seeds it with the transcript.</p>
     </div>
 
     <div class="qa-item">
       <h3>How do I find a session from last week?</h3>
-      <p>It's still on disk. <code>catchup claude -q "rate limit"</code> searches by keyword, lists what matches, and opens the exact one you meant.</p>
+      <p>It's still on disk. <code>catchup --all-dirs -q "rate limit"</code> lists matching sessions across projects and agents. Open one with <code>catchup &lt;agent&gt; --id &lt;id&gt;</code>.</p>
     </div>
 
     <div class="qa-item">
@@ -428,10 +429,11 @@
 
     <div class="qa-item">
       <h3>Does it merge histories across agents?</h3>
-      <p>No. One agent at a time. It's a handoff, not a blender.</p>
+      <p>No. Search can span agents and projects, but each read or handoff selects one session.</p>
     </div>
   </div>
-</section>
+    <p>Amp supports locally cached conversations only; tool results, native launch, and native resume are unsupported. ZCode also has no native resume.</p>
+  </section>
 
 <section class="install">
   <div class="col">

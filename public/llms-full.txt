@@ -1,6 +1,6 @@
 # catchup — full reference
 
-> catchup is an open-source command-line tool, written in Go and MIT-licensed, that lets your next coding agent catch itself up. It reads local Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, Pi Agent, ZCode, and DeepSeek Harness session history. Human Markdown contains the user/assistant conversation; agent handoffs also retain source-marked failed tool calls.
+> catchup is an open-source command-line tool, written in Go and MIT-licensed, that lets your next coding agent catch itself up. It reads local Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, Pi Agent, ZCode, DeepSeek Harness, and Amp session history. Human Markdown contains the user/assistant conversation; agent handoffs also retain source-marked failed tool calls.
 
 This is the complete reference. For the short summary, see [llms.txt](https://catchup.pages.dev/llms.txt). Source and README live at [github.com/wilbeibi/catchup](https://github.com/wilbeibi/catchup).
 
@@ -14,18 +14,18 @@ This is the complete reference. For the short summary, see [llms.txt](https://ca
 - Install command: `curl -fsSL https://catchup.pages.dev/install.sh | sh` (prebuilt binary, no Go toolchain), `brew install wilbeibi/tap/catchup`, or `go install github.com/wilbeibi/catchup@latest`
 - License: MIT
 - Author: wilbeibi (https://github.com/wilbeibi)
-- Supported agents: Claude Code (`claude`), Codex (`codex`), Copilot CLI (`copilot`), Cursor (`cursor`), Cline (`cline`), Kimi (`kimi`), Antigravity (`agy`), OpenCode (`opencode`), Pi Agent (`pi-agent`), ZCode (`zcode`), DeepSeek Harness (`deepseek`)
+- Supported agents: Claude Code (`claude`), Codex (`codex`), Copilot CLI (`copilot`), Cursor (`cursor`), Cline (`cline`), Kimi (`kimi`), Antigravity (`agy`), OpenCode (`opencode`), Pi Agent (`pi-agent`), ZCode (`zcode`), DeepSeek Harness (`deepseek`), Amp (`amp`)
 
 ## The problem catchup solves
 
-Developers increasingly use more than one AI coding agent. Each agent stores its conversation history in a different location and a different format — Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, Pi Agent, ZCode, and DeepSeek Harness all differ. When one agent hits a usage limit, when you want a second opinion from another agent, or when you return to a project days later, the next agent starts with zero context. The usual workaround is to copy-paste or re-summarize what already happened, which is slow and lossy.
+Developers increasingly use more than one AI coding agent. Each agent stores its conversation history in a different location and a different format — Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity (agy), OpenCode, Pi Agent, ZCode, DeepSeek Harness, and Amp all differ. When one agent hits a usage limit, when you want a second opinion from another agent, or when you return to a project days later, the next agent starts with zero context. The usual workaround is to copy-paste or re-summarize what already happened, which is slow and lossy.
 
 catchup gives the next agent a simple command it can run itself to recover prior work. It reads any supported agent's raw history and emits one consistent transcript. The default Markdown is a clean human view; `--agent` adds source-marked failed tool calls for an agent picking up the work.
 
 ## Concrete scenarios
 
 - Hitting a limit mid-task: Claude Code reaches its 5-hour usage limit during a refactor. In the same directory the next agent runs `catchup claude --agent --since-compact`, reads the recap and known failures, and continues without being re-briefed.
-- Forking back into the same agent: the current agent wants to preserve native session state instead of pasting a transcript. It runs `catchup fork` with any supported agent id (`catchup fork claude`, `catchup fork codex`, and so on) and catchup delegates to that agent's own fork or resume mechanism.
+- Forking back into the same agent: the current agent wants to preserve native session state instead of pasting a transcript. It runs `catchup fork` with an agent that supports native resume (`catchup fork claude`, `catchup fork codex`, and so on) and catchup delegates to that agent's own fork or resume mechanism.
 - Forking into a different agent: Claude Code reaches a limit, but the developer wants Codex to continue. The next command is `catchup fork claude --into codex`; catchup starts Codex with the conversation and source-marked failed tool calls.
 - Recalling earlier work: weeks later you ask a fresh agent about a past change. It runs `catchup codex -q "auth"` to locate the old session by keyword, then pulls it back into context by id.
 - Reviewing your own history: you read `catchup claude --last 4` to remind yourself what the last few exchanges actually decided, without scrolling through tool-call logs.
@@ -60,7 +60,7 @@ The skill source is at https://raw.githubusercontent.com/wilbeibi/catchup/main/S
 
 Agent handoff:
 
-- `catchup <agent>` — latest session for that agent in the current directory (`claude`, `codex`, `copilot`, `cursor`, `cline`, `kimi`, `agy`, `opencode`, `pi-agent`, `zcode`, `deepseek`).
+- `catchup <agent>` — latest session for that agent in the current directory (`claude`, `codex`, `copilot`, `cursor`, `cline`, `kimi`, `agy`, `opencode`, `pi-agent`, `zcode`, `deepseek`, `amp`).
 - `catchup` — the agent is optional: bare catchup reads the newest session in the current directory, whichever agent wrote it. Inside a live session the newest is usually your own, which pairs with `--since-compact` to recover context after a compaction.
 
 Human browsing:
@@ -97,13 +97,13 @@ Fork:
 
 Native fork resumes with the agent's real session state. `--into` carries the conversation and source-marked failed tool calls, not native state or a raw execution log. On Windows, catchup stores that transcript in a content-addressed `.catchup/` file and gives the target its path.
 
-Every supported agent can supply a handoff. Claude Code, Codex, Copilot CLI, Cursor, Cline, Antigravity, OpenCode, and Pi Agent can be launched as interactive `--into` targets. For Kimi, ZCode, or DeepSeek Harness, save the transcript and open it in the target manually.
+Every supported agent can supply a handoff. Claude Code, Codex, Copilot CLI, Cursor, Cline, Antigravity, OpenCode, and Pi Agent can be launched as interactive `--into` targets. For Kimi, ZCode, DeepSeek Harness, or Amp, save the transcript and open it in the target manually.
 
 `fork` returns the launched agent's exit status, including the shell convention of 128 plus the signal number when an agent is terminated by a signal.
 
 Common fork commands for AI agents:
 
-- Same-agent native resume: `catchup fork <agent>` for any supported agent id, e.g. `catchup fork codex`, `catchup fork claude`, `catchup fork cursor`.
+- Same-agent native resume: `catchup fork <agent>` for agents that support native resume, e.g. `catchup fork codex`, `catchup fork claude`, `catchup fork cursor`.
 - Cross-agent handoff: `catchup fork claude --into codex`, `catchup fork codex --into claude`, `catchup fork copilot --into claude`, `catchup fork opencode --into codex`, `catchup fork pi-agent --into codex`.
 - Smaller cross-agent prompt: add `--since-compact` or `--last <N>` so only the recent transcript is seeded into the target agent.
 
@@ -146,17 +146,18 @@ catchup is not a hosted cloud service and does not merge all agents into a singl
 - Pi Agent (`pi-agent`)
 - ZCode (`zcode`)
 - DeepSeek Harness (`deepseek`)
+- Amp (`amp`)
 
 Each produces the same clean human output regardless of how the source agent stored its history. Agent output additionally retains failures that the source log marks structurally.
 
 ## How catchup differs
 
 - Versus reading raw history files: the raw `.jsonl` or `.db` files contain tool calls, results, reasoning, and token accounting. Human output strips that execution detail and leaves the conversation. Agent output adds source-marked failed calls, but not a complete execution log.
-- Versus a unified "show everything" dashboard: catchup deliberately handles one agent at a time. There is no merged cross-agent view, because each agent's sessions have different shapes and flattening them would lose meaningful differences.
+- Versus a unified "show everything" dashboard: catchup lists and searches across agents, but each read or handoff preserves one session rather than merging transcripts.
 
 ## What catchup intentionally does not do
 
-- No cross-agent mixing — you pick one agent per invocation.
+- Listings and searches can span agents; transcripts are never merged.
 - No raw replay — successful tool activity and reasoning stay out of every handoff. Inspect the raw `.jsonl`/`.db` files for a complete execution log.
 
 ## Facts
@@ -177,3 +178,12 @@ Each produces the same clean human output regardless of how the source agent sto
 - [Go package reference](https://pkg.go.dev/github.com/wilbeibi/catchup): Package documentation.
 - [SKILL.md](https://raw.githubusercontent.com/wilbeibi/catchup/main/SKILL.md): Agent skill definition.
 - [MIT License](https://github.com/wilbeibi/catchup/blob/main/LICENSE): Licensing terms.
+
+## Cross-project discovery and source limits
+
+- Use `catchup --all-dirs -q "topic"` when you do not remember the project or agent. Results show recorded directories and parent or fork relationships.
+- Keep `--all-dirs` when selecting a result by rank, or use `catchup <agent> --id <id>`. Use `--dir <path>` to scope to one project; it cannot be combined with `--all-dirs`.
+- Codex native titles, including renamed titles, are searchable. A title-only match is labeled as a title and opens the whole conversation.
+- On an explicitly selected session, `-q "topic"` keeps matching exchanges. A title-only match may still return the whole conversation.
+- Amp reads only locally cached threads from `$XDG_DATA_HOME/amp/threads` (default `~/.local/share/amp/threads`); `AMP_DATA_HOME` overrides the data directory. Cloud-only threads, tool results, and reasoning are unavailable.
+- Native resume is unsupported for ZCode and Amp. Kimi, ZCode, DeepSeek Harness, and Amp cannot be launched as interactive `--into` targets; save the transcript and open it manually.

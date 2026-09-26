@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>How to find and reopen a past coding-agent session</title>
-<meta name="description" content="catchup --list shows recent sessions across every coding agent in the current directory, -q searches them by keyword, and catchup fork reopens the one you meant. Works with Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, and DeepSeek Harness.">
+<meta name="description" content="catchup --all-dirs -q searches local sessions across projects and agents. Find Codex sessions by their native titles and open a match by ID. Works with Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness, and Amp.">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <link rel="canonical" href="https://catchup.pages.dev/find-session/">
 <meta property="og:type" content="article">
@@ -21,7 +21,7 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "How to find and reopen a past coding-agent session",
-  "description": "List, search, and reopen prior Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, and DeepSeek Harness sessions from the terminal.",
+  "description": "List, search, and reopen prior Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness, and Amp sessions from the terminal.",
   "url": "https://catchup.pages.dev/find-session/",
   "mainEntityOfPage": { "@type": "WebPage", "@id": "https://catchup.pages.dev/find-session/" },
   "about": { "@id": "https://catchup.pages.dev/#catchup" },
@@ -48,17 +48,17 @@
     {
       "@type": "Question",
       "name": "Where does catchup look for sessions?",
-      "acceptedAnswer": { "@type": "Answer", "text": "In each agent's own local history, scoped to the directory you run it in. Use --dir <path> to read the sessions belonging to a different project directory instead of the current one." }
+      "acceptedAnswer": { "@type": "Answer", "text": "In each agent's own local history, scoped to the directory you run it in. Use --dir <path> to read another project, or --all-dirs when the original directory is unknown. These flags cannot be combined." }
     },
     {
       "@type": "Question",
       "name": "Can I search inside a session, not just across sessions?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes — stdout is the wire format, so pipe it: catchup claude | rg -C3 \"deploy\". The -q flag narrows which session, and a pager or grep narrows what inside it." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. catchup claude --id <id> -q \"deploy\" reads matching exchanges from that session. If only its native title matches, catchup reads the whole conversation." }
     },
     {
       "@type": "Question",
       "name": "Does searching work across different agents at once?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. catchup --list covers recent sessions from every supported agent in the current directory, so you do not have to remember which agent you used. Name an agent to narrow it, as in catchup codex --list." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. catchup --list covers recent sessions from every supported agent in the current directory, so you do not have to remember which agent you used. Add --all-dirs to search across projects too. Name an agent to narrow it, as in catchup codex --list." }
     }
   ]
 }
@@ -79,19 +79,22 @@
 
   <header class="q">
     <h1>How to find and reopen a past coding-agent session</h1>
-    <p class="lead">Run <code>catchup --list</code> to see recent sessions here across every agent, add <code>-q "keyword"</code> to search them, then reopen the one you meant with <code>catchup fork --id &lt;id&gt;</code>. Sessions are read from each agent's own local history — nothing is uploaded and nothing needs to have been saved in advance.</p>
+    <p class="lead">Run <code>catchup --all-dirs -q "topic"</code> to search across projects and agents, or <code>catchup --list</code> to see recent sessions here. Open a match with <code>catchup &lt;agent&gt; --id &lt;id&gt;</code>. Sessions are read from each agent's own local history — nothing is uploaded and nothing needs to have been saved in advance.</p>
   </header>
 
   <main>
     <div class="cmd"><span class="p">$</span><span class="t">catchup --list</span></div>
 
     <h2>Search when you only remember the topic</h2>
-    <p>You know there was a session about rate limits. You do not remember which agent, or when:</p>
-    <div class="cmd"><span class="p">$</span><span class="t">catchup -q "rate limit"</span></div>
+    <p>You know there was a session about rate limits. You do not remember which agent, which project, or when:</p>
+    <div class="cmd"><span class="p">$</span><span class="t">catchup --all-dirs -q "rate limit"</span></div>
     <p><code>-q</code> implies <code>--list</code>, so it prints the matching sessions rather than dumping one. <code>-n 50</code> raises the listing cap from its default of 20.</p>
+
+    <p>Results show recorded directories and parent or fork relationships. Codex native titles, including renamed titles, are searchable. A title-only hit is labeled <code>title:</code>; opening it reads the whole conversation.</p>
 
     <h2>Open an exact one</h2>
     <ul>
+      <li><code>catchup codex/3 --all-dirs -q "rate limit"</code> — select a ranked search result using the same query and directory scope, or use its stable ID.</li>
       <li><code>catchup claude/3</code> — the third-newest Claude Code session here.</li>
       <li><code>catchup --id &lt;id&gt;</code> — an exact session id, as printed by the listing.</li>
       <li><code>catchup codex -i</code> — metadata only, to confirm you have the right one before reading it.</li>
@@ -101,22 +104,22 @@
     <h2>Read it, or pick the work back up</h2>
     <p>Reading prints clean Markdown — your messages and the agent's replies, with tool calls, command output, and reasoning traces stripped:</p>
     <div class="cmd"><span class="p">$</span><span class="t">catchup claude --id 01J8Z... --since-compact</span></div>
-    <p>To continue the work rather than read it, hand the same selection to <code>fork</code>: <code>catchup fork --id &lt;id&gt;</code> resumes through the agent's native path, and adding <code>--into &lt;agent&gt;</code> continues it in a different agent instead.</p>
+    <p>To continue the work rather than read it, hand the same selection to <code>fork</code>: <code>catchup fork --id &lt;id&gt;</code> resumes through the agent's native path where supported, and adding <code>--into &lt;agent&gt;</code> continues it in a different agent instead.</p>
 
     <div class="limit">
-      <p><strong>What you will not find here.</strong> The default view is conversation, not execution. Agent handoffs can include source-marked failures, but catchup never reproduces a complete command log. Inspect the raw <code>.jsonl</code>/<code>.db</code> files when exact command output matters.</p>
+      <p><strong>What you will not find here.</strong> Amp is limited to locally cached conversations and omits tool results; native Amp launch and resume are unsupported. The default view is conversation, not execution. Agent handoffs can include source-marked failures, but catchup never reproduces a complete command log. Inspect the raw <code>.jsonl</code>/<code>.db</code> files when exact command output matters.</p>
     </div>
 
     <h2>Questions</h2>
 
     <h3>Where does catchup look for sessions?</h3>
-    <p>In each agent's own local history, scoped to the directory you run it in. Use <code>--dir &lt;path&gt;</code> to read the sessions belonging to a different project directory instead of the current one.</p>
+    <p>In each agent's own local history, scoped to the directory you run it in. Use <code>--dir &lt;path&gt;</code> to read another project, or <code>--all-dirs</code> when the original directory is unknown. These flags cannot be combined.</p>
 
     <h3>Can I search inside a session, not just across sessions?</h3>
-    <p>Yes — stdout is the wire format, so pipe it: <code>catchup claude | rg -C3 "deploy"</code>. The <code>-q</code> flag narrows which session, and a pager or grep narrows what inside it.</p>
+    <p>Yes. <code>catchup claude --id &lt;id&gt; -q "deploy"</code> reads matching exchanges from that session. If only its native title matches, catchup reads the whole conversation.</p>
 
     <h3>Does searching work across different agents at once?</h3>
-    <p>Yes. <code>catchup --list</code> covers recent sessions from every supported agent in the current directory, so you do not have to remember which agent you used. Name an agent to narrow it, as in <code>catchup codex --list</code>.</p>
+    <p>Yes. <code>catchup --list</code> covers recent sessions from every supported agent in the current directory, so you do not have to remember which agent you used. Add <code>--all-dirs</code> to search across projects too. Name an agent to narrow it, as in <code>catchup codex --list</code>.</p>
 
     <div class="related">
       <h2>Related</h2>
