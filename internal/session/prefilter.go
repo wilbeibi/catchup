@@ -68,7 +68,7 @@ func (o ListOptions) MatchesQuery(t Thread) bool {
 	if o.Query == "" {
 		return true
 	}
-	return o.firstMatch(t) != nil
+	return o.firstMatch(t) != nil || t.MatchesTitle(o.Query)
 }
 
 // containsFold reports whether raw contains needle, comparing A-Z case-blind.

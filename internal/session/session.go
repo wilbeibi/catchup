@@ -21,6 +21,7 @@ import (
 // Provider names. These are the only legal first segment of a target and the
 // keys of the provider registry.
 const (
+	ProviderAmp      = "amp"
 	ProviderCodex    = "codex"
 	ProviderClaude   = "claude"
 	ProviderAgy      = "agy" // Antigravity CLI
@@ -38,7 +39,7 @@ const (
 // Prose that names the agents — the help text, README, SKILL.md — is written
 // by hand and checked against this; machine-read lists build from it.
 var Providers = []string{
-	ProviderCodex, ProviderClaude, ProviderAgy, ProviderCline, ProviderCopilot,
+	ProviderAmp, ProviderCodex, ProviderClaude, ProviderAgy, ProviderCline, ProviderCopilot,
 	ProviderCursor, ProviderDeepSeek, ProviderKimi, ProviderOpenCode, ProviderPiAgent, ProviderZCode,
 }
 
@@ -93,6 +94,7 @@ type Target struct {
 // field means the provider default was not overridden; ResolveRoots always
 // fills every field with an absolute path.
 type Roots struct {
+	Amp      string
 	Codex    string
 	Claude   string
 	Agy      string
@@ -252,23 +254,29 @@ func (t Thread) VisibleText() string {
 // lister stamps it after filtering.
 func (t Thread) Summary() Summary {
 	return Summary{
-		Ref:       t.Source.Ref,
-		UpdatedAt: t.Source.UpdatedAt,
-		Title:     t.Source.Metadata["title"],
-		Cwd:       t.Source.Metadata["cwd"],
-		Preview:   t.Preview(),
+		Ref:          t.Source.Ref,
+		UpdatedAt:    t.Source.UpdatedAt,
+		Title:        t.Source.Metadata["title"],
+		Cwd:          t.Source.Metadata["cwd"],
+		Preview:      t.Preview(),
+		Parent:       t.Source.Metadata["parent"],
+		Relationship: t.Source.Metadata["relationship"],
+		AgentRole:    t.Source.Metadata["agent_role"],
 	}
 }
 
 // Summary is one row of a listing: a Source projected for display, carrying the
 // 1-based Rank that will re-select it on a later invocation.
 type Summary struct {
-	Ref       Ref
-	Rank      int
-	UpdatedAt time.Time
-	Title     string
-	Cwd       string
-	Preview   string
+	Ref          Ref
+	Rank         int
+	UpdatedAt    time.Time
+	Title        string
+	Cwd          string
+	Preview      string
+	Parent       string
+	Relationship string
+	AgentRole    string
 
 	// Match is the passage that satisfied the listing's keyword query, and is nil
 	// for a listing that carried none. It stands beside Preview rather than
@@ -282,7 +290,7 @@ type Summary struct {
 const DefaultListLimit = 20
 
 // ListOptions controls listing and rank resolution. Query is a literal,
-// case-insensitive match over visible text. Cwd filters to sessions whose
+// case-insensitive match over visible text and supported native titles. Cwd filters to sessions whose
 // working directory matches exactly; empty means no directory filter. Limit caps
 // the number of rows; zero means DefaultListLimit applies.
 type ListOptions struct {

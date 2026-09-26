@@ -11,7 +11,8 @@ import (
 // the agent's name for the whole session or, failing that, the directory every
 // row shares.
 //
-// Text is a literal span of the session, never a summary — catchup's reader can
+// Kind "title" identifies a native session name, with no speaker Role.
+// Otherwise Text is a literal span of the session, never a summary — catchup's reader can
 // summarize and this cannot, so the excerpt only ever quotes. It keeps its
 // original newlines; a renderer that needs one line collapses them itself, and
 // the ellipses that mark the two Truncated flags are likewise the renderer's to
@@ -70,6 +71,9 @@ func (o ListOptions) Excerpt(e Entry) *Match {
 func (o ListOptions) Summarize(t Thread) Summary {
 	s := t.Summary()
 	s.Match = o.firstMatch(t)
+	if s.Match == nil && t.MatchesTitle(o.Query) {
+		s.Match = &Match{Kind: "title", Text: t.Source.Metadata["native_title"]}
+	}
 	return s
 }
 
@@ -90,8 +94,7 @@ func (o ListOptions) firstMatch(t Thread) *Match {
 // place, because the reader came to find out what was said about it and the
 // conversation may return to it repeatedly.
 //
-// It decides entry by entry, exactly as MatchesQuery does, so a session the
-// listing matched always yields at least one index here.
+// Native title matches have no entry indexes; callers retain the whole thread.
 func (o ListOptions) MatchedEntries(t Thread) []int {
 	if o.Query == "" {
 		return nil
@@ -187,4 +190,13 @@ func matchFoldAt(s, needle string) (int, bool) {
 		i += size
 	}
 	return i, true
+}
+
+// MatchesTitle distinguishes native names from quoted conversation text.
+func (t Thread) MatchesTitle(query string) bool {
+	if query == "" {
+		return false
+	}
+	start, _ := IndexFold(t.Source.Metadata["native_title"], query)
+	return start >= 0
 }

@@ -73,13 +73,16 @@ func jsonMeta(w io.Writer, s session.Source) error {
 
 // summaryDoc is one row of a JSON listing.
 type summaryDoc struct {
-	Rank      int    `json:"rank"`
-	Agent     string `json:"agent"`
-	SessionID string `json:"session_id,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	Title     string `json:"title,omitempty"`
-	Cwd       string `json:"cwd,omitempty"`
-	Preview   string `json:"preview,omitempty"`
+	Rank         int    `json:"rank"`
+	Agent        string `json:"agent"`
+	SessionID    string `json:"session_id,omitempty"`
+	UpdatedAt    string `json:"updated_at,omitempty"`
+	Title        string `json:"title,omitempty"`
+	Cwd          string `json:"cwd,omitempty"`
+	Preview      string `json:"preview,omitempty"`
+	Parent       string `json:"parent,omitempty"`
+	Relationship string `json:"relationship,omitempty"`
+	AgentRole    string `json:"agent_role,omitempty"`
 
 	// Match is present only for a queried listing. Title stays beside it: the
 	// human table trades one for the other because it has one column, and a
@@ -126,7 +129,8 @@ func jsonList(w io.Writer, summaries []session.Summary) error {
 			Title:     s.Title,
 			Cwd:       s.Cwd,
 			Preview:   s.Preview,
-			Match:     makeMatchDoc(s.Match),
+			Parent:    s.Parent, Relationship: s.Relationship, AgentRole: s.AgentRole,
+			Match: makeMatchDoc(s.Match),
 		}
 	}
 	return encode(w, docs)

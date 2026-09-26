@@ -91,6 +91,15 @@ func Meta(w io.Writer, s session.Source, f session.Format) error {
 // before it gets here. provider names the agent every row belongs to, and is
 // empty for a cross-agent listing, where each row carries its own.
 func List(w io.Writer, provider string, summaries []session.Summary, f session.Format) error {
+	return list(w, provider, summaries, f, false)
+}
+
+// ListAcrossDirs includes recorded directories so results can be distinguished.
+func ListAcrossDirs(w io.Writer, provider string, summaries []session.Summary, f session.Format) error {
+	return list(w, provider, summaries, f, true)
+}
+
+func list(w io.Writer, provider string, summaries []session.Summary, f session.Format, showDirs bool) error {
 	if f != session.FormatJSON {
 		summaries = stripSummaries(summaries)
 	}
@@ -98,7 +107,7 @@ func List(w io.Writer, provider string, summaries []session.Summary, f session.F
 	case session.FormatJSON:
 		return jsonList(w, summaries)
 	case session.FormatMarkdown:
-		return tableList(w, provider, summaries)
+		return tableList(w, provider, summaries, showDirs)
 	default:
 		return fmt.Errorf("render: unsupported listing format %s", f)
 	}
@@ -114,7 +123,7 @@ func List(w io.Writer, provider string, summaries []session.Summary, f session.F
 // one --json away like the id. Columns are aligned with
 // display-width-aware padding so CJK characters (2 columns each in terminals)
 // align correctly.
-func tableList(w io.Writer, provider string, summaries []session.Summary) error {
+func tableList(w io.Writer, provider string, summaries []session.Summary, showDirs bool) error {
 	if len(summaries) == 0 {
 		if provider == "" {
 			_, err := fmt.Fprintln(w, "no sessions found")
@@ -159,12 +168,29 @@ func tableList(w io.Writer, provider string, summaries []session.Summary) error 
 		cell := titleCell(s)
 		if s.Match != nil {
 			cell = matchCell(*s.Match)
+			if s.Match.Kind == "title" {
+				cell = "title: " + cell
+			}
 		}
 		fmt.Fprintf(w, "%s %s %s\n",
 			runewidth.FillRight(handles[i], selW),
 			runewidth.FillRight(ages[i], updW),
 			runewidth.Truncate(cell, titleW, "…"),
 		)
+		if showDirs && s.Cwd != "" {
+			fmt.Fprintf(w, "  dir: %s\n", oneLine(s.Cwd))
+		}
+		if s.Parent != "" {
+			relation := s.Relationship
+			if relation == "" {
+				relation = "related"
+			}
+			fmt.Fprintf(w, "  %s of: %s", oneLine(relation), oneLine(s.Parent))
+			if s.AgentRole != "" {
+				fmt.Fprintf(w, " (%s)", oneLine(s.AgentRole))
+			}
+			fmt.Fprintln(w)
+		}
 	}
 	return nil
 }

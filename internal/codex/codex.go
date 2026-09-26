@@ -50,7 +50,12 @@ func New() *Provider { return &Provider{} }
 
 var _ session.Provider = (*Provider)(nil)
 
-func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) (session.Source, error) {
+func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) (src session.Source, err error) {
+	defer func() {
+		if err == nil {
+			enrich(&src, nativeTitles(roots.Codex))
+		}
+	}()
 	files, err := sessionFiles(roots.Codex)
 	if err != nil {
 		return session.Source{}, err
@@ -80,7 +85,14 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 	if err != nil {
 		return session.Thread{}, err
 	}
-	return readThread(fileInfo{path: src.Path, mod: info.ModTime()})
+	t, err := readThread(fileInfo{path: src.Path, mod: info.ModTime()})
+	if err != nil {
+		return t, err
+	}
+	for k, v := range src.Metadata {
+		t.Source.Metadata[k] = v
+	}
+	return t, err
 }
 
 func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
@@ -137,6 +149,7 @@ func listSessions(root string, opts session.ListOptions) ([]session.Summary, err
 	if err != nil {
 		return nil, err
 	}
+	titles := nativeTitles(root)
 	limit := opts.EffectiveLimit()
 	out := make([]session.Summary, 0, limit)
 	for _, fi := range files {
@@ -149,13 +162,21 @@ func listSessions(root string, opts session.ListOptions) ([]session.Summary, err
 				continue
 			}
 			if !opts.MayMatchQuery(raw) && !mayDeriveMatch(opts.Query) {
-				continue
+				src, err := readMeta(fi)
+				if err != nil {
+					continue
+				}
+				enrich(&src, titles)
+				if !(session.Thread{Source: src}).MatchesTitle(opts.Query) {
+					continue
+				}
 			}
 		}
 		t, err := readThread(fi)
 		if err != nil || len(t.Entries) == 0 {
 			continue
 		}
+		enrich(&t.Source, titles)
 		if !opts.Matches(t) {
 			continue
 		}
@@ -176,10 +197,14 @@ type codexLine struct {
 }
 
 type codexMeta struct {
-	ID            string `json:"id"`
-	Cwd           string `json:"cwd"`
-	CliVersion    string `json:"cli_version"`
-	ModelProvider string `json:"model_provider"`
+	ForkedFrom    string          `json:"forked_from_id"`
+	AgentRole     string          `json:"agent_role"`
+	AgentNickname string          `json:"agent_nickname"`
+	Source        json.RawMessage `json:"source"`
+	ID            string          `json:"id"`
+	Cwd           string          `json:"cwd"`
+	CliVersion    string          `json:"cli_version"`
+	ModelProvider string          `json:"model_provider"`
 }
 
 type codexMessage struct {
@@ -405,6 +430,30 @@ func newSource(fi fileInfo) session.Source {
 }
 
 func applyMeta(src *session.Source, m codexMeta) {
+	if m.ForkedFrom != "" {
+		src.Metadata["parent"], src.Metadata["relationship"] = m.ForkedFrom, "fork"
+	}
+	if m.AgentRole != "" {
+		src.Metadata["agent_role"] = m.AgentRole
+	}
+	if m.AgentNickname != "" {
+		src.Metadata["agent_nickname"] = m.AgentNickname
+	}
+	var origin struct {
+		Subagent struct {
+			ThreadSpawn struct {
+				Parent string `json:"parent_thread_id"`
+				Role   string `json:"agent_role"`
+			} `json:"thread_spawn"`
+		} `json:"subagent"`
+	}
+	if json.Unmarshal(m.Source, &origin) == nil && origin.Subagent.ThreadSpawn.Parent != "" {
+		src.Metadata["parent"], src.Metadata["relationship"] = origin.Subagent.ThreadSpawn.Parent, "child"
+		if origin.Subagent.ThreadSpawn.Role != "" {
+			src.Metadata["agent_role"] = origin.Subagent.ThreadSpawn.Role
+		}
+	}
+
 	if m.ID != "" {
 		src.Ref.SessionID = m.ID
 	}

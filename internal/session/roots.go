@@ -81,7 +81,15 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		copilot = filepath.Join(home, ".copilot")
 	}
 
-	return Roots{Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor, ZCode: zcode, DeepSeek: deepseek, Copilot: copilot}
+	amp := getenv("AMP_DATA_HOME")
+	if amp == "" {
+		base := getenv("XDG_DATA_HOME")
+		if base == "" {
+			base = filepath.Join(home, ".local", "share")
+		}
+		amp = filepath.Join(base, "amp")
+	}
+	return Roots{Amp: amp, Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor, ZCode: zcode, DeepSeek: deepseek, Copilot: copilot}
 }
 
 // ResolveSkillDirs returns each provider's global Agent Skills directory,
@@ -112,6 +120,7 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 //	           discovers ~/.agents/skills — Codex's entry, same reasoning)
 func ResolveSkillDirs(roots Roots, home string) map[string]string {
 	return map[string]string{
+		ProviderAmp:      filepath.Join(home, ".config", "amp", "skills"),
 		ProviderCodex:    filepath.Join(home, ".agents", "skills"),
 		ProviderClaude:   filepath.Join(roots.Claude, "skills"),
 		ProviderAgy:      filepath.Join(home, ".gemini", "config", "skills"),

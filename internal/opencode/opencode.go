@@ -190,6 +190,7 @@ func listSessions(ctx context.Context, db *sql.DB, path string, opts session.Lis
 			UpdatedAt: src.UpdatedAt,
 			Title:     src.Metadata["title"],
 			Cwd:       src.Metadata["cwd"],
+			Parent:    src.Metadata["parent"],
 			Preview:   firstText(ctx, db, src.Ref.SessionID),
 			Match:     match,
 		})

@@ -263,6 +263,7 @@ func applyFileMeta(src *session.Source, lines []piLine) {
 			}
 			if line.Parent != "" {
 				src.Metadata["parent"] = line.Parent
+				src.Metadata["relationship"] = "fork"
 			}
 		case "session_info":
 			src.Metadata["title"] = strings.TrimSpace(line.Name)

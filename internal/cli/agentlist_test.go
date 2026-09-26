@@ -119,6 +119,7 @@ func TestDocumentedAgentListsMatchTheProviders(t *testing.T) {
 // Adding a provider fails this test until the name is chosen.
 func TestProseNamesEveryAgent(t *testing.T) {
 	displayNames := map[string]string{
+		session.ProviderAmp:      "Amp",
 		session.ProviderCodex:    "Codex",
 		session.ProviderClaude:   "Claude Code",
 		session.ProviderAgy:      "Antigravity",

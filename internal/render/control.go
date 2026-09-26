@@ -217,6 +217,9 @@ func stripSummaries(rows []session.Summary) []session.Summary {
 		s.Ref.SessionID = StripControl(s.Ref.SessionID)
 		s.Title = StripControl(s.Title)
 		s.Cwd = StripControl(s.Cwd)
+		s.Parent = StripControl(s.Parent)
+		s.Relationship = StripControl(s.Relationship)
+		s.AgentRole = StripControl(s.AgentRole)
 		s.Preview = StripControl(s.Preview)
 		if s.Match != nil {
 			m := *s.Match

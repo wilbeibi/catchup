@@ -22,6 +22,7 @@ type Command struct {
 	Into         string // --into <agent>: with fork, seed that agent with the transcript
 	Model        string // --model <name>: with fork, launch the agent with this model
 	From         string // --from <file|-|http(s) url>: with fork --into, seed from this artifact instead of a provider store
+	AllDirs      bool   // --all-dirs: search every recorded directory
 	Dir          string // --dir <path>: select sessions from this directory instead of the cwd
 	Target       session.Target
 	Format       session.Format
@@ -165,6 +166,8 @@ func Parse(args []string) (Command, error) {
 			cmd.SinceCompact = true
 		case "--full":
 			cmd.Full = true
+		case "--all-dirs":
+			cmd.AllDirs = true
 		case "--dir":
 			v, err := value()
 			if err != nil {
@@ -339,6 +342,9 @@ func isProviderName(s string) bool {
 // a query with no explicit selector means list mode.
 func normalize(cmd *Command) error {
 	t := cmd.Target
+	if cmd.AllDirs && (cmd.Dir != "" || cmd.From != "" || cmd.Action == "install-skill") {
+		return errors.New("--all-dirs cannot be combined with --dir, --from, or install-skill")
+	}
 	if cmd.Into != "" && cmd.Action != "fork" {
 		return errors.New("--into only applies to fork")
 	}

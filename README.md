@@ -12,7 +12,7 @@
 
 Reach for it whenever you don't want to explain the whole job again: an agent hits its usage limit, you switch tools mid-task, you pick up older work, or you want a clean record of what happened.
 
-Works with **Claude Code**, **Codex**, **Copilot CLI**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, **Pi Agent**, **ZCode**, and **DeepSeek Harness**.
+Works with **Amp**, **Claude Code**, **Codex**, **Copilot CLI**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, **Pi Agent**, **ZCode**, and **DeepSeek Harness**.
 
 <div align="center">
 
@@ -56,13 +56,14 @@ herdr plugin install wilbeibi/herdr-catchup
 
 ## Usage
 
-Agents: `claude` · `codex` · `copilot` · `cursor` · `cline` · `kimi` · `agy` (Antigravity) · `opencode` · `pi-agent` · `zcode` · `deepseek` (dsh)
+Agents: amp · `claude` · `codex` · `copilot` · `cursor` · `cline` · `kimi` · `agy` (Antigravity) · `opencode` · `pi-agent` · `zcode` · `deepseek` (dsh)
 
 Omit `<agent>` and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
 
 **For you:** run in your terminal to re-enter a session:
 
 ```bash
+catchup --all-dirs -q "cache"     # search across projects and agents
 catchup --list                   # where was I: recent sessions, every agent
 catchup fork                     # fork the newest session across agents
 catchup fork <agent>             # fork that agent's newest session
@@ -89,7 +90,15 @@ catchup <agent> --json                   # render JSON; also --html
 
 Use `fork` to continue with the same agent and keep native session state. Use `fork --into` to start another agent with the transcript, or the same agent with `--last`/`--since-compact`, which restarts it clean on a trimmed transcript when the context is spent but the work isn't. Use read commands when you want old work in a clean context.
 
-Every supported agent can supply a handoff. Kimi, ZCode, and DeepSeek Harness cannot be launched as interactive `--into` targets; save the transcript and open it in those tools instead.
+Every supported agent can supply a handoff. Amp, Kimi, ZCode, and DeepSeek Harness cannot be launched as interactive `--into` targets; save the transcript and open it in those tools instead.
+
+Use `--all-dirs` again when selecting a search result by rank, or select its stable ID with `--id`.
+Listings show each session's directory and recorded parent or fork relationship.
+Codex native titles are searchable, including renamed titles. A title-only match opens the whole conversation.
+
+Amp reads local JSON caches in `$XDG_DATA_HOME/amp/threads` (default `~/.local/share/amp/threads`).
+Set `AMP_DATA_HOME` to override the Amp data directory. Cloud-only threads are unavailable until cached locally.
+Amp tool results and reasoning are omitted. Native Amp launch and resume are unsupported.
 
 ## Boundaries
 

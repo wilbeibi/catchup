@@ -23,6 +23,7 @@ import (
 
 	"github.com/mattn/go-runewidth"
 	"github.com/wilbeibi/catchup/internal/agy"
+	"github.com/wilbeibi/catchup/internal/amp"
 	"github.com/wilbeibi/catchup/internal/claude"
 	"github.com/wilbeibi/catchup/internal/cline"
 	"github.com/wilbeibi/catchup/internal/codex"
@@ -42,7 +43,7 @@ const helpText = `Usage: catchup [agent[/<rank>]] [flags]        read a past ses
        catchup fork --into <agent> --from <file | - | url>
        catchup install-skill [agent]
 
-Agents: codex, claude, agy (Antigravity), cline, copilot, cursor, deepseek (dsh),
+Agents: amp, codex, claude, agy (Antigravity), cline, copilot, cursor, deepseek (dsh),
 kimi, opencode, pi-agent, zcode
 Omit the agent to use whichever has the newest session here. Bare ` + "`catchup`" + `
 prints that session in full, as Markdown. The flags refine three things:
@@ -60,6 +61,7 @@ FIND — which session (default: newest here)
                       already picked, read the exchanges holding it
   <agent>/<rank>      the Nth newest, e.g. codex/3
   --id <id>           an exact session id
+  --all-dirs         search sessions across all directories
   --dir <path>        sessions from another directory, not the cwd
   -n, --limit <N>     cap the listing (default 20)
 
@@ -166,6 +168,10 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		current = nil
 	}
 
+	if cmd.AllDirs {
+		cwd, current = "", nil
+	}
+
 	if cmd.Action == "fork" {
 		if cmd.From != "" {
 			return forkFrom(ctx, cmd, launchDir, stdin, stdout, stderr)
@@ -217,6 +223,9 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 		if err != nil {
 			return err
 		}
+		if cmd.AllDirs {
+			return render.ListAcrossDirs(stdout, cmd.Target.Provider, summaries, cmd.Format)
+		}
 		return render.List(stdout, cmd.Target.Provider, summaries, cmd.Format)
 	}
 
@@ -240,7 +249,7 @@ func Run(ctx context.Context, args []string, roots session.Roots, current map[st
 	query := cmd.Target.Query
 	if query != "" {
 		hits := session.ListOptions{Query: query}.MatchedEntries(thread)
-		if len(hits) == 0 {
+		if len(hits) == 0 && !thread.MatchesTitle(query) {
 			return fmt.Errorf("no %q in %s %s; drop -q to read the session whole",
 				query, src.Ref.Provider, src.Ref.SessionID)
 		}
@@ -295,6 +304,9 @@ func listAcross(ctx context.Context, roots session.Roots, cmd Command, cwd strin
 			}
 			fmt.Fprintln(stderr, "catchup:", err)
 		}
+	}
+	if cmd.AllDirs {
+		return render.ListAcrossDirs(stdout, "", merged, cmd.Format)
 	}
 	return render.List(stdout, "", merged, cmd.Format)
 }
@@ -357,6 +369,8 @@ func orList(names []string) string {
 // and small, so this is a switch, not a registry.
 func selectProvider(name string) (session.Provider, error) {
 	switch name {
+	case session.ProviderAmp:
+		return amp.New(), nil
 	case session.ProviderCodex:
 		return codex.New(), nil
 	case session.ProviderClaude:
@@ -899,6 +913,8 @@ func seedInto(ctx context.Context, into, model string, s seed, stdin io.Reader, 
 // before the positional prompt where the agents that take one require it.
 func intoCommand(target, prompt, model string) (string, []string, error) {
 	switch target {
+	case session.ProviderAmp:
+		return "", nil, fmt.Errorf("--into amp: launching Amp is not supported; save the transcript and open it in Amp")
 	case session.ProviderCodex:
 		return "codex", append(modelArgs("-m", model), prompt), nil
 	case session.ProviderClaude:
@@ -967,6 +983,8 @@ func modelArgs(flag, model string) []string {
 // (every supported agent accepts it alongside its resume form).
 func forkCommand(src session.Source, model string) (string, []string, error) {
 	switch src.Ref.Provider {
+	case session.ProviderAmp:
+		return "", nil, fmt.Errorf("fork amp: native resume is not supported; use fork amp --into <agent> to hand off its transcript")
 	case session.ProviderCodex:
 		if src.Ref.SessionID == "" {
 			return "", nil, fmt.Errorf("fork codex: missing session id")

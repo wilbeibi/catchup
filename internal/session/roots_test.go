@@ -12,7 +12,7 @@ import (
 var allProviders = []string{
 	ProviderCodex, ProviderClaude, ProviderAgy, ProviderOpenCode,
 	ProviderPiAgent, ProviderKimi, ProviderCline, ProviderCursor,
-	ProviderZCode, ProviderDeepSeek, ProviderCopilot,
+	ProviderZCode, ProviderDeepSeek, ProviderCopilot, ProviderAmp,
 }
 
 // noEnv is the environment of a machine that overrides nothing.
@@ -31,6 +31,7 @@ func TestResolveRootsDefaults(t *testing.T) {
 	home := t.TempDir()
 	got := ResolveRoots(noEnv, home)
 	want := Roots{
+		Amp:      filepath.Join(home, ".local", "share", "amp"),
 		Codex:    filepath.Join(home, ".codex"),
 		Claude:   filepath.Join(home, ".claude"),
 		Agy:      filepath.Join(home, ".gemini", "antigravity-cli"),
