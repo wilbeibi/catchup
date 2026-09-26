@@ -5,8 +5,8 @@
 // a SQLite blob store opened through internal/sqlitedb (modernc.org/sqlite,
 // already this module's one database dependency).
 //
-// Format, reverse-engineered from the cursor-agent bundle and live sessions
-// on 2026-07-17 (no public source): store.db has blobs(id, data) and
+// Format reference, reverse-engineered from the cursor-agent bundle and live
+// sessions on 2026-07-17 (no public source): store.db has blobs(id, data) and
 // meta(key, value); meta key "0" is hex-encoded JSON carrying the chat name
 // and latestRootBlobId. The root blob is a protobuf whose repeated field 1
 // lists 32-byte blob ids in conversation order; each of those blobs is a

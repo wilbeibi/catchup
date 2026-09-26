@@ -33,6 +33,7 @@ const (
 	ProviderZCode    = "zcode"    // ZCode (Z.ai) desktop agent
 	ProviderDeepSeek = "deepseek" // DeepSeek Harness (dsh)
 	ProviderCopilot  = "copilot"  // GitHub Copilot CLI
+	ProviderGrok     = "grok"     // Grok Build (xAI's grok CLI)
 )
 
 // Providers lists every provider name, in the order catchup documents them.
@@ -40,7 +41,8 @@ const (
 // by hand and checked against this; machine-read lists build from it.
 var Providers = []string{
 	ProviderAmp, ProviderCodex, ProviderClaude, ProviderAgy, ProviderCline, ProviderCopilot,
-	ProviderCursor, ProviderDeepSeek, ProviderKimi, ProviderOpenCode, ProviderPiAgent, ProviderZCode,
+	ProviderCursor, ProviderDeepSeek, ProviderGrok, ProviderKimi, ProviderOpenCode,
+	ProviderPiAgent, ProviderZCode,
 }
 
 // Entry kinds and message roles. Providers normalize their own wire formats
@@ -106,6 +108,7 @@ type Roots struct {
 	ZCode    string
 	DeepSeek string
 	Copilot  string
+	Grok     string
 }
 
 // Source is a located session: enough to read it and to describe it in a

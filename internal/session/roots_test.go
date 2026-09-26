@@ -12,7 +12,7 @@ import (
 var allProviders = []string{
 	ProviderCodex, ProviderClaude, ProviderAgy, ProviderOpenCode,
 	ProviderPiAgent, ProviderKimi, ProviderCline, ProviderCursor,
-	ProviderZCode, ProviderDeepSeek, ProviderCopilot, ProviderAmp,
+	ProviderZCode, ProviderDeepSeek, ProviderCopilot, ProviderAmp, ProviderGrok,
 }
 
 // noEnv is the environment of a machine that overrides nothing.
@@ -43,6 +43,7 @@ func TestResolveRootsDefaults(t *testing.T) {
 		ZCode:    filepath.Join(home, ".zcode", "cli", "db"),
 		DeepSeek: filepath.Join(home, ".dsh"),
 		Copilot:  filepath.Join(home, ".copilot"),
+		Grok:     filepath.Join(home, ".grok"),
 	}
 	if got != want {
 		t.Fatalf("roots =\n%+v\nwant\n%+v", got, want)
@@ -65,6 +66,8 @@ func TestResolveRootsOverrides(t *testing.T) {
 		{"CLINE_DIR", map[string]string{"CLINE_DIR": dir}, func(r Roots) string { return r.Cline }, dir},
 		{"ZCODE_HOME", map[string]string{"ZCODE_HOME": dir}, func(r Roots) string { return r.ZCode }, dir},
 		{"DSH_HOME", map[string]string{"DSH_HOME": dir}, func(r Roots) string { return r.DeepSeek }, dir},
+		{"GROK_HOME", map[string]string{"GROK_HOME": dir}, func(r Roots) string { return r.Grok }, dir},
+		{"AMP_DATA_HOME", map[string]string{"AMP_DATA_HOME": dir}, func(r Roots) string { return r.Amp }, dir},
 		// OpenCode hangs off the XDG data dir, not the variable's bare value.
 		{"XDG_DATA_HOME", map[string]string{"XDG_DATA_HOME": dir}, func(r Roots) string { return r.OpenCode }, filepath.Join(dir, "opencode")},
 		// Cursor prefers its own variable, then XDG, then home.
@@ -87,7 +90,7 @@ func TestResolveRootsAreAbsolute(t *testing.T) {
 	for name, path := range map[string]string{
 		"Codex": r.Codex, "Claude": r.Claude, "Agy": r.Agy, "OpenCode": r.OpenCode,
 		"PiAgent": r.PiAgent, "Kimi": r.Kimi, "Cline": r.Cline, "Cursor": r.Cursor,
-		"ZCode": r.ZCode, "DeepSeek": r.DeepSeek,
+		"ZCode": r.ZCode, "DeepSeek": r.DeepSeek, "Grok": r.Grok, "Amp": r.Amp,
 	} {
 		if path == "" {
 			t.Errorf("%s root is empty", name)
@@ -122,16 +125,21 @@ func TestResolveSkillDirsCoverEveryProvider(t *testing.T) {
 // The skill dirs that follow a provider's history root must track an override
 // of that root; the ones pinned to a fixed convention must not.
 func TestResolveSkillDirsFollowOverrides(t *testing.T) {
-	home, claude, dsh, data := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
+	home, claude, dsh, grok, data := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
 	env := map[string]string{
 		"CLAUDE_CONFIG_DIR": claude,
 		"DSH_HOME":          dsh,
+		"GROK_HOME":         grok,
 		"XDG_DATA_HOME":     data,
 	}
 	dirs := ResolveSkillDirs(ResolveRoots(envFrom(env), home), home)
 	for p, want := range map[string]string{
 		ProviderClaude:   filepath.Join(claude, "skills"),
 		ProviderDeepSeek: filepath.Join(dsh, "skills"),
+		ProviderGrok:     filepath.Join(grok, "skills"),
+		// Amp discovers skills under ~/.config, not $AMP_DATA_HOME, so its
+		// history override must leave the skill dir alone.
+		ProviderAmp: filepath.Join(home, ".config", "amp", "skills"),
 		// OpenCode discovers skills under ~/.config, not $XDG_DATA_HOME, so
 		// its history override must leave the skill dir alone — and the dir
 		// must still be rooted at home.

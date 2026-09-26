@@ -1,6 +1,6 @@
 ---
 name: catchup
-description: Recovers the conversation and failed tool calls of a previous Codex, Amp, Claude Code, Antigravity, Cline, Copilot CLI, Cursor, DeepSeek Harness, Kimi, OpenCode, Pi Agent, or ZCode session. Use when the user says "catch up", "what did the last session do", "get me up to speed", "I switched agents", asks to recover/summarize a previous session before continuing, or asks to diagnose or report a catchup failure. Do NOT use for the current conversation, git history, or any non-agent log.
+description: Recovers the conversation and failed tool calls of a previous Codex, Amp, Claude Code, Antigravity, Cline, Copilot CLI, Cursor, DeepSeek Harness, Grok Build, Kimi, OpenCode, Pi Agent, or ZCode session. Use when the user says "catch up", "what did the last session do", "get me up to speed", "I switched agents", asks to recover/summarize a previous session before continuing, or asks to diagnose or report a catchup failure. Do NOT use for the current conversation, git history, or any non-agent log.
 ---
 
 # catchup
@@ -27,7 +27,7 @@ catchup fork <agent>               # native resume, full state
 catchup fork <agent> --into <other>  # seed a different agent with the transcript
 ```
 
-Agents: `amp`, `codex`, `claude`, `agy` (Antigravity), `cline`, `copilot`, `cursor`, `deepseek` (dsh), `kimi`, `opencode`, `pi-agent`, `zcode`.
+Agents: `amp`, `codex`, `claude`, `agy` (Antigravity), `cline`, `copilot`, `cursor`, `deepseek` (dsh), `grok`, `kimi`, `opencode`, `pi-agent`, `zcode`.
 
 ## Before loading a transcript
 
