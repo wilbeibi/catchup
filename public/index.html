@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>catchup - pick up a coding agent session without starting over</title>
-<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness, or Amp session and hands it to the next agent. When an agent stops mid-task, catchup fork --into keeps the work moving.">
-<meta name="keywords" content="catchup, AI coding agent, Claude Code, Codex, Copilot CLI, Cursor CLI, Cline, Kimi Code, Antigravity, agy, OpenCode, Pi Agent, ZCode, DeepSeek Harness, usage limit, session handoff, context handoff, CLI, Go">
+<meta name="description" content="catchup is an open-source CLI that reads your last Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness, Grok Build, or Amp session and hands it to the next agent. When an agent stops mid-task, catchup fork --into keeps the work moving.">
+<meta name="keywords" content="catchup, AI coding agent, Claude Code, Codex, Copilot CLI, Cursor CLI, Cline, Kimi Code, Antigravity, agy, OpenCode, Pi Agent, ZCode, DeepSeek Harness, Grok Build, usage limit, session handoff, context handoff, CLI, Go">
 <!--
   max-snippet:-1 removes the length cap on the text snippet a generative answer
   (AI Overviews, AI Mode) may quote. Google's RAG pipeline reuses classic-Search
@@ -46,7 +46,7 @@
   "applicationCategory": "DeveloperApplication",
   "applicationSubCategory": "Command-line tool",
   "operatingSystem": "macOS, Linux, Windows",
-  "description": "CLI that reads Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness & Amp session history so you can recap a session, find the right one, and hand it to the next agent as clean Markdown.",
+  "description": "CLI that reads Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness, Grok Build & Amp session history so you can recap a session, find the right one, and hand it to the next agent as clean Markdown.",
   "url": "https://catchup.pages.dev/",
   "downloadUrl": "https://github.com/wilbeibi/catchup",
   "softwareHelp": "https://github.com/wilbeibi/catchup#usage",
@@ -270,7 +270,7 @@
     .enter > *:nth-child(5) { animation-delay: .24s; }
     /* the agent chips arrive one at a time, so the block must not also fade as a unit */
     .enter > .agents-block { animation: none; }
-    .agents li, .agents-tag { animation: rise .45s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: calc(.3s + var(--i, 11) * 40ms); }
+    .agents li, .agents-tag { animation: rise .45s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: calc(.3s + var(--i, 12) * 40ms); }
     h1 .failure .quota { animation: quota 8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
     h1 .failure .outage { animation: outage 8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
     figure .frame { animation: lift both; animation-timeline: view(); animation-range: entry 5% cover 22%; }
@@ -343,7 +343,8 @@
         <li style="--i: 8">Pi Agent</li>
         <li style="--i: 9">ZCode</li>
         <li style="--i: 10">DeepSeek Harness</li>
-        <li style="--i: 11">Amp</li>
+        <li style="--i: 11">Grok Build</li>
+        <li style="--i: 12">Amp</li>
       </ul>
       <p class="agents-tag">Read any supported agent. Hand off to a supported target.</p>
     </div>

@@ -1,6 +1,6 @@
 # catchup
 
-> Let your next coding agent catch itself up. catchup is a small CLI your agents can run to read prior Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness, and Amp sessions and print clean, handoff-ready Markdown.
+> Let your next coding agent catch itself up. catchup is a small CLI your agents can run to read prior Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi, Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness, Grok Build, and Amp sessions and print clean, handoff-ready Markdown.
 
 Open-source CLI · Go · https://catchup.pages.dev/
 
@@ -20,7 +20,7 @@ catchup reads the local session history of an AI coding agent. Human-facing Mark
 
 Every command is one of three jobs with a session:
 
-- **Recap.** Pull a past session back into context. `catchup <agent> --since-compact` for `claude`, `codex`, `copilot`, `cursor`, `cline`, `kimi`, `agy`, `opencode`, `pi-agent`, `zcode`, `deepseek`, or `amp` reads the tail after the last compaction; drop the flag for the whole thing.
+- **Recap.** Pull a past session back into context. `catchup <agent> --since-compact` for `claude`, `codex`, `copilot`, `cursor`, `cline`, `kimi`, `agy`, `opencode`, `pi-agent`, `zcode`, `deepseek`, `grok`, or `amp` reads the tail after the last compaction; drop the flag for the whole thing.
 - **Find.** Locate the right session first. `catchup <agent> --list` lists what ran here, `-q "keyword"` searches by keyword, and `catchup <agent>/N` or `--id <id>` opens an exact one.
 - **Hand off.** Continue the work. `catchup fork <agent>` resumes through the agent's own native fork command with real state; crossing agents, `catchup fork codex --into claude` starts Claude with the Codex handoff transcript.
 
@@ -28,7 +28,7 @@ The default output is the conversation. `--agent` adds source-marked failed tool
 
 ## Supported agents
 
-Claude Code · Codex · Copilot CLI · Cursor · Cline · Kimi · Antigravity (agy) · OpenCode · Pi Agent · ZCode · DeepSeek Harness (dsh) · Amp
+Claude Code · Codex · Copilot CLI · Cursor · Cline · Kimi · Antigravity (agy) · OpenCode · Pi Agent · ZCode · DeepSeek Harness (dsh) · Grok Build · Amp
 
 Each agent keeps its own history format; catchup normalizes the output.
 

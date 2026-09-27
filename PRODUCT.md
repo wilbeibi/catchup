@@ -4,8 +4,8 @@
 
 Marketing site for `catchup`, an open-source Go CLI that reads a coding agent's
 local session history (Claude Code, Codex, Copilot CLI, Cursor, Cline, Kimi,
-Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness, Amp) and hands the
-conversation to the next agent. Static HTML
+Antigravity, OpenCode, Pi Agent, ZCode, DeepSeek Harness, Grok Build, Amp) and
+hands the conversation to the next agent. Static HTML
 on Cloudflare Pages; the `site` branch is the deploy source (`just deploy`).
 
 `/` is the spot — one page, one job (see Register). Everything under
