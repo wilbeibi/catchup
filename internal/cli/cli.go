@@ -64,7 +64,7 @@ FIND — which session (default: newest here)
                       already picked, read the exchanges holding it
   <agent>/<rank>      the Nth newest, e.g. codex/3
   --id <id>           an exact session id
-  --all-dirs         search sessions across all directories
+  --all-dirs          search sessions across all directories
   --dir <path>        sessions from another directory, not the cwd
   -n, --limit <N>     cap the listing (default 20)
 
