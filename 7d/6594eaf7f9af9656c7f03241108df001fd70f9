@@ -1,0 +1,44 @@
+internal/session/roots.go
+  s_938c16a97e1141::t_190fa48260858f 102-107,110,114-115,119-120
+  s_938c16a97e1141::t_f12e6e989fcbc2 3-6,108-109,111-113,116-118
+SKILL.md
+  s_938c16a97e1141::t_f9ea75f6068a8c 32-33
+internal/session/roots_test.go
+  s_938c16a97e1141::t_f12e6e989fcbc2 5,35-40,43-55
+  s_938c16a97e1141::t_190fa48260858f 34,42,100
+internal/cli/cli_test.go
+  s_938c16a97e1141::t_f9ea75f6068a8c 1653-1664
+internal/session/session.go
+  s_938c16a97e1141::t_f12e6e989fcbc2 103-110,112-116
+  s_938c16a97e1141::t_190fa48260858f 33,111
+internal/cursor/desktop.go
+  s_938c16a97e1141::t_1ae8e3c918642a 1-21,26-77,79-89,91-159
+  s_938c16a97e1141::t_f12e6e989fcbc2 22-25,78,90
+internal/cursor/cursor.go
+  s_938c16a97e1141::t_190fa48260858f 44,53-54,61-62,69-70,74,81-83,88,95-96,110,116,120-121,124
+  s_938c16a97e1141::t_f12e6e989fcbc2 55-60,63-68,71-73,75-78,86,89-90,93,103-104
+  s_938c16a97e1141::t_4b606c000b6cc4 79-80,105
+internal/cli/cli.go
+  s_938c16a97e1141::t_190fa48260858f 1057-1059
+  s_938c16a97e1141::t_a2d55d4a847b66 57
+README.md
+  s_938c16a97e1141::t_f9ea75f6068a8c 61-62
+internal/cursor/cursor_test.go
+  s_938c16a97e1141::t_f9ea75f6068a8c 269-357
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7d6594eaf7f9af9656c7f03241108df001fd70f9",
+  "prompts": {},
+  "sessions": {
+    "s_938c16a97e1141": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13333-402a-7861-ae03-6cc149986184",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Hongyi Shen <wilbeibi@gmail.com>"
+    }
+  }
+}
