@@ -1,0 +1,42 @@
+internal/session/roots.go
+  s_938c16a97e1141::t_30e8efc8593456 102
+internal/session/session.go
+  s_938c16a97e1141::t_30e8efc8593456 37,46,77-78,112
+internal/cli/cli.go
+  s_938c16a97e1141::t_30e8efc8593456 34,49,393-394,539-541,951-952,1057-1058
+internal/session/roots_test.go
+  s_938c16a97e1141::t_30e8efc8593456 41,99
+  s_938c16a97e1141::t_f933ddcd93b61a 9-11,114,117,127-128
+SKILL.md
+  s_938c16a97e1141::t_30e8efc8593456 3,30
+  s_938c16a97e1141::t_df734cd8f3efa7 34-35
+internal/grokbot/grokbot.go
+  s_938c16a97e1141::t_30e8efc8593456 152-156,159-161,173-175,200-202,204
+  s_938c16a97e1141::t_207b55952a88af 1-151,162-172,176-185,187-199,203,205-215
+  s_938c16a97e1141::t_d2432c54b88665 157-158,186
+internal/cli/agentlist_test.go
+  s_938c16a97e1141::t_30e8efc8593456 26,35-36,39,131
+README.md
+  s_938c16a97e1141::t_30e8efc8593456 15,59
+  s_938c16a97e1141::t_c3bf10825a91d4 63-64
+internal/cli/cli_test.go
+  s_938c16a97e1141::t_2b628fedc8bca0 1665-1682
+internal/grokbot/grokbot_test.go
+  s_938c16a97e1141::t_187a09ab5d0f6d 1-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a8a1cebfa1c8e12691e31e1fb844dc5790f5b3b9",
+  "prompts": {},
+  "sessions": {
+    "s_938c16a97e1141": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13333-402a-7861-ae03-6cc149986184",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Hongyi Shen <wilbeibi@gmail.com>"
+    }
+  }
+}
