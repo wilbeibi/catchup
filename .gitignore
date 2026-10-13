@@ -17,3 +17,8 @@ go.work.sum
 CLAUDE.md
 .claude/
 .wrangler/
+
+# Local metadata and generated assets
+.DS_Store
+/.omo/
+/assets/demo/
