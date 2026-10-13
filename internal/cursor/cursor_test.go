@@ -266,3 +266,92 @@ func TestListCursorSessions(t *testing.T) {
 		t.Fatalf("summary fields = %+v", sums[0])
 	}
 }
+
+// Sanitized Cursor 3.24.12 state.vscdb shapes, inspected 2026-10-12.
+// The UI reads the header order; JSONL dropped the mid-turn follow-up. Keep
+// the writer open: the provider must see committed WAL data without checkpointing.
+func TestDesktopHistory(t *testing.T) {
+	ctx, root := context.Background(), t.TempDir()
+	path := filepath.Join(root, "User", "globalStorage", "state.vscdb")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, stmt := range []string{
+		`PRAGMA journal_mode=WAL`,
+		`CREATE TABLE cursorDiskKV (key TEXT PRIMARY KEY, value BLOB)`,
+		`CREATE TABLE composerHeaders (composerId TEXT PRIMARY KEY, isArchived INTEGER, isSubagent INTEGER, value TEXT)`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data := `{"_v":18,"composerId":"same-id","name":"Review","lastUpdatedAt":1791840000000,"workspaceIdentifier":{"uri":{"scheme":"file","fsPath":"/project"}},"fullConversationHeadersOnly":[{"bubbleId":"u1","type":1},{"bubbleId":"a1","type":2},{"bubbleId":"u2","type":1},{"bubbleId":"t1","type":2},{"bubbleId":"t2","type":2},{"bubbleId":"missing","type":2}]}`
+	if _, err := db.Exec(`INSERT INTO composerHeaders VALUES ('same-id',0,0,?)`, data); err != nil {
+		t.Fatal(err)
+	}
+	for key, raw := range map[string]string{
+		"composerData:same-id":   data,
+		"bubbleId:same-id:u1":    `{"type":1,"text":"review these changes","createdAt":"2026-10-12T12:00:00Z"}`,
+		"bubbleId:same-id:a1":    `{"type":2,"text":"starting","thinking":{"text":"hidden reasoning"}}`,
+		"bubbleId:same-id:u2":    `{"type":1,"text":"I mean the first three PRs"}`,
+		"bubbleId:same-id:t1":    `{"type":2,"toolFormerData":{"name":"run_terminal_command_v2","status":"completed","rawArgs":"{\"command\":\"false\"}","result":"{\"output\":\"failed\",\"exitCode\":1,\"rejected\":false}"}}`,
+		"bubbleId:same-id:t2":    `{"type":2,"toolFormerData":{"name":"run_terminal_command_v2","status":"completed","rawArgs":"{}","result":"{\"output\":\"no error\",\"exitCode\":0}"}}`,
+		"bubbleId:same-id:stale": `{"type":1,"text":"not in the selected conversation"}`,
+	} {
+		if _, err := db.Exec(`INSERT INTO cursorDiskKV VALUES (?,?)`, key, raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	roots := session.Roots{Cursor: t.TempDir(), CursorDesktop: root}
+	writeChat(t, roots.Cursor, "ws", "same-id", "CLI", "/project", 1000, chatMessages)
+	p := New()
+	src, err := p.Resolve(ctx, roots, "ide:same-id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	thread, err := p.Read(ctx, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visible := thread.Visible(nil)
+	if len(visible.Entries) != 4 || visible.Entries[2].Text != "I mean the first three PRs" || visible.Entries[3].Kind != session.KindFailure || visible.Entries[3].Input != `{"command":"false"}` {
+		t.Fatalf("visible entries = %+v", visible.Entries)
+	}
+	if len(thread.Entries) != 6 || visible.Entries[0].Time != time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC) || !strings.Contains(strings.Join(thread.Warnings, "\n"), "missing") {
+		t.Fatalf("thread = %+v", thread)
+	}
+	rows, err := p.List(ctx, roots, session.ListOptions{Cwd: "/project"})
+	if err != nil || len(rows) != 2 || rows[0].Ref.SessionID != "ide:same-id" || rows[1].Ref.SessionID != "same-id" {
+		t.Fatalf("rows = %+v, %v", rows, err)
+	}
+	rows, err = p.List(ctx, roots, session.ListOptions{Query: "first three PRs"})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("query rows = %+v, %v", rows, err)
+	}
+	cli, err := p.Resolve(ctx, roots, "same-id")
+	if err != nil || cli.Path == src.Path {
+		t.Fatalf("CLI resolve = %+v, %v", cli, err)
+	}
+	if _, err := db.Exec(`UPDATE composerHeaders SET isArchived=1`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = p.List(ctx, roots, session.ListOptions{})
+	if err != nil || len(rows) != 1 || rows[0].Ref.SessionID != "same-id" {
+		t.Fatalf("archived rows = %+v, %v", rows, err)
+	}
+	if _, err := p.Resolve(ctx, roots, "ide:same-id"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE cursorDiskKV SET value='{"headerLog":{"key":"unverified"}}' WHERE key='composerData:same-id'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Read(ctx, src); err == nil || !strings.Contains(err.Error(), "headerLog") {
+		t.Fatalf("unsupported encoding: %v", err)
+	}
+
+}

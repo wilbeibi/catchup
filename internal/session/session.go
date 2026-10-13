@@ -30,7 +30,7 @@ const (
 	ProviderPiAgent  = "pi-agent"
 	ProviderKimi     = "kimi" // Kimi Code CLI
 	ProviderCline    = "cline"
-	ProviderCursor   = "cursor"   // Cursor CLI (cursor-agent)
+	ProviderCursor   = "cursor"   // Cursor CLI and desktop IDE
 	ProviderZCode    = "zcode"    // ZCode (Z.ai) desktop agent
 	ProviderDeepSeek = "deepseek" // DeepSeek Harness (dsh)
 	ProviderCopilot  = "copilot"  // GitHub Copilot CLI
@@ -100,19 +100,20 @@ type Target struct {
 // field means the provider default was not overridden; ResolveRoots always
 // fills every field with an absolute path.
 type Roots struct {
-	Amp      string
-	Codex    string
-	Claude   string
-	Agy      string
-	OpenCode string
-	PiAgent  string
-	Kimi     string
-	Cline    string
-	Cursor   string
-	ZCode    string
-	DeepSeek string
-	Copilot  string
-	Grok     string
+	Amp           string
+	Codex         string
+	Claude        string
+	Agy           string
+	OpenCode      string
+	PiAgent       string
+	Kimi          string
+	Cline         string
+	CursorDesktop string
+	Cursor        string
+	ZCode         string
+	DeepSeek      string
+	Copilot       string
+	Grok          string
 }
 
 // Source is a located session: enough to read it and to describe it in a

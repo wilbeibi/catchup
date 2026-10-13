@@ -41,7 +41,7 @@ import (
 	"github.com/wilbeibi/catchup/internal/sqlitedb"
 )
 
-// Provider reads Cursor CLI chat directories.
+// Provider reads Cursor CLI chats and desktop IDE composers.
 type Provider struct{}
 
 // New returns a Cursor provider.
@@ -50,47 +50,78 @@ func New() *Provider { return &Provider{} }
 var _ session.Provider = (*Provider)(nil)
 
 func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) (session.Source, error) {
-	dirs, err := chatDirs(roots.Cursor)
-	if err != nil {
-		return session.Source{}, err
-	}
-	if len(dirs) == 0 {
-		return session.Source{}, fmt.Errorf("cursor: no sessions found under %s", roots.Cursor)
-	}
-	if id == "" {
-		return newSource(dirs[0]), nil
-	}
-	for _, d := range dirs {
-		if filepath.Base(d.path) == id {
-			return newSource(d), nil
+	if strings.HasPrefix(id, "ide:") {
+		sources, err := desktopSources(ctx, roots.CursorDesktop, id)
+		if err != nil {
+			return session.Source{}, err
+		}
+		if len(sources) > 0 {
+			return sources[0], nil
+		}
+	} else if id == "" {
+		sources, err := p.sources(ctx, roots)
+		if err != nil {
+			return session.Source{}, err
+		}
+		if len(sources) > 0 {
+			return sources[0], nil
+		}
+	} else {
+		dirs, err := chatDirs(roots.Cursor)
+		if err != nil {
+			return session.Source{}, err
+		}
+		for _, d := range dirs {
+			if filepath.Base(d.path) == id {
+				return newSource(d), nil
+			}
 		}
 	}
 	return session.Source{}, fmt.Errorf("cursor: no session with id %q", id)
+}
+
+func (p *Provider) sources(ctx context.Context, roots session.Roots) ([]session.Source, error) {
+	dirs, err := chatDirs(roots.Cursor)
+	if err != nil {
+		return nil, err
+	}
+	sources, err := desktopSources(ctx, roots.CursorDesktop, "")
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range dirs {
+		sources = append(sources, newSource(d))
+	}
+	sort.SliceStable(sources, func(i, j int) bool { return sources[i].UpdatedAt.After(sources[j].UpdatedAt) })
+	return sources, nil
 }
 
 func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread, error) {
 	if src.Path == "" {
 		return session.Thread{}, errors.New("cursor: source has no path")
 	}
+	if strings.HasPrefix(src.Ref.SessionID, "ide:") {
+		return readDesktop(ctx, src)
+	}
 	return readThread(src)
 }
 
 func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.ListOptions) ([]session.Summary, error) {
-	dirs, err := chatDirs(roots.Cursor)
+	sources, err := p.sources(ctx, roots)
 	if err != nil {
 		return nil, err
 	}
 	limit := opts.EffectiveLimit()
 	out := make([]session.Summary, 0, limit)
-	for _, d := range dirs {
+	for _, src := range sources {
 		if len(out) >= limit {
 			break
 		}
-		// meta.json answers the cwd filter without opening the database.
-		if !opts.MatchesCwd(d.meta.Cwd) {
+		// Source metadata answers the cwd filter before reading the timeline.
+		if !opts.MatchesCwd(src.Metadata["cwd"]) {
 			continue
 		}
-		t, err := readThread(newSource(d))
+		t, err := p.Read(ctx, src)
 		if err != nil || len(t.Entries) == 0 {
 			continue
 		}

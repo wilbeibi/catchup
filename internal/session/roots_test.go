@@ -2,6 +2,7 @@ package session
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -30,20 +31,28 @@ func envFrom(m map[string]string) func(string) string {
 func TestResolveRootsDefaults(t *testing.T) {
 	home := t.TempDir()
 	got := ResolveRoots(noEnv, home)
+	data := filepath.Join(home, ".config")
+	if runtime.GOOS == "darwin" {
+		data = filepath.Join(home, "Library", "Application Support")
+	}
+	if runtime.GOOS == "windows" {
+		data = filepath.Join(home, "AppData", "Roaming")
+	}
 	want := Roots{
-		Amp:      filepath.Join(home, ".local", "share", "amp"),
-		Codex:    filepath.Join(home, ".codex"),
-		Claude:   filepath.Join(home, ".claude"),
-		Agy:      filepath.Join(home, ".gemini", "antigravity-cli"),
-		OpenCode: filepath.Join(home, ".local", "share", "opencode"),
-		PiAgent:  filepath.Join(home, ".pi", "agent"),
-		Kimi:     filepath.Join(home, ".kimi-code"),
-		Cline:    filepath.Join(home, ".cline"),
-		Cursor:   filepath.Join(home, ".cursor"),
-		ZCode:    filepath.Join(home, ".zcode", "cli", "db"),
-		DeepSeek: filepath.Join(home, ".dsh"),
-		Copilot:  filepath.Join(home, ".copilot"),
-		Grok:     filepath.Join(home, ".grok"),
+		CursorDesktop: filepath.Join(data, "Cursor"),
+		Amp:           filepath.Join(home, ".local", "share", "amp"),
+		Codex:         filepath.Join(home, ".codex"),
+		Claude:        filepath.Join(home, ".claude"),
+		Agy:           filepath.Join(home, ".gemini", "antigravity-cli"),
+		OpenCode:      filepath.Join(home, ".local", "share", "opencode"),
+		PiAgent:       filepath.Join(home, ".pi", "agent"),
+		Kimi:          filepath.Join(home, ".kimi-code"),
+		Cline:         filepath.Join(home, ".cline"),
+		Cursor:        filepath.Join(home, ".cursor"),
+		ZCode:         filepath.Join(home, ".zcode", "cli", "db"),
+		DeepSeek:      filepath.Join(home, ".dsh"),
+		Copilot:       filepath.Join(home, ".copilot"),
+		Grok:          filepath.Join(home, ".grok"),
 	}
 	if got != want {
 		t.Fatalf("roots =\n%+v\nwant\n%+v", got, want)
@@ -88,7 +97,7 @@ func TestResolveRootsAreAbsolute(t *testing.T) {
 	r := ResolveRoots(noEnv, t.TempDir())
 	for name, path := range map[string]string{
 		"Codex": r.Codex, "Claude": r.Claude, "Agy": r.Agy, "OpenCode": r.OpenCode,
-		"PiAgent": r.PiAgent, "Kimi": r.Kimi, "Cline": r.Cline, "Cursor": r.Cursor,
+		"PiAgent": r.PiAgent, "Kimi": r.Kimi, "Cline": r.Cline, "Cursor": r.Cursor, "CursorDesktop": r.CursorDesktop,
 		"ZCode": r.ZCode, "DeepSeek": r.DeepSeek, "Grok": r.Grok,
 	} {
 		if path == "" {

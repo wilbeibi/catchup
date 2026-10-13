@@ -54,7 +54,7 @@ RECAP — how much of the session (default: all of it)
   --since-compact     what the agent resumed with after compacting
   --last <N>          just the last N exchanges
   --full              oversized messages whole, not clamped
-  --show tools        the agent's tool calls (claude, codex) and failures
+  --show tools        the agent's tool calls (claude, codex, Cursor IDE) and failures
                       too; -q then searches the calls
   -i, --info          metadata only, no messages
 
@@ -1054,6 +1054,9 @@ func forkCommand(src session.Source, model string) (string, []string, error) {
 		// original, which is what catchup's native fork means.
 		return "grok", append([]string{"--resume", src.Ref.SessionID, "--fork-session"}, modelArgs("-m", model)...), nil
 	case session.ProviderCursor:
+		if strings.HasPrefix(src.Ref.SessionID, "ide:") {
+			return "", nil, fmt.Errorf("fork cursor: continue inside Cursor IDE, or use `catchup fork cursor --id %s --into <agent>`", src.Ref.SessionID)
+		}
 		if src.Ref.SessionID == "" {
 			return "", nil, fmt.Errorf("fork cursor: missing session id")
 		}

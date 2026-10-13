@@ -58,6 +58,8 @@ herdr plugin install wilbeibi/herdr-catchup
 
 Agents: `claude` · `codex` · `copilot` · `cursor` · `cline` · `kimi` · `agy` (Antigravity) · `opencode` · `pi-agent` · `zcode` · `deepseek` (dsh) · `grok` · `amp`
 
+`cursor` reads CLI and desktop IDE history. IDE IDs use `ide:<id>` and retain mid-turn user messages and failed commands from the desktop database. Compaction boundaries and API stop events are unavailable. Continue in Cursor IDE, or hand off with `catchup fork cursor --id ide:<id> --into codex`.
+
 Omit `<agent>` and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
 
 **For you:** run in your terminal to re-enter a session:

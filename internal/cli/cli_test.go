@@ -1650,3 +1650,15 @@ func TestClampKeepsTheMatch(t *testing.T) {
 		t.Errorf("want a marker on each side of the kept window:\n%s", got)
 	}
 }
+
+func TestForkCursorSurfaces(t *testing.T) {
+	for _, id := range []string{"same-id", "ide:same-id"} {
+		name, _, err := forkCommand(session.Source{Ref: session.Ref{Provider: "cursor", SessionID: id}}, "")
+		if id == "same-id" && (err != nil || name != "cursor-agent") {
+			t.Fatalf("CLI: %s, %v", name, err)
+		}
+		if id == "ide:same-id" && (err == nil || !strings.Contains(err.Error(), "--into")) {
+			t.Fatalf("IDE: %s, %v", name, err)
+		}
+	}
+}

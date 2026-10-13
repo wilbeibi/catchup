@@ -1,6 +1,9 @@
 package session
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"runtime"
+)
 
 // ResolveRoots determines each provider's history location from the
 // environment, falling back to the conventional default under home when the
@@ -96,7 +99,25 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		grok = filepath.Join(home, ".grok")
 	}
 
-	return Roots{Amp: amp, Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor, ZCode: zcode, DeepSeek: deepseek, Copilot: copilot, Grok: grok}
+	return Roots{CursorDesktop: filepath.Join(desktopData(getenv, home), "Cursor"), Amp: amp, Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor, ZCode: zcode, DeepSeek: deepseek, Copilot: copilot, Grok: grok}
+}
+
+// desktopData follows Electron's per-platform appData directory.
+func desktopData(getenv func(string) string, home string) string {
+	switch runtime.GOOS {
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support")
+	case "windows":
+		if dir := getenv("APPDATA"); dir != "" {
+			return dir
+		}
+		return filepath.Join(home, "AppData", "Roaming")
+	default:
+		if dir := getenv("XDG_CONFIG_HOME"); dir != "" {
+			return dir
+		}
+		return filepath.Join(home, ".config")
+	}
 }
 
 // ResolveSkillDirs returns each provider's global Agent Skills directory,

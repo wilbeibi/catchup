@@ -29,6 +29,8 @@ catchup fork <agent> --into <other>  # seed a different agent with the transcrip
 
 Agents: `amp`, `codex`, `claude`, `agy` (Antigravity), `cline`, `copilot`, `cursor`, `deepseek` (dsh), `grok`, `kimi`, `opencode`, `pi-agent`, `zcode`.
 
+`cursor` reads CLI and desktop IDE history. IDE IDs use `ide:<id>` and retain mid-turn user messages and failed commands from the desktop database. Compaction boundaries and API stop events are unavailable. Continue in Cursor IDE, or hand off with `catchup fork cursor --id ide:<id> --into codex`.
+
 ## Before loading a transcript
 
 Preflight session reads into this conversation; listings, metadata, and `fork` don't need it.
