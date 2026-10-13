@@ -58,22 +58,14 @@ func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) 
 		if len(sources) > 0 {
 			return sources[0], nil
 		}
-	} else if id == "" {
+	} else {
 		sources, err := p.sources(ctx, roots)
 		if err != nil {
 			return session.Source{}, err
 		}
-		if len(sources) > 0 {
-			return sources[0], nil
-		}
-	} else {
-		dirs, err := chatDirs(roots.Cursor)
-		if err != nil {
-			return session.Source{}, err
-		}
-		for _, d := range dirs {
-			if filepath.Base(d.path) == id {
-				return newSource(d), nil
+		for _, src := range sources {
+			if id == "" || src.Ref.SessionID == id {
+				return src, nil
 			}
 		}
 	}
@@ -86,11 +78,15 @@ func (p *Provider) sources(ctx context.Context, roots session.Roots) ([]session.
 		return nil, err
 	}
 	sources, err := desktopSources(ctx, roots.CursorDesktop, "")
-	if err != nil {
+	if err != nil && (len(dirs) == 0 || ctx.Err() != nil) {
 		return nil, err
 	}
 	for _, d := range dirs {
-		sources = append(sources, newSource(d))
+		src := newSource(d)
+		if err != nil {
+			src.Warnings = append(src.Warnings, fmt.Sprintf("Cursor IDE sessions omitted: %v", err))
+		}
+		sources = append(sources, src)
 	}
 	sort.SliceStable(sources, func(i, j int) bool { return sources[i].UpdatedAt.After(sources[j].UpdatedAt) })
 	return sources, nil
@@ -122,7 +118,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 			continue
 		}
 		t, err := p.Read(ctx, src)
-		if err != nil || len(t.Entries) == 0 {
+		if err != nil || !opts.Listable(&t) {
 			continue
 		}
 		if !opts.MatchesQuery(t) {

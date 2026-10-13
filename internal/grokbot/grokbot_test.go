@@ -91,6 +91,13 @@ func TestCachedConversations(t *testing.T) {
 			if _, err := p.Read(ctx, src); err == nil {
 				t.Fatal("accepted unverified schema")
 			}
+			selected, err := p.Resolve(ctx, roots, "old")
+			if err != nil || selected.Ref.SessionID != "old" {
+				t.Fatalf("healthy replica blocked by another schema: %+v, %v", selected, err)
+			}
+			if _, err := p.Resolve(ctx, roots, "group"); err == nil {
+				t.Fatal("explicit selection accepted unverified schema")
+			}
 		})
 	}
 }

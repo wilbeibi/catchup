@@ -30,7 +30,7 @@ func New() *Provider { return &Provider{} }
 var _ session.Provider = (*Provider)(nil)
 
 func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) (session.Source, error) {
-	threads, err := p.sessions(ctx, roots.GrokBot)
+	threads, err := p.sessions(ctx, roots.GrokBot, id)
 	if err != nil {
 		return session.Source{}, err
 	}
@@ -47,7 +47,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 	if opts.Cwd != "" {
 		return nil, nil
 	}
-	threads, err := p.sessions(ctx, roots.GrokBot)
+	threads, err := p.sessions(ctx, roots.GrokBot, "")
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 	return out, nil
 }
 
-func (p *Provider) sessions(ctx context.Context, root string) ([]session.Thread, error) {
+func (p *Provider) sessions(ctx context.Context, root, id string) ([]session.Thread, error) {
 	if root == "" {
 		return nil, nil
 	}
@@ -114,6 +114,9 @@ func (p *Provider) sessions(ctx context.Context, root string) ([]session.Thread,
 			continue
 		}
 		src := session.Source{Ref: session.Ref{Provider: session.ProviderGrokBot, SessionID: strings.TrimPrefix(suffix, "transcript.replicas.")}, Path: path}
+		if id != "" && src.Ref.SessionID != id {
+			continue
+		}
 		t, err := p.Read(ctx, src)
 		if err != nil {
 			return nil, fmt.Errorf("grokbot replica %s: %w", src.Ref.SessionID, err)

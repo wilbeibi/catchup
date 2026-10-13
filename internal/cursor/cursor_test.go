@@ -300,7 +300,7 @@ func TestDesktopHistory(t *testing.T) {
 		"bubbleId:same-id:a1":    `{"type":2,"text":"starting","thinking":{"text":"hidden reasoning"}}`,
 		"bubbleId:same-id:u2":    `{"type":1,"text":"I mean the first three PRs"}`,
 		"bubbleId:same-id:t1":    `{"type":2,"toolFormerData":{"name":"run_terminal_command_v2","status":"completed","rawArgs":"{\"command\":\"false\"}","result":"{\"output\":\"failed\",\"exitCode\":1,\"rejected\":false}"}}`,
-		"bubbleId:same-id:t2":    `{"type":2,"toolFormerData":{"name":"run_terminal_command_v2","status":"completed","rawArgs":"{}","result":"{\"output\":\"no error\",\"exitCode\":0}"}}`,
+		"bubbleId:same-id:t2":    `{"type":2,"toolFormerData":{"name":"run_terminal_command_v2","status":"completed","rawArgs":"{\"command\":\"pwd\"}","result":"{\"output\":\"no error\",\"exitCode\":0}"}}`,
 		"bubbleId:same-id:stale": `{"type":1,"text":"not in the selected conversation"}`,
 	} {
 		if _, err := db.Exec(`INSERT INTO cursorDiskKV VALUES (?,?)`, key, raw); err != nil {
@@ -333,6 +333,12 @@ func TestDesktopHistory(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("query rows = %+v, %v", rows, err)
 	}
+	for _, show := range [][]string{nil, {session.KindToolCall}} {
+		rows, err := p.List(ctx, roots, session.ListOptions{Query: "pwd", Show: show})
+		if err != nil || len(rows) != len(show) {
+			t.Errorf("tool query with show=%v: rows = %+v, %v", show, rows, err)
+		}
+	}
 	cli, err := p.Resolve(ctx, roots, "same-id")
 	if err != nil || cli.Path == src.Path {
 		t.Fatalf("CLI resolve = %+v, %v", cli, err)
@@ -353,5 +359,20 @@ func TestDesktopHistory(t *testing.T) {
 	if _, err := p.Read(ctx, src); err == nil || !strings.Contains(err.Error(), "headerLog") {
 		t.Fatalf("unsupported encoding: %v", err)
 	}
-
+	if _, err := db.Exec(`DROP TABLE composerHeaders`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = p.List(ctx, roots, session.ListOptions{Cwd: "/project"})
+	if err != nil || len(rows) != 1 || rows[0].Ref.SessionID != "same-id" {
+		t.Errorf("CLI history with unreadable desktop: rows = %+v, %v", rows, err)
+	}
+	for _, id := range []string{"", "same-id"} {
+		src, err := p.Resolve(ctx, roots, id)
+		if err != nil || src.Ref.SessionID != "same-id" || len(src.Warnings) == 0 {
+			t.Errorf("CLI resolve %q with unreadable desktop = %+v, %v", id, src, err)
+		}
+	}
+	if _, err := p.Resolve(ctx, roots, "ide:same-id"); err == nil {
+		t.Error("explicit desktop selection hid its error")
+	}
 }
