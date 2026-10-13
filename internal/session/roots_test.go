@@ -6,11 +6,9 @@ import (
 	"testing"
 )
 
-// allProviders is every provider name the registry knows. It is spelled out
-// here rather than imported from the cli layer (which would invert the
-// dependency) so that adding a provider without extending root resolution
-// fails loudly.
-var allProviders = []string{
+// installableProviders have known local skill directories. Grok Bot uses
+// cloud skills and must not acquire a fabricated local installation path.
+var installableProviders = []string{
 	ProviderCodex, ProviderClaude, ProviderAgy, ProviderOpenCode,
 	ProviderPiAgent, ProviderKimi, ProviderCline, ProviderCursor,
 	ProviderZCode, ProviderDeepSeek, ProviderCopilot, ProviderAmp, ProviderGrok,
@@ -40,6 +38,7 @@ func TestResolveRootsDefaults(t *testing.T) {
 	}
 	want := Roots{
 		CursorDesktop: filepath.Join(data, "Cursor"),
+		GrokBot:       filepath.Join(data, "Grok Bot"),
 		Amp:           filepath.Join(home, ".local", "share", "amp"),
 		Codex:         filepath.Join(home, ".codex"),
 		Claude:        filepath.Join(home, ".claude"),
@@ -97,7 +96,7 @@ func TestResolveRootsAreAbsolute(t *testing.T) {
 	r := ResolveRoots(noEnv, t.TempDir())
 	for name, path := range map[string]string{
 		"Codex": r.Codex, "Claude": r.Claude, "Agy": r.Agy, "OpenCode": r.OpenCode,
-		"PiAgent": r.PiAgent, "Kimi": r.Kimi, "Cline": r.Cline, "Cursor": r.Cursor, "CursorDesktop": r.CursorDesktop,
+		"PiAgent": r.PiAgent, "Kimi": r.Kimi, "Cline": r.Cline, "Cursor": r.Cursor, "CursorDesktop": r.CursorDesktop, "GrokBot": r.GrokBot,
 		"ZCode": r.ZCode, "DeepSeek": r.DeepSeek, "Grok": r.Grok,
 	} {
 		if path == "" {
@@ -112,10 +111,10 @@ func TestResolveRootsAreAbsolute(t *testing.T) {
 // a sharper reason: install-skill writes SKILL.md there, so a relative entry
 // would stamp the file into whatever directory catchup was run from instead of
 // the agent's global skills dir.
-func TestResolveSkillDirsCoverEveryProvider(t *testing.T) {
+func TestResolveSkillDirsCoverInstallableProviders(t *testing.T) {
 	home := t.TempDir()
 	dirs := ResolveSkillDirs(ResolveRoots(noEnv, home), home)
-	for _, p := range allProviders {
+	for _, p := range installableProviders {
 		dir, ok := dirs[p]
 		if !ok {
 			t.Errorf("no skill dir for provider %q", p)
@@ -125,8 +124,8 @@ func TestResolveSkillDirsCoverEveryProvider(t *testing.T) {
 			t.Errorf("skill dir for %q = %q, want an absolute path", p, dir)
 		}
 	}
-	if len(dirs) != len(allProviders) {
-		t.Errorf("skill dirs = %d entries, want %d: %+v", len(dirs), len(allProviders), dirs)
+	if len(dirs) != len(installableProviders) {
+		t.Errorf("skill dirs = %d entries, want %d: %+v", len(dirs), len(installableProviders), dirs)
 	}
 }
 

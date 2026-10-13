@@ -1,6 +1,6 @@
 ---
 name: catchup
-description: Recovers the conversation and failed tool calls of a previous Codex, Amp, Claude Code, Antigravity, Cline, Copilot CLI, Cursor, DeepSeek Harness, Grok Build, Kimi, OpenCode, Pi Agent, or ZCode session. Use when the user says "catch up", "what did the last session do", "get me up to speed", "I switched agents", asks to recover/summarize a previous session before continuing, or asks to diagnose or report a catchup failure. Do NOT use for the current conversation, git history, or any non-agent log.
+description: Recovers the conversation and failed tool calls of a previous Codex, Amp, Claude Code, Antigravity, Cline, Copilot CLI, Cursor, DeepSeek Harness, Grok Build, Grok Bot, Kimi, OpenCode, Pi Agent, or ZCode session. Use when the user says "catch up", "what did the last session do", "get me up to speed", "I switched agents", asks to recover/summarize a previous session before continuing, or asks to diagnose or report a catchup failure. Do NOT use for the current conversation, git history, or any non-agent log.
 ---
 
 # catchup
@@ -27,9 +27,11 @@ catchup fork <agent>               # native resume, full state
 catchup fork <agent> --into <other>  # seed a different agent with the transcript
 ```
 
-Agents: `amp`, `codex`, `claude`, `agy` (Antigravity), `cline`, `copilot`, `cursor`, `deepseek` (dsh), `grok`, `kimi`, `opencode`, `pi-agent`, `zcode`.
+Agents: `amp`, `codex`, `claude`, `agy` (Antigravity), `cline`, `copilot`, `cursor`, `deepseek` (dsh), `grok`, `grokbot`, `kimi`, `opencode`, `pi-agent`, `zcode`.
 
 `cursor` reads CLI and desktop IDE history. IDE IDs use `ide:<id>` and retain mid-turn user messages and failed commands from the desktop database. Compaction boundaries and API stop events are unavailable. Continue in Cursor IDE, or hand off with `catchup fork cursor --id ide:<id> --into codex`.
+
+`catchup grokbot --all-dirs` reads the active account's Grok Bot desktop cache; `grok` remains Grok Build. Bot chats have no local project directory. The cache can omit older messages, tool failures and compaction history; warnings describe these limits. Use `catchup fork grokbot --all-dirs --into codex` for a handoff. Native launch and local skill installation are unavailable.
 
 ## Before loading a transcript
 

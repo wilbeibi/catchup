@@ -31,6 +31,7 @@ import (
 	"github.com/wilbeibi/catchup/internal/cursor"
 	"github.com/wilbeibi/catchup/internal/deepseek"
 	"github.com/wilbeibi/catchup/internal/grok"
+	"github.com/wilbeibi/catchup/internal/grokbot"
 	"github.com/wilbeibi/catchup/internal/kimi"
 	"github.com/wilbeibi/catchup/internal/opencode"
 	"github.com/wilbeibi/catchup/internal/piagent"
@@ -45,7 +46,7 @@ const helpText = `Usage: catchup [agent[/<rank>]] [flags]        read a past ses
        catchup install-skill [agent]
 
 Agents: amp, codex, claude, agy (Antigravity), cline, copilot, cursor, deepseek (dsh),
-grok, kimi, opencode, pi-agent, zcode
+grok, grokbot, kimi, opencode, pi-agent, zcode
 Omit the agent to use whichever has the newest session here. Bare ` + "`catchup`" + `
 prints that session in full, as Markdown. The flags refine three things:
 which session, how much of it, and as what.
@@ -389,6 +390,8 @@ func selectProvider(name string) (session.Provider, error) {
 		return cursor.New(), nil
 	case session.ProviderDeepSeek:
 		return deepseek.New(), nil
+	case session.ProviderGrokBot:
+		return grokbot.New(), nil
 	case session.ProviderGrok:
 		return grok.New(), nil
 	case session.ProviderKimi:
@@ -532,6 +535,9 @@ func installSkill(provider string, skillDirs map[string]string, skillMD []byte, 
 	if provider != "" {
 		if _, err := selectProvider(provider); err != nil {
 			return err
+		}
+		if _, ok := skillDirs[provider]; !ok {
+			return fmt.Errorf("install-skill %s: no known local skill directory", provider)
 		}
 		names = []string{provider}
 	}
@@ -942,6 +948,8 @@ func intoCommand(target, prompt, model string) (string, []string, error) {
 		// -i starts interactive and auto-executes the prompt; a bare -p is
 		// non-interactive and exits when the answer lands.
 		return "copilot", append(modelArgs("--model", model), "-i", prompt), nil
+	case session.ProviderGrokBot:
+		return "", nil, fmt.Errorf("--into grokbot: no verified CLI launch; save the transcript and open it in Grok Bot")
 	case session.ProviderGrok:
 		// The TUI takes its opening prompt as a positional argument (a bare -p
 		// runs headless and exits); options must precede it.
@@ -1046,6 +1054,8 @@ func forkCommand(src session.Source, model string) (string, []string, error) {
 		// Copilot has no fork; --resume is its native resume, and it takes
 		// the id inline (a bare --resume opens the session picker).
 		return "copilot", append([]string{"--resume=" + src.Ref.SessionID}, modelArgs("--model", model)...), nil
+	case session.ProviderGrokBot:
+		return "", nil, fmt.Errorf("fork grokbot: continue in Grok Bot, or use `catchup fork grokbot --all-dirs --into <agent>`")
 	case session.ProviderGrok:
 		if src.Ref.SessionID == "" {
 			return "", nil, fmt.Errorf("fork grok: missing session id")

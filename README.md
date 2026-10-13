@@ -12,7 +12,7 @@
 
 Reach for it whenever you don't want to explain the whole job again: an agent hits its usage limit, you switch tools mid-task, you pick up older work, or you want a clean record of what happened.
 
-Works with **Claude Code**, **Codex**, **Copilot CLI**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, **Pi Agent**, **ZCode**, **Grok Build**, **DeepSeek Harness**, and **Amp**.
+Works with **Claude Code**, **Codex**, **Copilot CLI**, **Cursor**, **Cline**, **Kimi**, **Antigravity**, **OpenCode**, **Pi Agent**, **ZCode**, **Grok Build**, **Grok Bot**, **DeepSeek Harness**, and **Amp**.
 
 <div align="center">
 
@@ -56,9 +56,11 @@ herdr plugin install wilbeibi/herdr-catchup
 
 ## Usage
 
-Agents: `claude` · `codex` · `copilot` · `cursor` · `cline` · `kimi` · `agy` (Antigravity) · `opencode` · `pi-agent` · `zcode` · `deepseek` (dsh) · `grok` · `amp`
+Agents: `claude` · `codex` · `copilot` · `cursor` · `cline` · `kimi` · `agy` (Antigravity) · `opencode` · `pi-agent` · `zcode` · `deepseek` (dsh) · `grok` · `grokbot` · `amp`
 
 `cursor` reads CLI and desktop IDE history. IDE IDs use `ide:<id>` and retain mid-turn user messages and failed commands from the desktop database. Compaction boundaries and API stop events are unavailable. Continue in Cursor IDE, or hand off with `catchup fork cursor --id ide:<id> --into codex`.
+
+`catchup grokbot --all-dirs` reads the active account's Grok Bot desktop cache; `grok` remains Grok Build. Bot chats have no local project directory. The cache can omit older messages, tool failures and compaction history; warnings describe these limits. Use `catchup fork grokbot --all-dirs --into codex` for a handoff. Native launch and local skill installation are unavailable.
 
 Omit `<agent>` and catchup uses whichever agent has the newest session in this directory. Inside a live session, that's usually the session you're in.
 

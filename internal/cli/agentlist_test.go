@@ -23,7 +23,7 @@ import (
 
 // supportedAgents returns the provider set, having first checked that the two
 // registries agree with it: every name must resolve to an implementation, and
-// must have a skill directory, or install-skill has nowhere to write.
+// every agent except Grok Bot must have a known local skill directory.
 func supportedAgents(t *testing.T) []string {
 	t.Helper()
 	skillDirs := session.ResolveSkillDirs(session.Roots{}, "/home/u")
@@ -32,11 +32,11 @@ func supportedAgents(t *testing.T) []string {
 		if _, err := selectProvider(name); err != nil {
 			t.Errorf("session.Providers lists %q but selectProvider rejects it: %v", name, err)
 		}
-		if _, ok := skillDirs[name]; !ok {
-			t.Errorf("%q has no skill directory; install-skill would have nowhere to write it", name)
+		if _, ok := skillDirs[name]; ok != (name != session.ProviderGrokBot) {
+			t.Errorf("unexpected local skill directory registration for %q", name)
 		}
 	}
-	if len(skillDirs) != len(names) {
+	if len(skillDirs) != len(names)-1 {
 		t.Errorf("ResolveSkillDirs covers %d agents, session.Providers lists %d", len(skillDirs), len(names))
 	}
 	sort.Strings(names)
@@ -128,6 +128,7 @@ func TestProseNamesEveryAgent(t *testing.T) {
 		session.ProviderCursor:   "Cursor",
 		session.ProviderDeepSeek: "DeepSeek Harness",
 		session.ProviderGrok:     "Grok Build",
+		session.ProviderGrokBot:  "Grok Bot",
 		session.ProviderKimi:     "Kimi",
 		session.ProviderOpenCode: "OpenCode",
 		session.ProviderPiAgent:  "Pi Agent",

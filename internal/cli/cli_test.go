@@ -1662,3 +1662,21 @@ func TestForkCursorSurfaces(t *testing.T) {
 		}
 	}
 }
+
+func TestGrokBotUnsupportedActions(t *testing.T) {
+	_, _, forkErr := forkCommand(session.Source{Ref: session.Ref{Provider: "grokbot", SessionID: "bot"}}, "")
+	_, _, intoErr := intoCommand("grokbot", "prompt", "")
+	var out bytes.Buffer
+	installErr := installSkill("grokbot", session.ResolveSkillDirs(session.Roots{}, t.TempDir()), []byte("skill"), "test", &out)
+	for _, tc := range []struct {
+		name string
+		err  error
+		hint string
+	}{
+		{"fork", forkErr, "--into"}, {"into", intoErr, "save the transcript"}, {"install", installErr, "no known local skill directory"},
+	} {
+		if tc.err == nil || !strings.Contains(tc.err.Error(), tc.hint) {
+			t.Errorf("%s: %v", tc.name, tc.err)
+		}
+	}
+}

@@ -99,7 +99,7 @@ func ResolveRoots(getenv func(string) string, home string) Roots {
 		grok = filepath.Join(home, ".grok")
 	}
 
-	return Roots{CursorDesktop: filepath.Join(desktopData(getenv, home), "Cursor"), Amp: amp, Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor, ZCode: zcode, DeepSeek: deepseek, Copilot: copilot, Grok: grok}
+	return Roots{GrokBot: filepath.Join(desktopData(getenv, home), "Grok Bot"), CursorDesktop: filepath.Join(desktopData(getenv, home), "Cursor"), Amp: amp, Codex: codex, Claude: claude, Agy: agy, OpenCode: opencode, PiAgent: piAgent, Kimi: kimi, Cline: cline, Cursor: cursor, ZCode: zcode, DeepSeek: deepseek, Copilot: copilot, Grok: grok}
 }
 
 // desktopData follows Electron's per-platform appData directory.

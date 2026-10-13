@@ -34,6 +34,7 @@ const (
 	ProviderZCode    = "zcode"    // ZCode (Z.ai) desktop agent
 	ProviderDeepSeek = "deepseek" // DeepSeek Harness (dsh)
 	ProviderCopilot  = "copilot"  // GitHub Copilot CLI
+	ProviderGrokBot  = "grokbot"  // Grok Bot desktop cache
 	ProviderGrok     = "grok"     // Grok Build (xAI's grok CLI)
 )
 
@@ -42,7 +43,7 @@ const (
 // by hand and checked against this; machine-read lists build from it.
 var Providers = []string{
 	ProviderAmp, ProviderCodex, ProviderClaude, ProviderAgy, ProviderCline, ProviderCopilot,
-	ProviderCursor, ProviderDeepSeek, ProviderGrok, ProviderKimi, ProviderOpenCode,
+	ProviderCursor, ProviderDeepSeek, ProviderGrok, ProviderGrokBot, ProviderKimi, ProviderOpenCode,
 	ProviderPiAgent, ProviderZCode,
 }
 
@@ -73,8 +74,8 @@ const (
 )
 
 // Ref identifies one conversation within one provider. It is the stable handle
-// that survives across runs: SessionID is the provider's own identifier, the
-// value a user passes to --id.
+// that survives across runs: SessionID is provider-local, optionally namespaced
+// by storage surface; it is the value a user passes to --id.
 type Ref struct {
 	Provider  string
 	SessionID string
@@ -108,6 +109,7 @@ type Roots struct {
 	PiAgent       string
 	Kimi          string
 	Cline         string
+	GrokBot       string
 	CursorDesktop string
 	Cursor        string
 	ZCode         string
