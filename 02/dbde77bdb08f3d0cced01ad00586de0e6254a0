@@ -1,0 +1,32 @@
+internal/cli/cli.go
+  s_23e09a9fb195c0::t_6f437d7f87dc86 760-762,826
+  s_23e09a9fb195c0::t_e6dce71bd97b55 33,78,839-847
+README.md
+  s_23e09a9fb195c0::t_3fea3c7aac8c51 107-128
+internal/devin/devin.go
+  s_23e09a9fb195c0::t_067671c016db51 22,26-27
+  s_23e09a9fb195c0::t_e6dce71bd97b55 1-21,23-25,28-93,97-115,117-129,133-134,138-154
+  s_23e09a9fb195c0::t_b58ca0b02d7c09 94-96,116,130-132,135-137
+internal/cli/cli_test.go
+  s_23e09a9fb195c0::t_3fea3c7aac8c51 11,1433,1435-1437,1487-1513,1515,1517-1530,1538-1590,1592-1597,1604-1630
+  s_23e09a9fb195c0::t_18cfd95b32568d 1514,1516,1531-1537,1591,1598-1603
+  s_23e09a9fb195c0::t_82c6a22c74d88f 1631-1632
+internal/devin/testdata/events.jsonl
+  s_23e09a9fb195c0::t_3d79a22b2f1f1e 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "02dbde77bdb08f3d0cced01ad00586de0e6254a0",
+  "prompts": {},
+  "sessions": {
+    "s_23e09a9fb195c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a140f2-0591-7c33-a895-83769e668963",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Hongyi Shen <wilbeibi@gmail.com>"
+    }
+  }
+}
