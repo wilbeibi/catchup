@@ -4,21 +4,33 @@
 // It opens the database read-only via modernc.org/sqlite (a pure-Go, cgo-free
 // driver) — the module's one database dependency, shared with internal/cursor.
 //
-// Schema reference, source of truth for the session/message/part tables —
-// packages/core/src/session/sql.ts in the OpenCode repo:
-// https://github.com/sst/opencode/blob/dev/packages/core/src/session/sql.ts
+// OpenCode 2.x keeps sessions in session_v2 and their transcripts in
+// session_message, one row per message ordered by seq, and its startup
+// migration copies every legacy session there in the background. A database
+// with session_v2 is read from it alone; one without is read from the legacy
+// session/message/part tables. Schema references, read at anomalyco/opencode
+// 6dfc681835 (2026-10-21):
+// packages/core/src/session/sql.ts (tables) and
+// packages/schema/src/session-message.ts (session_message.data per type).
+// Checked against a database written by opencode2 0.0.0-beta-19271 and the
+// v2.0.32 layout reported in issue #26.
 //
-// Useful rows: session.{id,title,directory,parent_id,agent,model,time_created,
-// time_updated} for metadata and listing; message.{id,session_id,time_created,
-// data} for role and order; part.data.type=text for timeline text;
-// part.data.type=compaction as a compaction marker. Times are epoch
-// milliseconds.
+// In 2.x, user rows and the text items of assistant rows form the timeline, a
+// tool item whose state.status is error becomes a failure entry, and a
+// completed compaction row becomes a compaction marker carrying its summary.
+// Synthetic and system rows are injected context, not user turns.
 //
-// A part.type=tool whose state.status is error becomes a failure entry with
-// state.input and state.error. Successful tool parts stay off the timeline.
+// Useful legacy rows: session.{id,title,directory,parent_id,agent,model,
+// time_created,time_updated} for metadata and listing (session_v2 has the same
+// columns); message.{id,session_id,time_created,data} for role and order;
+// part.data.type=text for timeline text; part.data.type=compaction as a
+// compaction marker. Times are epoch milliseconds.
+//
+// A legacy part.type=tool whose state.status is error becomes a failure entry
+// with state.input and state.error. Successful tool parts stay off the timeline.
 // Ignored by default: other tool states, reasoning, step-start, step-finish,
 // token/cost plumbing, snapshots, patch payloads, and raw file payloads. Child
-// session ids can be read, but v1 does not expand parent/child trees.
+// session ids can be read, but catchup does not expand parent/child trees.
 package opencode
 
 import (
@@ -53,11 +65,15 @@ func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) 
 		return session.Source{}, err
 	}
 	defer db.Close()
+	v2, err := isV2(ctx, db)
+	if err != nil {
+		return session.Source{}, err
+	}
 
 	if id == "" {
-		return latestSession(ctx, db, path)
+		return latestSession(ctx, db, path, v2)
 	}
-	return loadSession(ctx, db, path, id)
+	return loadSession(ctx, db, path, v2, id)
 }
 
 func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread, error) {
@@ -70,6 +86,13 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 		return session.Thread{}, fmt.Errorf("opencode: %w", err)
 	}
 	defer db.Close()
+	v2, err := isV2(ctx, db)
+	if err != nil {
+		return session.Thread{}, err
+	}
+	if v2 {
+		return readThreadV2(ctx, db, src)
+	}
 	return readThread(ctx, db, src)
 }
 
@@ -82,7 +105,11 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 		return nil, err
 	}
 	defer db.Close()
-	return listSessions(ctx, db, path, opts)
+	v2, err := isV2(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	return listSessions(ctx, db, path, v2, opts)
 }
 
 // --- database access --------------------------------------------------------
@@ -99,7 +126,22 @@ func open(root string) (*sql.DB, string, error) {
 	return db, path, nil
 }
 
-const sessionColumns = `id, title, directory, COALESCE(agent,''), COALESCE(model,''), COALESCE(parent_id,''), time_created, time_updated`
+// isV2 reports whether the database has OpenCode 2.x session tables.
+func isV2(ctx context.Context, db *sql.DB) (bool, error) {
+	var n int
+	err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'session_v2'`).Scan(&n)
+	return n > 0, err
+}
+
+const sessionColumns = `id, COALESCE(title,''), directory, COALESCE(agent,''), COALESCE(model,''), COALESCE(parent_id,''), time_created, time_updated`
+
+// selectSessions selects sessionColumns from the session table of either schema.
+func selectSessions(v2 bool) string {
+	if v2 {
+		return `SELECT ` + sessionColumns + ` FROM session_v2`
+	}
+	return `SELECT ` + sessionColumns + ` FROM session`
+}
 
 func scanSession(path string, sc interface{ Scan(...any) error }) (session.Source, error) {
 	var id, title, dir, agent, model, parent string
@@ -131,8 +173,8 @@ func scanSession(path string, sc interface{ Scan(...any) error }) (session.Sourc
 	}, nil
 }
 
-func latestSession(ctx context.Context, db *sql.DB, path string) (session.Source, error) {
-	row := db.QueryRowContext(ctx, `SELECT `+sessionColumns+` FROM session WHERE time_archived IS NULL ORDER BY time_updated DESC LIMIT 1`)
+func latestSession(ctx context.Context, db *sql.DB, path string, v2 bool) (session.Source, error) {
+	row := db.QueryRowContext(ctx, selectSessions(v2)+` WHERE time_archived IS NULL ORDER BY time_updated DESC LIMIT 1`)
 	src, err := scanSession(path, row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return session.Source{}, errors.New("opencode: no sessions found")
@@ -140,8 +182,8 @@ func latestSession(ctx context.Context, db *sql.DB, path string) (session.Source
 	return src, err
 }
 
-func loadSession(ctx context.Context, db *sql.DB, path, id string) (session.Source, error) {
-	row := db.QueryRowContext(ctx, `SELECT `+sessionColumns+` FROM session WHERE id = ?`, id)
+func loadSession(ctx context.Context, db *sql.DB, path string, v2 bool, id string) (session.Source, error) {
+	row := db.QueryRowContext(ctx, selectSessions(v2)+` WHERE id = ?`, id)
 	src, err := scanSession(path, row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return session.Source{}, fmt.Errorf("opencode: no session with id %q", id)
@@ -151,12 +193,16 @@ func loadSession(ctx context.Context, db *sql.DB, path, id string) (session.Sour
 
 // --- listing ----------------------------------------------------------------
 
-func listSessions(ctx context.Context, db *sql.DB, path string, opts session.ListOptions) ([]session.Summary, error) {
-	rows, err := db.QueryContext(ctx, `SELECT `+sessionColumns+` FROM session WHERE time_archived IS NULL ORDER BY time_updated DESC`)
+func listSessions(ctx context.Context, db *sql.DB, path string, v2 bool, opts session.ListOptions) ([]session.Summary, error) {
+	rows, err := db.QueryContext(ctx, selectSessions(v2)+` WHERE time_archived IS NULL ORDER BY time_updated DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	matchText, firstText := matchText, firstText
+	if v2 {
+		matchText, firstText = matchTextV2, firstTextV2
+	}
 
 	q := strings.ToLower(opts.Query)
 	limit := opts.EffectiveLimit()
@@ -249,6 +295,39 @@ func firstText(ctx context.Context, db *sql.DB, sessionID string) string {
 	return s.String
 }
 
+// v2Texts selects a 2.x session's message text in timeline order (seq, item):
+// each user row's text and each text item of an assistant row's content.
+const v2Texts = `
+	SELECT seq, 0 AS item, type AS role, json_extract(data,'$.text') AS text
+	  FROM session_message WHERE session_id = ?1 AND type = 'user'
+	UNION ALL
+	SELECT m.seq, c.key, m.type, json_extract(c.value,'$.text')
+	  FROM session_message m, json_each(m.data,'$.content') c
+	  WHERE m.session_id = ?1 AND m.type = 'assistant' AND json_extract(c.value,'$.type') = 'text'`
+
+// matchTextV2 is matchText over the 2.x tables.
+func matchTextV2(ctx context.Context, db *sql.DB, sessionID, lowerQuery string) (role, text string, ok bool, err error) {
+	err = db.QueryRowContext(ctx,
+		`SELECT role, text FROM (`+v2Texts+`) WHERE instr(lower(text), ?2) > 0 ORDER BY seq, item LIMIT 1`,
+		sessionID, lowerQuery,
+	).Scan(&role, &text)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	return role, text, true, nil
+}
+
+func firstTextV2(ctx context.Context, db *sql.DB, sessionID string) string {
+	var s sql.NullString
+	if db.QueryRowContext(ctx, `SELECT text FROM (`+v2Texts+`) ORDER BY seq, item LIMIT 1`, sessionID).Scan(&s) != nil {
+		return ""
+	}
+	return s.String
+}
+
 // --- timeline ---------------------------------------------------------------
 
 func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Thread, error) {
@@ -322,6 +401,108 @@ func readThread(ctx context.Context, db *sql.DB, src session.Source) (session.Th
 		return session.Thread{}, err
 	}
 	return session.Thread{Source: src, Entries: entries, Warnings: unknown.AppendTo(nil)}, nil
+}
+
+func readThreadV2(ctx context.Context, db *sql.DB, src session.Source) (session.Thread, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT type, time_created, data FROM session_message WHERE session_id = ? ORDER BY seq`,
+		src.Ref.SessionID,
+	)
+	if err != nil {
+		return session.Thread{}, err
+	}
+	defer rows.Close()
+
+	var entries []session.Entry
+	var unknown session.UnknownTypes
+	for rows.Next() {
+		var typ, data string
+		var ms int64
+		if err := rows.Scan(&typ, &ms, &data); err != nil {
+			return session.Thread{}, err
+		}
+		at := msToTime(ms)
+		switch typ {
+		case "user":
+			if txt := partText(data); txt != "" {
+				entries = append(entries, session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: txt, Time: at})
+			}
+		case "assistant":
+			entries = appendAssistant(entries, &unknown, data, at)
+		case "compaction":
+			// A running or failed compaction has not replaced the context.
+			var c struct {
+				Status  string `json:"status"`
+				Summary string `json:"summary"`
+			}
+			if json.Unmarshal([]byte(data), &c) == nil && c.Status == "completed" {
+				entries = append(entries, session.Entry{Kind: session.KindCompact, Text: c.Summary, Time: at})
+			}
+		case "synthetic", "system", "skill", "shell", "agent-switched", "model-switched", "location-switched", "idle":
+			// Injected context, harness bookkeeping, and turn markers.
+		default:
+			unknown.Add(typ)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return session.Thread{}, err
+	}
+	return session.Thread{Source: src, Entries: entries, Warnings: unknown.AppendTo(nil)}, nil
+}
+
+// appendAssistant appends a 2.x assistant row: its text items joined into one
+// message, split around any failed tool call, which becomes a failure entry.
+func appendAssistant(entries []session.Entry, unknown *session.UnknownTypes, data string, at time.Time) []session.Entry {
+	var m struct {
+		Content []struct {
+			Type  string `json:"type"`
+			Text  string `json:"text"`
+			Name  string `json:"name"`
+			State struct {
+				Status string          `json:"status"`
+				Input  json.RawMessage `json:"input"`
+				Error  struct {
+					Message string `json:"message"`
+				} `json:"error"`
+			} `json:"state"`
+			Time struct {
+				Created int64 `json:"created"`
+			} `json:"time"`
+		} `json:"content"`
+	}
+	json.Unmarshal([]byte(data), &m)
+	var text []string
+	flush := func() {
+		if len(text) > 0 {
+			entries = append(entries, session.Entry{
+				Kind: session.KindMessage, Role: session.RoleAssistant, Text: strings.Join(text, "\n\n"), Time: at,
+			})
+		}
+		text = nil
+	}
+	for _, c := range m.Content {
+		switch c.Type {
+		case "text":
+			if c.Text != "" {
+				text = append(text, c.Text)
+			}
+		case "tool":
+			if c.State.Status == "error" {
+				flush()
+				ts := at
+				if c.Time.Created != 0 {
+					ts = msToTime(c.Time.Created)
+				}
+				entries = append(entries, session.Failure(c.Name, c.State.Input, c.State.Error.Message, ts))
+			}
+		case "reasoning":
+			// The model's own scratch work.
+		default:
+			unknown.Add(c.Type)
+		}
+	}
+	flush()
+	return entries
 }
 
 // --- small decoders ---------------------------------------------------------
