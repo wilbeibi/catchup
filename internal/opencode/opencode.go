@@ -12,8 +12,9 @@
 // 6dfc681835 (2026-10-21):
 // packages/core/src/session/sql.ts (tables) and
 // packages/schema/src/session-message.ts (session_message.data per type).
-// Checked against a database written by opencode2 0.0.0-beta-19271 and the
-// v2.0.32 layout reported in issue #26.
+// Checked against databases written by @opencode/cli 2.1.4 (fresh sessions and
+// migrated 1.19.4 and beta-19271 databases), and the v2.0.32 layout reported in
+// issue #26.
 //
 // In 2.x, user rows and the text items of assistant rows form the timeline, a
 // tool item whose state.status is error becomes a failure entry, and a
