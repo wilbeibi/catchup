@@ -30,6 +30,7 @@ import (
 	"github.com/wilbeibi/catchup/internal/copilot"
 	"github.com/wilbeibi/catchup/internal/cursor"
 	"github.com/wilbeibi/catchup/internal/deepseek"
+	"github.com/wilbeibi/catchup/internal/devin"
 	"github.com/wilbeibi/catchup/internal/grok"
 	"github.com/wilbeibi/catchup/internal/grokbot"
 	"github.com/wilbeibi/catchup/internal/kimi"
@@ -74,6 +75,7 @@ HAND OFF — continue the work
   --into <agent>      seed a different agent with the transcript; the same
                       agent, with --last/--since-compact, restarts it clean
   --from <src>        with --into: seed from a file, - (stdin), or http(s) URL
+                      Devin session URLs require DEVIN_API_KEY (org service key)
   --model <name>      launch it on a specific model, e.g. a cheaper one
                       (the target agent's own model name, passed as-is)
 
@@ -755,9 +757,9 @@ func forkInto(ctx context.Context, src session.Source, cmd Command, launchDir st
 
 // forkFrom is the artifact half of fork: it seeds the --into
 // agent from a document that did not come from a provider store — a file,
-// stdin, or a plain-GET URL. The artifact is seeded verbatim (any text
-// document works, not only catchup output), so no Thread is built and the
-// trims cannot apply; parse.go rejects those combinations. Same-agent --into
+// stdin, or a URL. Devin URLs are exported through its API before seeding;
+// other artifacts are seeded verbatim. The trims cannot apply to arbitrary
+// documents; parse.go rejects those combinations. Same-agent --into
 // is allowed by construction: no native state stands behind an artifact, so
 // the seed is the best continuation there is.
 func forkFrom(ctx context.Context, cmd Command, launchDir string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -821,8 +823,7 @@ func fromLabel(from string) string {
 	return from
 }
 
-// readArtifact fetches the --from artifact's bytes. The spelling was
-// validated at parse time; the three shapes just dispatch here.
+// readArtifact loads --from bytes, rendering Devin's API events as a transcript.
 func readArtifact(ctx context.Context, from string, stdin io.Reader) ([]byte, error) {
 	switch {
 	case from == "-":
@@ -835,6 +836,15 @@ func readArtifact(ctx context.Context, from string, stdin io.Reader) ([]byte, er
 		}
 		return b, nil
 	case isHTTPURL(from):
+		if devin.IsURL(from) {
+			thread, err := devin.Read(ctx, from, os.Getenv("DEVIN_API_KEY"), artifactClient)
+			if err != nil {
+				return nil, err
+			}
+			var buf bytes.Buffer
+			err = render.Thread(&buf, thread, session.FormatAgent)
+			return buf.Bytes(), err
+		}
 		return fetchArtifact(ctx, from)
 	default:
 		b, err := os.ReadFile(expandTilde(from))
