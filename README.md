@@ -94,7 +94,7 @@ catchup <agent> --json                   # render JSON; also --html
 
 Use `fork` to continue with the same agent and keep native session state. Use `fork --into` to start another agent with the transcript, or the same agent with `--last`/`--since-compact`, which restarts it clean on a trimmed transcript when the context is spent but the work isn't. Use read commands when you want old work in a clean context.
 
-Every supported agent can supply a handoff. Amp, Kimi, ZCode, and DeepSeek Harness cannot be launched as interactive `--into` targets; save the transcript and open it in those tools instead.
+Every supported agent can supply a handoff. Amp, Grok Bot, Kimi, ZCode, and DeepSeek Harness cannot be launched as interactive `--into` targets; save the transcript and open it in those tools instead.
 
 Use `--all-dirs` again when selecting a search result by rank, or select its stable ID with `--id`.
 Listings show each session's directory and recorded parent or fork relationship.
@@ -108,9 +108,9 @@ Amp tool results and reasoning are omitted. Native Amp launch and resume are uns
 
 - One agent at a time. It does not merge histories.
 - Human Markdown and HTML contain the conversation only.
-- `--agent`, `--json`, and `fork --into` also retain tool calls the source log marked failed. Successful tool activity and reasoning traces remain stripped.
+- `--agent`, `--json`, and `fork --into` also retain tool calls the source log marked failed. Successful tool activity and reasoning traces remain stripped by default; `--show tools` includes recorded tool calls where supported (Claude Code, Codex, Cursor IDE).
 - Read-only, except `fork`.
-- Same-agent `fork` uses the agent's native resume path, so it keeps real session state.
+- Same-agent `fork` uses the agent's native resume path where supported, so it keeps real session state (agents without a CLI resume direct you to `fork --into`).
 - Same-agent `fork --into` is the opposite trade: native state is dropped for a clean context.
 - Cross-agent `fork --into` seeds the new agent with a transcript, not native state.
 - `fork` returns the launched agent's exit status, so shell scripts and CI can handle its failure normally.

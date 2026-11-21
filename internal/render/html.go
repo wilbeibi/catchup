@@ -45,6 +45,7 @@ type htmlEntry struct {
 	Kind  string
 	Role  string
 	Time  string
+	Input string
 	Text  string
 }
 
@@ -63,8 +64,11 @@ func htmlEntries(entries []session.Entry) []htmlEntry {
 			Time:  ts,
 			Text:  e.Text,
 		}
-		if e.Kind == session.KindToolCall {
+		switch e.Kind {
+		case session.KindToolCall:
 			out[i].Text = StripControl(e.InputText())
+		case session.KindFailure:
+			out[i].Input = StripControl(e.InputText())
 		}
 	}
 	return out
@@ -96,6 +100,7 @@ dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 .warnings { border-left: 3px solid #c93; padding: .25rem .75rem; margin: 0 0 2rem; font-size: .85rem; }
 section.entry { margin: 0 0 1.5rem; }
 section.entry h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; opacity: .6; margin: 0 0 .35rem; }
+section.entry h3 { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; opacity: .6; margin: .5rem 0 .2rem; }
 section.entry.role-user h2 { color: #2a6; }
 section.entry.role-assistant h2 { color: #46c; }
 section.entry.kind-compact h2, section.entry.kind-branch h2 { color: #c93; }
@@ -117,6 +122,11 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; 
 {{- range .Entries}}
 <section class="entry role-{{.Role}} kind-{{.Kind}}">
 <h2>{{.Index}}. {{.Label}}{{if .Time}} · {{.Time}}{{end}}</h2>
+{{- if .Input}}
+<h3>Input</h3>
+<pre>{{.Input}}</pre>
+<h3>Output</h3>
+{{- end}}
 <pre>{{.Text}}</pre>
 </section>
 {{- end}}

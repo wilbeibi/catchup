@@ -13,6 +13,7 @@ Add `--agent` to session reads below to include failed tool calls and avoid repe
 # RECAP — how much (default: all of it)
 catchup <agent> --since-compact    # what the agent itself resumed with — the default recovery read
 catchup <agent> --last 20          # just the last 20 exchanges
+catchup <agent> --show tools       # include recorded tool calls (claude, codex, Cursor IDE) and failures
 
 # FIND — which one (default: newest here)
 catchup --all-dirs -q "topic"      # search all directories and agents

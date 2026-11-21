@@ -452,6 +452,9 @@ func locateForkSource(ctx context.Context, roots session.Roots, cmd Command, cwd
 		}
 		switch len(sums) {
 		case 0:
+			if cwd == "" {
+				return session.Source{}, false, fmt.Errorf("fork %s: no sessions matching %q", t.Provider, t.Query)
+			}
 			return session.Source{}, false, fmt.Errorf("fork %s: no sessions matching %q in %s", t.Provider, t.Query, cwd)
 		case 1:
 			src, err := prov.Resolve(ctx, roots, sums[0].Ref.SessionID)
@@ -460,11 +463,15 @@ func locateForkSource(ctx context.Context, roots session.Roots, cmd Command, cwd
 			}
 			return stampProvider(src, t.Provider), true, nil
 		default:
-			if err := render.List(stdout, t.Provider, sums, cmd.Format); err != nil {
+			listFn, scope := render.List, ""
+			if cmd.AllDirs {
+				listFn, scope = render.ListAcrossDirs, " --all-dirs"
+			}
+			if err := listFn(stdout, t.Provider, sums, cmd.Format); err != nil {
 				return session.Source{}, false, err
 			}
-			fmt.Fprintf(stderr, "catchup: %d sessions match %q; rerun as catchup fork %s/<rank> -q %q\n",
-				len(sums), t.Query, t.Provider, t.Query)
+			fmt.Fprintf(stderr, "catchup: %d sessions match %q; rerun as catchup fork %s/<rank>%s -q %q\n",
+				len(sums), t.Query, t.Provider, scope, t.Query)
 			return session.Source{}, false, nil
 		}
 	}
@@ -515,7 +522,11 @@ func newestAcross(ctx context.Context, roots session.Roots, cwd string) (session
 		// own hint (where that agent's sessions actually are, or that it has
 		// none), so the aggregate reads as a diagnosis, not a dead end.
 		var b strings.Builder
-		fmt.Fprintf(&b, "no sessions found in %s", cwd)
+		if cwd == "" {
+			b.WriteString("no sessions found")
+		} else {
+			fmt.Fprintf(&b, "no sessions found in %s", cwd)
+		}
 		for _, f := range failures {
 			b.WriteString("\n  ")
 			b.WriteString(f.Error())
@@ -578,6 +589,9 @@ func newestInCwd(ctx context.Context, prov session.Provider, roots session.Roots
 		return session.Source{}, err
 	}
 	if len(sums) == 0 {
+		if cwd == "" {
+			return session.Source{}, fmt.Errorf("%s: no sessions anywhere", name)
+		}
 		return session.Source{}, fmt.Errorf("%s: no sessions in %s; %s", name, cwd, absenceHint(ctx, prov, roots))
 	}
 	src, err := prov.Resolve(ctx, roots, sums[0].Ref.SessionID)

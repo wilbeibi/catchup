@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -39,6 +40,27 @@ func TestDiscoveryAcrossDirectories(t *testing.T) {
 		if _, err := Parse(args); err == nil {
 			t.Fatalf("%v should reject conflicting scope", args)
 		}
+	}
+
+	// fork --all-dirs -q keeps directory lines and --all-dirs in its rerun hint,
+	// and omits the trailing "in <dir>" when no directory was scoped.
+	claudeRoots := claudeRoot(t)
+	var outBuf, errBuf bytes.Buffer
+	if err := Run(context.Background(), []string{"fork", "claude", "--all-dirs", "-q", "question"}, claudeRoots, nil, nil, nil, "test", fxDir("/elsewhere"), nil, &outBuf, &errBuf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(outBuf.String(), "dir: "+fxDir("/home/u/proj")) {
+		t.Errorf("fork --all-dirs listing missing directory:\n%s", outBuf.String())
+	}
+	if !strings.Contains(errBuf.String(), `catchup fork claude/<rank> --all-dirs -q "question"`) {
+		t.Errorf("fork --all-dirs hint dropped --all-dirs: %s", errBuf.String())
+	}
+	if err := Run(context.Background(), []string{"fork", "claude", "--all-dirs", "-q", "no-such-term"}, claudeRoots, nil, nil, nil, "test", fxDir("/elsewhere"), nil, &outBuf, &errBuf); err == nil || strings.Contains(err.Error(), " in ") {
+		t.Errorf("fork --all-dirs 0-match error = %v, want no empty dir clause", err)
+	}
+	emptyRoots := session.ResolveRoots(func(string) string { return "" }, t.TempDir())
+	if err := Run(context.Background(), []string{"--all-dirs"}, emptyRoots, nil, nil, nil, "test", fxDir("/elsewhere"), nil, &outBuf, &errBuf); err == nil || strings.Contains(err.Error(), " in ") {
+		t.Errorf("--all-dirs empty error = %v, want no empty dir clause", err)
 	}
 }
 

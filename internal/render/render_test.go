@@ -219,6 +219,19 @@ func TestFailureViews(t *testing.T) {
 	if strings.Contains(b.String(), "failure: Bash") || strings.Contains(b.String(), "FAIL\tcatchup") {
 		t.Errorf("human html exposed a tool failure:\n%s", b.String())
 	}
+
+	// With --show tools, HTML keeps failures and renders both input and output.
+	b.Reset()
+	shown := th
+	shown.Shown = []string{session.KindToolCall}
+	if err := Thread(&b, shown, session.FormatHTML); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"failure: Bash", "<h3>Input</h3>", "go test ./...", "<h3>Output</h3>", "FAIL\tcatchup/x &lt;0.1s&gt;"} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("html with --show tools missing %q:\n%s", want, b.String())
+		}
+	}
 }
 
 func TestList(t *testing.T) {

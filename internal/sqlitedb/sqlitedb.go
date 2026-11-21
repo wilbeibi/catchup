@@ -6,9 +6,18 @@ package sqlitedb
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
+
+// uriEscaper percent-encodes the characters SQLite treats as URI syntax so a
+// path containing %, ?, or # is not truncated or misparsed as query/fragment.
+var uriEscaper = strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23")
+
+func sqliteURI(path, query string) string {
+	return "file:" + uriEscaper.Replace(path) + "?" + query
+}
 
 // Open opens path for reading. Plain mode=ro comes first because the database
 // runs in WAL mode and a reader must consult the -wal file to see a live
@@ -18,14 +27,14 @@ import (
 // recovery needs write access); there the checkpointed prefix is the best
 // available answer.
 func Open(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteURI(path, "mode=ro"))
 	if err == nil {
 		if err = db.Ping(); err == nil {
 			return db, nil
 		}
 		db.Close()
 	}
-	fallback, ferr := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
+	fallback, ferr := sql.Open("sqlite", sqliteURI(path, "mode=ro&immutable=1"))
 	if ferr != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
