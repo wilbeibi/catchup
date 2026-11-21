@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1429,7 +1430,11 @@ func TestRunForkFromStdinNoTTY(t *testing.T) {
 }
 
 func TestRunForkFromURL(t *testing.T) {
+	t.Setenv("DEVIN_API_KEY", "unrelated-secret")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Basic bGFiZWwtdXNlcjpsYWJlbC1wYXNzd29yZA==" {
+			t.Error("generic URL authorization changed")
+		}
 		fmt.Fprint(w, "remote transcript body")
 	}))
 	defer srv.Close()
@@ -1476,6 +1481,152 @@ func TestRunForkFromURL(t *testing.T) {
 				t.Errorf("malformed URL credential %q leaked into the error: %v", secret, err)
 			}
 		}
+	}
+}
+
+type devinTransport func(*http.Request) (*http.Response, error)
+
+func (f devinTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestRunForkFromDevin(t *testing.T) {
+	// Selected real events from Devin MCP 2.14.3's v3beta1 HTTP endpoint,
+	// observed 2026-10-15. IDs/text are sanitized; order and wire keys remain.
+	// Padding, duplicate completion and truncation markers exercise boundaries.
+	fixture, err := os.ReadFile("../devin/testdata/events.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := bytes.Split(bytes.TrimSpace(fixture), []byte("\n"))
+	first := make([]json.RawMessage, 0, 50)
+	for _, row := range rows[:11] {
+		first = append(first, json.RawMessage(row))
+	}
+	for len(first) < 50 {
+		first = append(first, json.RawMessage(rows[2])) // ignored reasoning events
+	}
+	last := []json.RawMessage{rows[11], bytes.ReplaceAll(rows[11], []byte("shell_process_completed"), []byte("shell_process_completed_background")), rows[12]}
+	last[2] = bytes.Replace(last[2], []byte(`"truncated_fields":[]`), []byte(`"truncated_fields":["message"]`), 1)
+	for _, tc := range []struct {
+		name, from, key, fault, wantErr string
+	}{
+		{"app", "https://app.devin.ai/sessions/abc?token=url-secret#fragment-secret", "test-key", "", ""},
+		{"enterprise", "https://team.devinenterprise.com/sessions/devin-abc/", "test-key", "", ""},
+		{"attachment", "https://app.devin.ai/attachments/note.txt", "test-key", "artifact", ""},
+		{"missing key", "https://app.devin.ai/sessions/abc", "", "", "DEVIN_API_KEY"},
+		{"wrong path", "https://app.devin.ai/sessions/abc/extra", "test-key", "", "session URL"},
+		{"http", "http://app.devin.ai/sessions/abc", "test-key", "", "HTTPS"},
+		{"unauthorized", "https://app.devin.ai/sessions/abc", "test-key", "auth", "HTTP 401"},
+		{"unscoped key", "https://app.devin.ai/sessions/abc", "test-key", "org", "organization-scoped"},
+		{"redirect", "https://app.devin.ai/sessions/abc", "test-key", "redirect", "HTTP 302"},
+		{"second page fails", "https://app.devin.ai/sessions/abc", "test-key", "page", "HTTP 403"},
+		{"schema drift", "https://app.devin.ai/sessions/abc", "test-key", "schema", "no items"},
+		{"invalid JSON", "https://app.devin.ai/sessions/abc", "test-key", "json", "decode API response"},
+		{"empty session", "https://app.devin.ai/sessions/abc", "test-key", "empty", "no conversation"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("DEVIN_API_KEY", tc.key)
+			requests := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				if tc.fault == "artifact" {
+					if r.Header.Get("Authorization") != "" {
+						t.Error("API key sent to attachment URL")
+					}
+					fmt.Fprint(w, "remote transcript body")
+					return
+				}
+				if r.Method != "GET" || r.Header.Get("Authorization") != "Bearer test-key" {
+					t.Errorf("unexpected method or authorization: %s", r.Method)
+				}
+				if tc.fault == "auth" {
+					http.Error(w, "test-key must not reach error text", 401)
+					return
+				}
+				if tc.fault == "redirect" {
+					http.Redirect(w, r, "https://elsewhere.invalid/leak", 302)
+					return
+				}
+				if r.URL.Path == "/v3/self" {
+					if tc.fault == "org" {
+						fmt.Fprint(w, `{}`)
+					} else {
+						fmt.Fprint(w, `{"org_id":"org-example"}`)
+					}
+					return
+				}
+				if r.URL.Path != "/v3beta1/organizations/org-example/sessions/devin-abc/events/details" || r.URL.Query().Get("limit") != "50" || r.URL.Query().Get("max_content_length") != "100000" {
+					t.Errorf("unexpected API request: %s", r.URL)
+				}
+				switch tc.fault {
+				case "schema":
+					fmt.Fprint(w, `{}`)
+					return
+				case "json":
+					fmt.Fprint(w, `{`)
+					return
+				case "empty":
+					fmt.Fprint(w, `{"items":[]}`)
+					return
+				}
+				page := first
+				switch r.URL.Query().Get("offset") {
+				case "0":
+				case "50":
+					if tc.fault == "page" {
+						http.Error(w, "forbidden", 403)
+						return
+					}
+					page = last
+				default:
+					t.Error("incorrect pagination offset")
+					page = nil
+				}
+				json.NewEncoder(w).Encode(map[string]any{"items": page})
+			}))
+			defer srv.Close()
+			base, _ := url.Parse(srv.URL)
+			old := artifactClient
+			t.Cleanup(func() { artifactClient = old })
+			artifactClient = &http.Client{Transport: devinTransport(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Host != "api.devin.ai" && !(tc.fault == "artifact" && r.URL.Host == "app.devin.ai") {
+					t.Errorf("credential sent to unexpected host: %s", r.URL.Host)
+				}
+				r.URL.Scheme, r.URL.Host = base.Scheme, base.Host
+				return srv.Client().Transport.RoundTrip(r)
+			})}
+			name, prompt, _, err := forkFromRun(t, nil, "fork", "--into", "codex", "--from", tc.from)
+			if tc.fault == "artifact" {
+				if err != nil || name != "codex" || requests != 1 || !strings.Contains(prompt, "remote transcript body") {
+					t.Fatalf("attachment import changed: agent=%q requests=%d err=%v", name, requests, err)
+				}
+				return
+			}
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) || name != "" || strings.Contains(err.Error(), "test-key") {
+					t.Fatalf("want %q without launch or credential leak, got agent=%q err=%v", tc.wantErr, name, err)
+				}
+				return
+			}
+			if err != nil || name != "codex" || requests != 3 {
+				t.Fatalf("agent=%q requests=%d err=%v", name, requests, err)
+			}
+			previous := -1
+			for _, text := range []string{"Check the cache.", "I will inspect it.", "Keep the public API unchanged.", "I will run the tests.", "go test ./...", "FAIL: configuration missing", "The tests need a configuration fix."} {
+				index := strings.Index(prompt, text)
+				if index <= previous {
+					t.Fatalf("missing or reordered %q in transcript", text)
+				}
+				previous = index
+			}
+			if strings.Count(prompt, "failure: shell") != 1 || !strings.Contains(prompt, "Devin truncated devin_message fields: message") || !strings.Contains(prompt, "compaction history") {
+				t.Fatalf("missing failure deduplication or loss warnings: %s", prompt)
+			}
+			for _, excluded := range []string{"test-key", "url-secret", "fragment-secret", "private reasoning", "successful output"} {
+				if strings.Contains(prompt, excluded) {
+					t.Errorf("unexpected %q in transcript", excluded)
+				}
+			}
+		})
 	}
 }
 

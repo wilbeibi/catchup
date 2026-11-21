@@ -104,6 +104,28 @@ Amp reads local JSON caches in `$XDG_DATA_HOME/amp/threads` (default `~/.local/s
 Set `AMP_DATA_HOME` to override the Amp data directory. Cloud-only threads are unavailable until cached locally.
 Amp tool results and reasoning are omitted. Native Amp launch and resume are unsupported.
 
+### Devin web sessions
+
+Create an **organization-scoped service-user API key** in Devin's **Settings > Devin API**.
+The key needs read access to the session. Set `DEVIN_API_KEY`, then paste the session URL:
+
+```bash
+export DEVIN_API_KEY='your-api-key'
+catchup fork --into codex --from 'https://app.devin.ai/sessions/YOUR_SESSION_ID'
+```
+
+Enterprise URLs such as `https://your-team.devinenterprise.com/sessions/YOUR_SESSION_ID`
+also work. Catchup discovers the organization from the key and imports the conversation
+and failed shell commands. It sends the key only to `api.devin.ai` and does not store it.
+Personal access tokens and enterprise-scoped keys need explicit organization selection,
+which this importer does not implement.
+
+The importer uses the `v3beta1` event endpoint behind [Devin MCP](https://docs.devin.ai/work-with-devin/devin-mcp).
+That endpoint is absent from the public v3 OpenAPI specification and may change.
+Shell output can be truncated; warnings also identify event fields truncated by the API.
+Attachments, non-shell tool failures, and compaction history are unavailable.
+Devin URL imports use `fork --from`; local discovery, search, and native Devin resume do not apply.
+
 ## Boundaries
 
 - One agent at a time. It does not merge histories.
