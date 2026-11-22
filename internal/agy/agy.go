@@ -1,29 +1,34 @@
 // Package agy implements session.Provider over Antigravity CLI history:
 // step transcripts under
-// <root>/brain/<conversation-id>/.system_generated/logs/transcript.jsonl
-// (default ~/.gemini/antigravity-cli; no override variable is known).
+// <root>/brain/<conversation-id>/.system_generated/logs/{transcript_full,transcript}.jsonl
+// (default ~/.gemini/antigravity-cli; verified against agy 1.5.14).
 //
-// Antigravity's primary conversation store (conversations/*.pb, *.db) is an
-// undocumented protobuf/SQLite pairing; the brain transcript is the one
-// plain-text record the CLI writes, so this provider reads that. Each line is
-// one step: {step_index, source, type, status, created_at, content}.
+// Antigravity writes two JSONL logs per conversation: transcript.jsonl
+// truncates long fields (<truncated N bytes>) and transcript_full.jsonl keeps
+// them whole. Older sessions can miss a prefix or single step in one of the
+// two files, and compaction replays can duplicate a step_index range or emit
+// steps slightly out of index order. Reading merges both files by step_index
+// (transcript_full.jsonl wins on collision, last occurrence wins within a
+// file) and sorts ascending.
 //
 // Useful steps: USER_INPUT (the user turn, wrapped in <USER_REQUEST> tags),
-// PLANNER_RESPONSE from MODEL (the assistant's prose), and CHECKPOINT (the
-// CLI's own truncation summary, surfaced as a compaction marker). Everything
-// else — RUN_COMMAND, VIEW_FILE, CODE_ACTION and the other tool steps,
-// EPHEMERAL_MESSAGE / SYSTEM_MESSAGE / CONVERSATION_HISTORY bookkeeping — is
+// PLANNER_RESPONSE from MODEL (assistant prose, model name, and tool_calls as
+// KindToolCall), CHECKPOINT (compaction marker), ERROR_MESSAGE (provider API
+// or model-output stop as KindStop), and tool steps with status "ERROR"
+// (KindFailure, paired in order with the preceding PLANNER_RESPONSE's
+// tool_calls). Successful tool steps — including agy 1.5.14 shell commands
+// logged as GENERIC with exit codes only in prose — and bookkeeping steps are
 // skipped.
 //
-// Subagent conversations write brain transcripts indistinguishable from
-// top-level ones. The CLI's <root>/history.jsonl, however, records one line
-// per user-typed prompt ({display, workspace, timestamp, conversationId}), so
-// it doubles as the directory index — and keeps subagents out of cwd-filtered
-// listings. One wrinkle, verified against real stores: a conversation's first
-// prompt is logged before its id exists, so that line has no conversationId
-// and single-prompt conversations never get one. Those are joined back to
-// their transcript by matching the first user turn's text (closest timestamp
-// on ties); see history.matchStart.
+// Metadata comes from <root>/conversation_summaries.db (opened read-only via
+// internal/sqlitedb for WAL visibility): native title, workspace_uris, and
+// subagent hierarchy (parent_conversation_id, nesting_depth, agent_name).
+// Subagents marked there are hidden from List and bare Resolve, while explicit
+// Resolve(id) still returns them with their parent/role metadata.
+// <root>/history.jsonl remains the fallback for older sessions with empty
+// workspace_uris or an absent database: slash-command lines are ignored as
+// titles, and id-less opening prompts join back by first-turn text (closest
+// timestamp on ties); see history.matchStart.
 package agy
 
 import (
@@ -32,13 +37,16 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/wilbeibi/catchup/internal/session"
+	"github.com/wilbeibi/catchup/internal/sqlitedb"
 )
 
 // Provider reads Antigravity CLI brain transcripts.
@@ -57,29 +65,33 @@ func (p *Provider) Resolve(ctx context.Context, roots session.Roots, id string) 
 		if err != nil {
 			return session.Source{}, fmt.Errorf("agy: no session with id %q", id)
 		}
-		return resolveSource(fi, roots.Agy), nil
+		return resolveSource(fi, loadSummaries(roots.Agy), loadHistory(roots.Agy)), nil
 	}
 	files, err := sessionFiles(roots.Agy)
 	if err != nil {
 		return session.Source{}, err
 	}
-	if len(files) == 0 {
-		return session.Source{}, fmt.Errorf("agy: no sessions found under %s", roots.Agy)
+	db := loadSummaries(roots.Agy)
+	h := loadHistory(roots.Agy)
+	for _, fi := range files {
+		if !isSubagent(sourceOf(fi, db, h)) {
+			return resolveSource(fi, db, h), nil
+		}
 	}
-	return resolveSource(files[0], roots.Agy), nil
+	return session.Source{}, fmt.Errorf("agy: no sessions found under %s", roots.Agy)
 }
 
 // resolveSource builds a Source for one transcript, paying one extra
-// transcript read for the matchStart join when history.jsonl has no id line
-// for it (single-prompt conversations).
-func resolveSource(fi fileInfo, root string) session.Source {
-	h := loadHistory(root)
-	src := sourceOf(fi, h)
+// transcript read for the matchStart join when neither conversation_summaries.db
+// nor history.jsonl locates it by id.
+func resolveSource(fi fileInfo, db map[string]dbSummary, h history) session.Source {
+	src := sourceOf(fi, db, h)
 	if src.Metadata["cwd"] == "" {
-		if entries, _, err := readEntries(fi); err == nil {
+		if entries, _, _, err := readEntries(fi); err == nil {
 			applyStart(&src, entries, h)
 		}
 	}
+	finalizeTitle(&src)
 	return src
 }
 
@@ -91,10 +103,16 @@ func (p *Provider) Read(ctx context.Context, src session.Source) (session.Thread
 	if err != nil {
 		return session.Thread{}, err
 	}
-	fi := fileInfo{path: src.Path, mod: info.ModTime(), id: src.Ref.SessionID}
-	entries, warnings, err := readEntries(fi)
+	fi := fileInfoFromPath(src.Path, info.ModTime(), src.Ref.SessionID)
+	entries, model, warnings, err := readEntries(fi)
 	if err != nil {
 		return session.Thread{}, err
+	}
+	if model != "" {
+		if src.Metadata == nil {
+			src.Metadata = map[string]string{}
+		}
+		src.Metadata["model"] = model
 	}
 	return session.Thread{Source: src, Entries: entries, Warnings: warnings}, nil
 }
@@ -105,20 +123,69 @@ func (p *Provider) List(ctx context.Context, roots session.Roots, opts session.L
 
 // --- file enumeration -------------------------------------------------------
 
+const (
+	compactLogName = "transcript.jsonl"
+	fullLogName    = "transcript_full.jsonl"
+)
+
 type fileInfo struct {
-	path string
-	mod  time.Time
-	id   string // conversation id, the brain directory's name
+	path    string // canonical path for Source.Path (full when present, else compact)
+	compact string // transcript.jsonl, when present
+	full    string // transcript_full.jsonl, when present
+	mod     time.Time
+	id      string // conversation id, the brain directory's name
 }
 
-// transcriptOf stats the brain transcript belonging to one conversation id.
+// transcriptOf stats the brain transcript(s) belonging to one conversation id,
+// preferring transcript_full.jsonl as the primary path while retaining
+// transcript.jsonl so missing prefixes in either file are recovered.
 func transcriptOf(root, id string) (fileInfo, error) {
-	p := filepath.Join(root, "brain", id, ".system_generated", "logs", "transcript.jsonl")
-	info, err := os.Stat(p)
-	if err != nil {
-		return fileInfo{}, err
+	dir := filepath.Join(root, "brain", id, ".system_generated", "logs")
+	full := filepath.Join(dir, fullLogName)
+	compact := filepath.Join(dir, compactLogName)
+	fiFull, errFull := os.Stat(full)
+	fiCompact, errCompact := os.Stat(compact)
+	switch {
+	case errFull == nil && errCompact == nil:
+		mod := fiFull.ModTime()
+		if fiCompact.ModTime().After(mod) {
+			mod = fiCompact.ModTime()
+		}
+		return fileInfo{path: full, compact: compact, full: full, mod: mod, id: id}, nil
+	case errFull == nil:
+		return fileInfo{path: full, full: full, mod: fiFull.ModTime(), id: id}, nil
+	case errCompact == nil:
+		return fileInfo{path: compact, compact: compact, mod: fiCompact.ModTime(), id: id}, nil
+	default:
+		return fileInfo{}, errCompact
 	}
-	return fileInfo{path: p, mod: info.ModTime(), id: id}, nil
+}
+
+// fileInfoFromPath rebuilds a fileInfo from a located Source.Path, attaching
+// its companion transcript file if one sits beside it.
+func fileInfoFromPath(path string, mod time.Time, id string) fileInfo {
+	fi := fileInfo{path: path, mod: mod, id: id}
+	dir := filepath.Dir(path)
+	switch filepath.Base(path) {
+	case fullLogName:
+		fi.full = path
+		if c := filepath.Join(dir, compactLogName); fileExists(c) {
+			fi.compact = c
+		}
+	case compactLogName:
+		fi.compact = path
+		if f := filepath.Join(dir, fullLogName); fileExists(f) {
+			fi.full = f
+		}
+	default:
+		fi.full = path
+	}
+	return fi
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // sessionFiles returns every brain transcript under <root>/brain, newest
@@ -147,6 +214,91 @@ func sessionFiles(root string) ([]fileInfo, error) {
 	return files, nil
 }
 
+// --- SQLite summary index ---------------------------------------------------
+
+type dbSummary struct {
+	title     string
+	cwd       string
+	parent    string
+	depth     int
+	agentName string
+}
+
+// loadSummaries reads conversation metadata from <root>/conversation_summaries.db.
+// Missing or unreadable databases yield nil so reads degrade cleanly to
+// history.jsonl without failing.
+func loadSummaries(root string) map[string]dbSummary {
+	path := filepath.Join(root, "conversation_summaries.db")
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	db, err := sqlitedb.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer db.Close()
+
+	rows, err := db.Query(`SELECT conversation_id, COALESCE(title, ''), COALESCE(workspace_uris, ''), COALESCE(parent_conversation_id, ''), COALESCE(nesting_depth, 0), COALESCE(agent_name, '') FROM conversation_summaries`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	out := map[string]dbSummary{}
+	for rows.Next() {
+		var id, title, wsURIs, parent, agent string
+		var depth int
+		if rows.Scan(&id, &title, &wsURIs, &parent, &depth, &agent) != nil || id == "" {
+			continue
+		}
+		out[id] = dbSummary{
+			title:     strings.TrimSpace(title),
+			cwd:       firstWorkspace(wsURIs),
+			parent:    parent,
+			depth:     depth,
+			agentName: agent,
+		}
+	}
+	return out
+}
+
+func firstWorkspace(raw string) string {
+	var uris []string
+	if json.Unmarshal([]byte(raw), &uris) != nil {
+		return ""
+	}
+	for _, uri := range uris {
+		if p := fileURIPath(uri); p != "" {
+			return p
+		}
+	}
+	return ""
+}
+
+func fileURIPath(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	if u.Scheme == "" {
+		if raw == "" {
+			return ""
+		}
+		return filepath.Clean(raw)
+	}
+	if u.Scheme != "file" {
+		return ""
+	}
+	p := u.Path
+	if len(p) >= 3 && p[0] == '/' && p[2] == ':' {
+		p = p[1:]
+	}
+	if p == "" {
+		return ""
+	}
+	return filepath.FromSlash(p)
+}
+
 // --- history index ----------------------------------------------------------
 
 // historyEntry is one line of <root>/history.jsonl: the prompt the user typed
@@ -158,6 +310,7 @@ type historyEntry struct {
 	Workspace      string `json:"workspace"`
 	Timestamp      int64  `json:"timestamp"`
 	ConversationID string `json:"conversationId"`
+	Type           string `json:"type"`
 }
 
 // history indexes history.jsonl two ways: byID for lines that carry a
@@ -184,12 +337,23 @@ func loadHistory(root string) history {
 		if dec.Decode(&e) != nil {
 			break
 		}
+		if e.Type == "slash_command" {
+			e.Display = ""
+			if e.ConversationID == "" {
+				continue
+			}
+		}
 		if e.ConversationID == "" {
 			h.starts = append(h.starts, e)
 			continue
 		}
-		if first, ok := h.byID[e.ConversationID]; ok {
-			e.Display = first.Display // keep the earliest prompt as the title
+		if prev, ok := h.byID[e.ConversationID]; ok {
+			if prev.Display != "" {
+				e.Display = prev.Display // keep the earliest prompt as the title
+			}
+			if e.Workspace == "" {
+				e.Workspace = prev.Workspace
+			}
 		}
 		h.byID[e.ConversationID] = e
 	}
@@ -228,56 +392,82 @@ func (h history) matchStart(entries []session.Entry) (historyEntry, bool) {
 	return best, bestDiff >= 0
 }
 
-// applyStart fills cwd/title from the matchStart join for a Source that
-// history.jsonl does not locate by id. A no-op when cwd is already known.
+// applyStart fills cwd/title from the matchStart join when they are still
+// empty after checking conversation_summaries.db and history.jsonl by id.
 func applyStart(src *session.Source, entries []session.Entry, h history) {
-	if src.Metadata["cwd"] != "" {
+	if src.Metadata["cwd"] != "" && src.Metadata["title"] != "" {
 		return
 	}
 	s, ok := h.matchStart(entries)
 	if !ok {
 		return
 	}
-	src.Metadata["cwd"] = s.Workspace
-	if src.Metadata["title"] == "" {
+	if src.Metadata["cwd"] == "" && s.Workspace != "" {
+		src.Metadata["cwd"] = s.Workspace
+	}
+	if src.Metadata["title"] == "" && s.Display != "" {
 		src.Metadata["title"] = s.Display
 	}
 }
 
-func sourceOf(fi fileInfo, h history) session.Source {
+func sourceOf(fi fileInfo, db map[string]dbSummary, h history) session.Source {
 	src := session.Source{
 		Ref:       session.Ref{Provider: session.ProviderAgy, SessionID: fi.id},
 		Path:      fi.path,
 		UpdatedAt: fi.mod,
 		Metadata:  map[string]string{},
 	}
-	if e, ok := h.byID[fi.id]; ok {
-		if e.Workspace != "" {
-			src.Metadata["cwd"] = e.Workspace
+	if s, ok := db[fi.id]; ok {
+		if s.cwd != "" {
+			src.Metadata["cwd"] = s.cwd
 		}
-		if e.Display != "" {
-			src.Metadata["title"] = e.Display
+		if s.title != "" {
+			src.Metadata["title"] = s.title
+			src.Metadata["native_title"] = s.title
+		}
+		if s.parent != "" || s.depth > 0 {
+			src.Metadata["relationship"] = "child"
+			if s.parent != "" {
+				src.Metadata["parent"] = s.parent
+			}
+		}
+		if s.agentName != "" {
+			src.Metadata["agent_role"] = s.agentName
 		}
 	}
-	if src.Metadata["title"] == "" {
-		if cwd := src.Metadata["cwd"]; cwd != "" {
-			src.Metadata["title"] = filepath.Base(cwd)
+	if e, ok := h.byID[fi.id]; ok {
+		if src.Metadata["cwd"] == "" && e.Workspace != "" {
+			src.Metadata["cwd"] = e.Workspace
+		}
+		if src.Metadata["title"] == "" && e.Display != "" {
+			src.Metadata["title"] = e.Display
 		}
 	}
 	return src
 }
 
+func finalizeTitle(src *session.Source) {
+	if src.Metadata["title"] == "" {
+		if cwd := src.Metadata["cwd"]; cwd != "" {
+			src.Metadata["title"] = filepath.Base(cwd)
+		}
+	}
+}
+
+func isSubagent(src session.Source) bool {
+	return src.Metadata["relationship"] == "child"
+}
+
 // --- listing ----------------------------------------------------------------
 
 // listSessions walks transcripts newest-first and collects up to limit
-// summaries. When cwd is set, only conversations located in that directory by
-// history.jsonl (by id, or by matchStart for single-prompt conversations) are
-// included.
+// summaries. Subagents marked in conversation_summaries.db are hidden.
 func listSessions(root string, opts session.ListOptions) ([]session.Summary, error) {
 	files, err := sessionFiles(root)
 	if err != nil {
 		return nil, err
 	}
+	db := loadSummaries(root)
 	h := loadHistory(root)
 	limit := opts.EffectiveLimit()
 	out := make([]session.Summary, 0, limit)
@@ -285,26 +475,29 @@ func listSessions(root string, opts session.ListOptions) ([]session.Summary, err
 		if len(out) >= limit {
 			break
 		}
-		src := sourceOf(fi, h)
-		// history.jsonl locates most conversations by id. When it does, applyStart
-		// below is a no-op, so the directory is already final and rejects here,
-		// before the transcript is parsed.
+		src := sourceOf(fi, db, h)
+		if isSubagent(src) {
+			continue
+		}
+		// conversation_summaries.db and history.jsonl locate most conversations
+		// by id; reject non-matching directories before parsing the transcript.
 		if src.Metadata["cwd"] != "" && !opts.MatchesCwd(src.Metadata["cwd"]) {
 			continue
 		}
-		if opts.Query != "" {
-			raw, err := os.ReadFile(fi.path)
-			if err != nil || !opts.MayMatchQuery(raw) {
-				continue
-			}
-		}
-		entries, _, err := readEntries(fi)
-		if err != nil || len(entries) == 0 {
+		if opts.Query != "" && !(session.Thread{Source: src}).MatchesTitle(opts.Query) && !mayMatchFiles(fi, opts) {
 			continue
 		}
+		entries, model, _, err := readEntries(fi)
+		if err != nil {
+			continue
+		}
+		if model != "" {
+			src.Metadata["model"] = model
+		}
 		applyStart(&src, entries, h)
+		finalizeTitle(&src)
 		t := session.Thread{Source: src, Entries: entries}
-		if !opts.Matches(t) {
+		if !opts.Listable(&t) || !opts.Matches(t) {
 			continue
 		}
 		out = append(out, opts.Summarize(t))
@@ -315,56 +508,173 @@ func listSessions(root string, opts session.ListOptions) ([]session.Summary, err
 	return out, nil
 }
 
-// --- parsing ----------------------------------------------------------------
-
-type agyStep struct {
-	Source    string `json:"source"`
-	Type      string `json:"type"`
-	CreatedAt string `json:"created_at"`
-	Content   string `json:"content"`
+func mayMatchFiles(fi fileInfo, opts session.ListOptions) bool {
+	for _, p := range []string{fi.full, fi.compact} {
+		if p == "" {
+			continue
+		}
+		if raw, err := os.ReadFile(p); err == nil && opts.MayMatchQuery(raw) {
+			return true
+		}
+	}
+	return false
 }
 
-func readEntries(fi fileInfo) ([]session.Entry, []string, error) {
-	f, err := os.Open(fi.path)
+// --- parsing ----------------------------------------------------------------
+
+type agyToolCall struct {
+	Name string          `json:"name"`
+	Args json.RawMessage `json:"args"`
+}
+
+type agyStep struct {
+	StepIndex *int          `json:"step_index"`
+	Source    string        `json:"source"`
+	Type      string        `json:"type"`
+	Status    string        `json:"status"`
+	CreatedAt string        `json:"created_at"`
+	Content   string        `json:"content"`
+	Model     string        `json:"model"`
+	Error     string        `json:"error"`
+	ErrorCode int           `json:"error_code"`
+	ToolCalls []agyToolCall `json:"tool_calls"`
+}
+
+func readEntries(fi fileInfo) ([]session.Entry, string, []string, error) {
+	steps, warnings, err := loadMergedSteps(fi)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", nil, err
 	}
-	defer f.Close()
 
 	var entries []session.Entry
-	var warnings []string
 	var unknown session.UnknownTypes
-	dec := json.NewDecoder(f)
-	for dec.More() {
-		var step agyStep
-		if err := dec.Decode(&step); err != nil {
-			warnings = append(warnings, session.ReadStopWarning(err))
-			break
-		}
+	var model string
+	var pending []agyToolCall
+
+	for _, step := range steps {
 		ts := session.ParseTime(step.CreatedAt)
 		switch step.Type {
 		case "USER_INPUT":
+			pending = nil
 			if text := userRequest(step.Content); text != "" {
 				entries = append(entries, session.Entry{Kind: session.KindMessage, Role: session.RoleUser, Text: text, Time: ts})
 			}
 		case "PLANNER_RESPONSE":
-			if step.Source == "MODEL" && step.Content != "" {
-				entries = append(entries, session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: step.Content, Time: ts})
+			if step.Source == "MODEL" {
+				if step.Model != "" {
+					model = step.Model
+				}
+				if step.Content != "" {
+					entries = append(entries, session.Entry{Kind: session.KindMessage, Role: session.RoleAssistant, Text: step.Content, Time: ts})
+				}
+				pending = nil
+				for _, tc := range step.ToolCalls {
+					if tc.Name != "" {
+						entries = append(entries, session.ToolCall(tc.Name, tc.Args, ts))
+					}
+					pending = append(pending, tc)
+				}
 			}
 		case "CHECKPOINT":
+			pending = nil
 			if step.Content != "" {
 				entries = append(entries, session.Entry{Kind: session.KindCompact, Text: step.Content, Time: ts})
 			}
+		case "ERROR_MESSAGE":
+			pending = nil
+			if text := stepErrorText(step); text != "" {
+				reason := "error"
+				if step.ErrorCode != 0 {
+					reason = strconv.Itoa(step.ErrorCode)
+				}
+				entries = append(entries, session.Entry{Kind: session.KindStop, Reason: reason, Text: text, Time: ts})
+			}
 		case "RUN_COMMAND", "VIEW_FILE", "LIST_DIRECTORY", "GREP_SEARCH", "SEARCH_WEB",
-			"CODE_ACTION", "GENERATE_IMAGE", "INVOKE_SUBAGENT", "ASK_QUESTION":
-			// The steps the agent took: its own tool plumbing.
-		case "EPHEMERAL_MESSAGE", "SYSTEM_MESSAGE", "ERROR_MESSAGE", "GENERIC", "CONVERSATION_HISTORY":
+			"CODE_ACTION", "GENERATE_IMAGE", "INVOKE_SUBAGENT", "ASK_QUESTION", "GENERIC":
+			var call agyToolCall
+			if len(pending) > 0 {
+				call = pending[0]
+				pending = pending[1:]
+			}
+			if step.Status == "ERROR" {
+				tool := call.Name
+				if tool == "" {
+					tool = strings.ToLower(step.Type)
+				}
+				entries = append(entries, session.Failure(tool, call.Args, stepErrorText(step), ts))
+			}
+		case "EPHEMERAL_MESSAGE", "SYSTEM_MESSAGE", "CONVERSATION_HISTORY":
 			// Status lines, injected context, and the CLI's own replay.
 		default:
 			unknown.Add(step.Type)
 		}
 	}
-	return entries, unknown.AppendTo(warnings), nil
+	return entries, model, unknown.AppendTo(warnings), nil
+}
+
+func stepErrorText(step agyStep) string {
+	if text := strings.TrimSpace(step.Error); text != "" {
+		return text
+	}
+	return strings.TrimSpace(step.Content)
+}
+
+// loadMergedSteps reads transcript.jsonl first and overlays
+// transcript_full.jsonl on top, keying by step_index so untruncated full steps
+// override truncated compact ones, missing prefixes in either file are
+// recovered, duplicate replay runs collapse, and out-of-order steps sort into
+// chronological step order.
+func loadMergedSteps(fi fileInfo) ([]agyStep, []string, error) {
+	byIndex := map[int]agyStep{}
+	var unindexed []agyStep
+	var warnings []string
+
+	for _, p := range []string{fi.compact, fi.full} {
+		if p == "" {
+			continue
+		}
+		if err := decodeStepsFile(p, byIndex, &unindexed, &warnings); err != nil {
+			if p == fi.path {
+				return nil, nil, err
+			}
+		}
+	}
+
+	keys := make([]int, 0, len(byIndex))
+	for k := range byIndex {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+
+	steps := make([]agyStep, 0, len(keys)+len(unindexed))
+	for _, k := range keys {
+		steps = append(steps, byIndex[k])
+	}
+	steps = append(steps, unindexed...)
+	return steps, warnings, nil
+}
+
+func decodeStepsFile(path string, byIndex map[int]agyStep, unindexed *[]agyStep, warnings *[]string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	dec := json.NewDecoder(f)
+	for dec.More() {
+		var step agyStep
+		if err := dec.Decode(&step); err != nil {
+			*warnings = append(*warnings, session.ReadStopWarning(err))
+			break
+		}
+		if step.StepIndex != nil {
+			byIndex[*step.StepIndex] = step
+		} else {
+			*unindexed = append(*unindexed, step)
+		}
+	}
+	return nil
 }
 
 // userRequest extracts what the user actually typed from a USER_INPUT step:
