@@ -410,8 +410,9 @@ func TestSummariesDBMetadataSubagentsAndSlashCommands(t *testing.T) {
 	if newest.Ref.SessionID != "conv-headless" {
 		t.Fatalf("newest = %s, want conv-headless", newest.Ref.SessionID)
 	}
-	if newest.Metadata["cwd"] != "/tmp/my proj" || newest.Metadata["title"] != "Matrix Avatar Review" || newest.Metadata["native_title"] != "Matrix Avatar Review" {
-		t.Errorf("headless metadata = %+v", newest.Metadata)
+	wantCwd := filepath.FromSlash("/tmp/my proj")
+	if newest.Metadata["cwd"] != wantCwd || newest.Metadata["title"] != "Matrix Avatar Review" || newest.Metadata["native_title"] != "Matrix Avatar Review" {
+		t.Errorf("headless metadata = %+v, want cwd=%q", newest.Metadata, wantCwd)
 	}
 
 	// Unfiltered List hides conv-child; cwd filter finds conv-headless via DB workspace_uris.
@@ -419,7 +420,7 @@ func TestSummariesDBMetadataSubagentsAndSlashCommands(t *testing.T) {
 	if err != nil || len(all) != 2 {
 		t.Fatalf("unfiltered list = %+v, err=%v; want 2 (subagent hidden)", all, err)
 	}
-	byCwd, err := p.List(ctx, roots, session.ListOptions{Cwd: "/tmp/my proj"})
+	byCwd, err := p.List(ctx, roots, session.ListOptions{Cwd: wantCwd})
 	if err != nil || len(byCwd) != 1 || byCwd[0].Ref.SessionID != "conv-headless" {
 		t.Fatalf("cwd list = %+v, err=%v", byCwd, err)
 	}
