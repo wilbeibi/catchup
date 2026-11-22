@@ -170,4 +170,8 @@ func TestResolveCurrent(t *testing.T) {
 	if len(got) != 1 || got[ProviderCopilot] != "sess-2" {
 		t.Fatalf("current = %+v", got)
 	}
+	got = ResolveCurrent(envFrom(map[string]string{"ANTIGRAVITY_CONVERSATION_ID": "sess-3"}))
+	if len(got) != 1 || got[ProviderAgy] != "sess-3" {
+		t.Fatalf("current = %+v", got)
+	}
 }

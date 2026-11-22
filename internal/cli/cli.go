@@ -56,8 +56,8 @@ RECAP — how much of the session (default: all of it)
   --since-compact     what the agent resumed with after compacting
   --last <N>          just the last N exchanges
   --full              oversized messages whole, not clamped
-  --show tools        the agent's tool calls (claude, codex, Cursor IDE) and failures
-                      too; -q then searches the calls
+  --show tools        the agent's tool calls (agy, claude, codex, Cursor IDE) and
+                      failures too; -q then searches the calls
   -i, --info          metadata only, no messages
 
 FIND — which session (default: newest here)

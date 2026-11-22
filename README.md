@@ -98,7 +98,7 @@ Every supported agent can supply a handoff. Amp, Grok Bot, Kimi, ZCode, and Deep
 
 Use `--all-dirs` again when selecting a search result by rank, or select its stable ID with `--id`.
 Listings show each session's directory and recorded parent or fork relationship.
-Codex native titles are searchable, including renamed titles. A title-only match opens the whole conversation.
+Codex and Antigravity native titles are searchable (including renamed Codex titles). A title-only match opens the whole conversation.
 
 Amp reads local JSON caches in `$XDG_DATA_HOME/amp/threads` (default `~/.local/share/amp/threads`).
 Set `AMP_DATA_HOME` to override the Amp data directory. Cloud-only threads are unavailable until cached locally.

@@ -166,13 +166,14 @@ func ResolveSkillDirs(roots Roots, home string) map[string]string {
 }
 
 // ResolveCurrent reports the session each provider says we are running inside,
-// keyed by provider name. Two agents inject such a signal into every shell
-// they spawn: Claude Code ($CLAUDE_CODE_SESSION_ID) and Copilot CLI
-// ($COPILOT_AGENT_SESSION_ID, whose value is the id --resume takes); Codex and
-// OpenCode spawn shells indistinguishable from a plain terminal, so they
-// contribute nothing. A provider absent from the map (or mapped to "") has no in-band
-// current session, and the caller falls back to the newest session in the
-// working directory.
+// keyed by provider name. Three agents inject such a signal into every shell
+// they spawn: Claude Code ($CLAUDE_CODE_SESSION_ID), Copilot CLI
+// ($COPILOT_AGENT_SESSION_ID, whose value is the id --resume takes), and
+// Antigravity CLI ($ANTIGRAVITY_CONVERSATION_ID, the id --conversation takes);
+// Codex and OpenCode spawn shells indistinguishable from a plain terminal, so
+// they contribute nothing. A provider absent from the map (or mapped to "")
+// has no in-band current session, and the caller falls back to the newest
+// session in the working directory.
 //
 // getenv is injected for the reason given on ResolveRoots.
 func ResolveCurrent(getenv func(string) string) map[string]string {
@@ -182,6 +183,9 @@ func ResolveCurrent(getenv func(string) string) map[string]string {
 	}
 	if id := getenv("COPILOT_AGENT_SESSION_ID"); id != "" {
 		current[ProviderCopilot] = id
+	}
+	if id := getenv("ANTIGRAVITY_CONVERSATION_ID"); id != "" {
+		current[ProviderAgy] = id
 	}
 	return current
 }
