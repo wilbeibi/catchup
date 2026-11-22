@@ -54,5 +54,5 @@ Preflight session reads into this conversation; listings, metadata, and `fork` d
 
 Run `catchup --help` for every other flag, recipe, and example.
 
-- Codex native titles are searchable. A title-only match reads the whole conversation; it is not a quoted passage.
+- Codex and Antigravity native titles are searchable. A title-only match reads the whole conversation; it is not a quoted passage.
 - Amp reads locally cached threads only; tool results and reasoning are omitted. Native Amp launch and resume are unsupported.
